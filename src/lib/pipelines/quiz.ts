@@ -3,7 +3,7 @@ import { getGenerator } from "@/lib/ai";
 import { searchChunks, retrieveForWholeSet, formatRetrievedContext, emptyRetrievalError, type RetrievedChunk } from "@/lib/retrieval";
 import { createAnchorsForChunks } from "@/lib/pipelines/anchors";
 import { quizSchema, type QuizQuestionDraft } from "@/lib/pipelines/schemas";
-import { validateQuizQuestion } from "@/lib/pipelines/validation";
+import { validateQuizQuestion, resolveChunkRef, normalizeQuizQuestion } from "@/lib/pipelines/validation";
 import { QUIZ_SYSTEM, QUIZ_USER, PROMPT_VERSION } from "@/lib/prompts";
 import type { JobContext } from "@/lib/queue/types";
 import { audit } from "@/lib/audit";
@@ -46,9 +46,20 @@ export async function generateQuizJob(ctx: JobContext<QuizJobPayload>): Promise<
   });
 
   await ctx.updateStage("validating", 80);
-  const validChunkIds = new Set(chunks.map((c) => c.id));
+  const chunkIds = chunks.map((c) => c.id);
   const chunkById = new Map(chunks.map((c) => [c.id, c] as const));
-  const drafts = result.data.questions.filter((q) => validChunkIds.has(q.chunkId));
+  const cited = result.data.questions
+    .map((q) => ({ ...q, chunkId: resolveChunkRef(q.chunkId, chunkIds) ?? "" }))
+    .filter((q) => chunkById.has(q.chunkId));
+  // Only answerable, gradable questions are stored (see normalizeQuizQuestion).
+  const drafts: Array<(typeof cited)[number]> = [];
+  const dropped: string[] = [];
+  for (const q of cited) {
+    const n = normalizeQuizQuestion(q);
+    if ("dropped" in n) dropped.push(n.dropped);
+    else drafts.push({ ...n.question, warnings: n.note ? [...n.question.warnings, n.note] : n.question.warnings });
+  }
+  if (dropped.length) ctx.log(`dropped ${dropped.length} malformed question(s)`, { reasons: dropped });
 
   await prisma.quizQuestion.deleteMany({ where: { quizId } });
   let ordinal = 0;
@@ -62,7 +73,7 @@ export async function generateQuizJob(ctx: JobContext<QuizJobPayload>): Promise<
         ordinal: ordinal++,
         type: draft.type.toUpperCase() as never,
         stem: draft.stem,
-        options: (draft.options ?? undefined) as object | undefined,
+        options: (draft.options.length ? draft.options : undefined) as object | undefined,
         answer: draft.answer as object,
         explanation: draft.explanation,
         distractorRationale: (draft.distractorRationale ?? undefined) as object | undefined,
@@ -73,7 +84,13 @@ export async function generateQuizJob(ctx: JobContext<QuizJobPayload>): Promise<
       },
     });
   }
-  if (ordinal === 0) throw new Error("Generation produced no valid questions.");
+  if (ordinal === 0) {
+    throw new Error(
+      result.data.questions.length > cited.length
+        ? "Generation produced no questions citing the provided sources. Try again."
+        : `Generation produced no answerable questions (${dropped.length} malformed: ${[...new Set(dropped)].slice(0, 2).join("; ")}). Try again.`,
+    );
+  }
 
   await prisma.quiz.update({
     where: { id: quizId },

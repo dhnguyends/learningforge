@@ -3,7 +3,7 @@ import { getGenerator } from "@/lib/ai";
 import { searchChunks, retrieveForWholeSet, formatRetrievedContext, emptyRetrievalError, type RetrievedChunk } from "@/lib/retrieval";
 import { createAnchorsForChunks } from "@/lib/pipelines/anchors";
 import { exercisesSchema, type ExerciseDraft } from "@/lib/pipelines/schemas";
-import { validateExercise } from "@/lib/pipelines/validation";
+import { validateExercise, resolveChunkRefs } from "@/lib/pipelines/validation";
 import { EXERCISES_SYSTEM, EXERCISES_USER, PROMPT_VERSION } from "@/lib/prompts";
 import type { JobContext } from "@/lib/queue/types";
 import { audit } from "@/lib/audit";
@@ -52,16 +52,30 @@ export async function generateExercisesJob(ctx: JobContext<ExercisesJobPayload>)
   });
 
   await ctx.updateStage("validating", 80);
-  const validChunkIds = new Set(chunks.map((c) => c.id));
+  const chunkIds = chunks.map((c) => c.id);
   const chunkById = new Map(chunks.map((c) => [c.id, c] as const));
 
   await prisma.exercise.deleteMany({ where: { exerciseSetId } });
   let ordinal = 0;
-  for (const draft of result.data.exercises) {
-    const anchored = draft.chunkIds.filter((id) => validChunkIds.has(id));
-    if (draft.grounded && anchored.length === 0) continue;
-    if (config.groundedOnly && !draft.grounded) continue;
-    const warnings = validateExercise(draft);
+  let dropped = 0;
+  for (const generated of result.data.exercises) {
+    const anchored = resolveChunkRefs(generated.chunkIds, chunkIds);
+    // A "grounded" exercise that cites nothing verifiable must not be shown as
+    // source-derived — but it is still a usable exercise: keep it, honestly
+    // relabelled as additional practice (it used to be dropped, and a model
+    // that never fills chunkIds made every generation fail).
+    const unverified = generated.grounded && anchored.length === 0;
+    const draft = unverified ? { ...generated, grounded: false } : generated;
+    if (config.groundedOnly && !draft.grounded) {
+      dropped++;
+      continue;
+    }
+    const warnings = [
+      ...validateExercise(draft),
+      ...(unverified
+        ? ["Marked as source-based by the generator but cited no source passage — shown as additional practice; verify against your sources."]
+        : []),
+    ];
     const anchorIds = await createAnchorsForChunks(anchored.map((id) => chunkById.get(id)!).filter(Boolean));
     await prisma.exercise.create({
       data: {
@@ -84,7 +98,13 @@ export async function generateExercisesJob(ctx: JobContext<ExercisesJobPayload>)
       },
     });
   }
-  if (ordinal === 0) throw new Error("Generation produced no valid exercises.");
+  if (ordinal === 0) {
+    throw new Error(
+      dropped > 0
+        ? `None of the ${dropped} generated exercise(s) could be tied to a source passage, and this set only allows source-grounded exercises. Try again, or allow practice exercises.`
+        : "Generation produced no exercises.",
+    );
+  }
 
   await prisma.exerciseSet.update({
     where: { id: exerciseSetId },

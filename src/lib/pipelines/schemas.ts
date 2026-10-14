@@ -89,7 +89,12 @@ export const quizQuestionDraftSchema = z.object({
     "numerical",
   ]),
   stem: z.string().min(10),
-  options: z.array(quizOptionSchema).optional(),
+  /**
+   * Required (empty for short_answer / numerical / code_tracing): when it was
+   * optional, schema-constrained local models (Gemma 4) simply omitted it and
+   * every choice question arrived with nothing to choose from.
+   */
+  options: z.array(quizOptionSchema),
   answer: quizAnswerSchema,
   explanation: z.string().min(10),
   distractorRationale: z.record(z.string()).optional(),
@@ -128,7 +133,8 @@ export const exerciseDraftSchema = z.object({
   grounded: z.boolean(),
   hints: z.array(z.string()).length(3),
   solution: z.string().min(20),
-  chunkIds: z.array(z.string()).default([]),
+  /** Ids of the source chunks the exercise is based on (required: grounded=true needs at least one). */
+  chunkIds: z.array(z.string()),
   warnings: z.array(z.string()).default([]),
 });
 

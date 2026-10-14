@@ -13,6 +13,36 @@ export function filterValidChunkIds(ids: string[], provided: Set<string>): strin
   return ids.filter((id) => provided.has(id));
 }
 
+// --- Chunk references from the model ---------------------------------------------
+
+/**
+ * Resolve one chunk reference written by the model to a provided chunk id.
+ * Context blocks are labelled "[CHUNK 3] (id=cmv8…)", and local models often
+ * cite the label ("CHUNK 3", "chunk_3", "3", "id=cmv8…") instead of the bare
+ * id. Positional labels map to the n-th provided chunk; anything that is not
+ * a provided id or a valid position resolves to null (never trusted).
+ */
+export function resolveChunkRef(ref: string, chunkIds: readonly string[]): string | null {
+  const cleaned = ref.trim().replace(/^\[|\]$/g, "").replace(/^id\s*[=:]\s*/i, "").trim();
+  if (chunkIds.includes(cleaned)) return cleaned;
+  const positional = cleaned.match(/^(?:chunk[\s_#-]*)?(\d{1,3})$/i);
+  if (positional) {
+    const n = Number(positional[1]);
+    if (n >= 1 && n <= chunkIds.length) return chunkIds[n - 1];
+  }
+  return null;
+}
+
+/** Resolve and de-duplicate a list of model chunk references (order kept). */
+export function resolveChunkRefs(refs: readonly string[], chunkIds: readonly string[]): string[] {
+  const out: string[] = [];
+  for (const ref of refs) {
+    const id = resolveChunkRef(ref, chunkIds);
+    if (id && !out.includes(id)) out.push(id);
+  }
+  return out;
+}
+
 // --- Inline chunk ids ---------------------------------------------------------
 
 /**
@@ -170,6 +200,84 @@ export function validateQuizQuestion(q: QuizQuestionDraft): string[] {
 
   if (q.explanation.length < 20) warnings.push("Explanation too thin to teach from.");
   return warnings;
+}
+
+export type QuizNormalization = { question: QuizQuestionDraft; note?: string } | { dropped: string };
+
+/**
+ * Make a generated question's answer consistent with its type before it is
+ * stored, so every persisted question is answerable and gradable.
+ *
+ * The quiz schema is a loose union (options optional, every answer field
+ * optional), and local models mix shapes: Gemma 4 labelled questions
+ * multiple_choice but answered them short-answer style with no options at
+ * all — the quiz page then showed stems with nothing to pick, and grading
+ * would mark every response wrong. Rules:
+ * - choice questions need ≥2 options and correct ids that exist; without
+ *   options but with an answer text they become short_answer;
+ * - a correct answer given as option TEXT is mapped to its option id;
+ * - numerical needs a finite value (else short_answer from text);
+ * - ordering/derivation_steps need a permutation of the options; matching
+ *   needs pairs over existing options — otherwise the question is dropped;
+ * - only the answer fields of the final type are kept.
+ * Pure; unit-tested.
+ */
+export function normalizeQuizQuestion(input: QuizQuestionDraft): QuizNormalization {
+  const options = (input.options ?? []).filter((o) => o.id.trim() && o.text.trim());
+  const optionIds = new Set(options.map((o) => o.id));
+  const texts = (input.answer.text ?? []).map((t) => t.trim()).filter(Boolean);
+  const byText = new Map(options.map((o) => [o.text.trim().toLowerCase(), o.id]));
+  const correctIds = [
+    ...new Set(
+      [...(input.answer.correctIds ?? []), ...texts]
+        .map((v) => (optionIds.has(v) ? v : byText.get(v.trim().toLowerCase())))
+        .filter((v): v is string => Boolean(v)),
+    ),
+  ];
+
+  const as = (type: QuizQuestionDraft["type"], answer: QuizQuestionDraft["answer"], keepOptions: boolean, note?: string): QuizNormalization => ({
+    question: { ...input, type, options: keepOptions ? options : [], answer },
+    note,
+  });
+  const toShortAnswer = (why: string): QuizNormalization =>
+    texts.length
+      ? as("short_answer", { text: texts }, false, `Converted to short answer: ${why}.`)
+      : { dropped: `${input.type} question with ${why} and no answer text` };
+
+  switch (input.type) {
+    case "multiple_choice":
+    case "multi_select": {
+      if (options.length < 2) return toShortAnswer("the generator gave no answer options");
+      if (correctIds.length === 0) return { dropped: `${input.type} question whose correct answer matches no option` };
+      if (input.type === "multiple_choice" && correctIds.length > 1) return as("multi_select", { correctIds }, true, "Converted to multi-select: more than one correct option.");
+      if (input.type === "multi_select" && correctIds.length === 1) return as("multiple_choice", { correctIds }, true);
+      return as(input.type, { correctIds }, true);
+    }
+    case "short_answer":
+      if (texts.length) return as("short_answer", { text: texts }, false);
+      if (options.length >= 2 && correctIds.length === 1) return as("multiple_choice", { correctIds }, true);
+      return { dropped: "short_answer question with no acceptable answer" };
+    case "code_tracing":
+      if (texts.length) return as("code_tracing", { text: texts }, false);
+      return { dropped: "code_tracing question with no expected output" };
+    case "numerical": {
+      const numeric = input.answer.numeric;
+      if (numeric && Number.isFinite(numeric.value)) return as("numerical", { numeric }, false);
+      return toShortAnswer("no numeric answer");
+    }
+    case "ordering":
+    case "derivation_steps": {
+      const order = (input.answer.order ?? []).filter((id) => optionIds.has(id));
+      const isPermutation = order.length === options.length && new Set(order).size === order.length && options.length >= 2;
+      return isPermutation ? as(input.type, { order }, true) : { dropped: `${input.type} question whose answer order does not match its options` };
+    }
+    case "matching": {
+      const pairs = (input.answer.pairs ?? []).filter((p) => optionIds.has(p.optionId) && p.value.trim());
+      return pairs.length >= 2 ? as("matching", { pairs }, true) : { dropped: "matching question without valid pairs" };
+    }
+    default:
+      return { dropped: `unsupported question type ${String(input.type)}` };
+  }
 }
 
 // --- Exercises ---------------------------------------------------------------------

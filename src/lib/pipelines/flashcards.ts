@@ -3,7 +3,7 @@ import { getGenerator, isMockAI } from "@/lib/ai";
 import { searchChunks, retrieveForWholeSet, formatRetrievedContext, emptyRetrievalError, type RetrievedChunk } from "@/lib/retrieval";
 import { createAnchorsForChunks } from "@/lib/pipelines/anchors";
 import { flashcardsSchema, type FlashcardDraft } from "@/lib/pipelines/schemas";
-import { dedupeFlashcards } from "@/lib/pipelines/validation";
+import { dedupeFlashcards, resolveChunkRef, resolveChunkRefs } from "@/lib/pipelines/validation";
 import { FLASHCARDS_SYSTEM, FLASHCARDS_USER, PROMPT_VERSION } from "@/lib/prompts";
 import type { JobContext } from "@/lib/queue/types";
 import { audit } from "@/lib/audit";
@@ -51,10 +51,11 @@ export async function generateFlashcardsJob(ctx: JobContext<FlashcardsJobPayload
   await ctx.updateStage("validating", 80);
   const validChunkIds = new Set(chunks.map((c) => c.id));
   const drafts = result.data.cards
+    .map((c) => ({ ...c, chunkId: resolveChunkRef(c.chunkId, chunks.map((x) => x.id)) ?? "" }))
     .filter((c) => validChunkIds.has(c.chunkId))
     .map((c) => ({
       ...c,
-      supportingChunkIds: c.supportingChunkIds.filter((id) => validChunkIds.has(id)),
+      supportingChunkIds: resolveChunkRefs(c.supportingChunkIds, chunks.map((x) => x.id)),
     }));
   const { kept, duplicates } = dedupeFlashcards(drafts);
   if (kept.length === 0) throw new Error("Generation produced no valid, source-cited cards.");

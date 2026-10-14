@@ -7,13 +7,13 @@
  * trail can attribute output to a specific prompt version.
  */
 
-export const PROMPT_VERSION = "2026-10-v2";
+export const PROMPT_VERSION = "2026-10-v4";
 
 /** Rules shared by every artifact + tutor prompt. */
 export const CITATION_RULES = `
 CITATION RULES (non-negotiable):
-1. Ground every factual statement in the provided SOURCE CHUNKS. Each chunk has a stable id like "chunk_x".
-2. When you use a chunk, reference its exact id in the anchor fields. NEVER cite a chunk id that was not provided.
+1. Ground every factual statement in the provided SOURCE CHUNKS. Each chunk is labelled like "[CHUNK 3] (id=cmv8bahjl0003730qah9g2dm9)"; its id is the value after "id=".
+2. When you use a chunk, put its exact id (the value after "id=") in the anchor fields (chunkId / chunkIds / anchorChunkIds / citations). NEVER cite a chunk id that was not provided.
 3. If the chunks do not contain the needed fact, either omit the fact or mark it with claimType "inference" / "external" and explain in "warnings". Prefer omission.
 4. Preserve equations in LaTeX, keep symbols, units, and code blocks exactly as the source states them. Do not round or "simplify" numeric constants.
 5. Never invent timestamps, page numbers, quotes, or results. Excerpts must be copied from the chunks (shortened with "..." if needed).
@@ -146,7 +146,16 @@ Question rules:
 - Derivation-step questions ask to order or supply key steps, citing the source's own derivation.
 - Code-tracing questions include the code in the stem and ask for a specific output/value/error.
 - Explanations must resolve the question using the cited chunk; do not introduce technique the source never covered.
-- Tag each question with one learning objective phrased as "Students will be able to ..."`;
+- Tag each question with one learning objective phrased as "Students will be able to ..."
+
+Answer contract — the "answer" object MUST match the question type (questions that break it are discarded):
+- multiple_choice: 3–5 "options" [{ "id": "a", "text": "..." }]; answer { "correctIds": ["<exactly one option id>"] }.
+- multi_select: 4–6 options; answer { "correctIds": [<2 or more option ids>] }.
+- short_answer / code_tracing: no options; answer { "text": ["<canonical answer>", "<accepted variant>", ...] }.
+- numerical: no options; answer { "numeric": { "value": <number>, "tolerance": <number>, "unit": "<unit>" } }.
+- ordering / derivation_steps: options are the steps; answer { "order": [<every option id, in the correct order>] }.
+- matching: options are the left column; answer { "pairs": [{ "optionId": "<option id>", "value": "<right-column text>" }, ...] }.
+Fill only the answer fields of the chosen type.`;
 
 export const QUIZ_USER = (ctx: {
   studySetTitle: string;
@@ -172,7 +181,7 @@ export const EXERCISES_SYSTEM = `You are LectureForge's exercise designer. You c
 ${CITATION_RULES}
 
 Exercise rules:
-- Two families, marked honestly: grounded=true exercises derive directly from the source (same setting, same theorem, same code). grounded=false transfer exercises extend the source's ideas to a new regime — label them "Additional practice, not stated in source".
+- Two families, marked honestly: grounded=true exercises derive directly from the source (same setting, same theorem, same code) and MUST list in "chunkIds" the id of every chunk they are based on (at least one). grounded=false transfer exercises extend the source's ideas to a new regime — label them "Additional practice, not stated in source" and still list the chunks they build on in "chunkIds".
 - State prerequisites (notational and conceptual), assumptions, required knowledge, expected output format (e.g. "derivation in LaTeX + final boxed result", "working Python function + complexity argument"), estimated minutes, and difficulty.
 - Quantitative problems must be numerically solvable with the data given; verify your own arithmetic before submitting and keep intermediate values in the solution.
 - Provide 3 progressive hints (hint 1: direction; hint 2: key relation/setup; hint 3: near-complete scaffold) and a full solution with steps.
