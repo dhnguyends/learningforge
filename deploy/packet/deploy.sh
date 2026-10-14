@@ -26,7 +26,7 @@ if [ -n "$(git status --porcelain)" ]; then
 fi
 
 echo "==> Shipping $(git rev-parse --short "$REF") to $PACKET_USER@$PACKET_HOST:$REMOTE_DIR"
-git archive --format=tar "$REF" | "${SSH[@]}" "mkdir -p '$REMOTE_DIR' && tar -x -C '$REMOTE_DIR' && echo '$(git rev-parse "$REF")' > '$REMOTE_DIR/REVISION'"
+git -c core.autocrlf=false archive --format=tar "$REF" | "${SSH[@]}" "mkdir -p '$REMOTE_DIR' && tar -x -C '$REMOTE_DIR' && echo '$(git rev-parse "$REF")' > '$REMOTE_DIR/REVISION'"
 
 echo "==> Setup + build on the pod"
 "${SSH[@]}" "cd '$REMOTE_DIR' && DATA_DIR='$DATA_DIR' PUBLIC_URL='$PUBLIC_URL' bash deploy/packet/setup.sh"

@@ -31,3 +31,6 @@ test-results/
 .vscode/
 .idea/
 tsconfig.tsbuildinfo
+
+# packet.ai trial backups (contain secrets)
+backups/

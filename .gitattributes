@@ -1,0 +1,2 @@
+# Shell scripts run on Linux hosts (packet.ai pods): never convert to CRLF.
+*.sh text eol=lf
