@@ -114,3 +114,35 @@ Notes:
 - **Secrets rotation**: provider keys can be rotated in the Vercel/worker
   dashboards without schema changes; `NEXTAUTH_SECRET` rotation
   invalidates sessions (users just sign in again).
+
+## Alternative: single GPU pod on packet.ai (trial)
+
+For a self-contained trial with a local model, everything — Next.js, PostgreSQL +
+pgvector, local file storage, the inline job queue and Ollama — runs on one
+packet.ai GPU pod. Scripts live in `deploy/packet/`:
+
+| Script | Runs on | Does |
+|---|---|---|
+| `deploy.sh [git-ref]` | your machine | ships committed code (`git archive`), runs `setup.sh`, then `start.sh` |
+| `setup.sh` | pod | installs PostgreSQL 16 + pgvector, Node 20, FFmpeg, yt-dlp, Ollama + model; writes `.env.production.local` with generated secrets; builds |
+| `start.sh [all\|infra\|app\|stop-app\|status]` | pod | (re)starts services — re-run after any pod restart |
+| `backup.sh backup\|restore` | your machine | downloads / restores the database, uploaded files and secrets |
+
+```bash
+# one-time: create a dedicated key and add its .pub to the pod's ~/.ssh/authorized_keys
+ssh-keygen -t ed25519 -f ~/.ssh/packet_lectureforge
+# expose pod port 3000 (pod page → Exposed services → HTTP) to get http://<ip>:<external_port>
+PACKET_HOST=<ip> PACKET_PORT=<ssh port> PUBLIC_URL=http://<ip>:<external_port> bash deploy/packet/deploy.sh
+```
+
+Know before you use it:
+
+- **Pods launched without persistent storage lose everything when stopped.** Run
+  `backup.sh backup` before stopping; `backup.sh restore <folder>` after redeploying.
+  Launch with persistent storage enabled for anything long-lived.
+- **Plain HTTP only** — packet.ai exposes `http(s)://<ip>:<port>` NodePorts with no
+  custom domain; passwords cross the network unencrypted. Treat it as a private trial.
+- Billing is per second from the wallet (RTX PRO 6000 from $0.66/h ≈ $480/month if
+  left on). Stop the pod when idle.
+- Embeddings and transcription stay on the offline mock providers unless configured:
+  uploaded recordings get placeholder transcripts.
