@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { getGenerator } from "@/lib/ai";
-import { searchChunks, formatRetrievedContext, emptyRetrievalError, type RetrievedChunk } from "@/lib/retrieval";
+import { searchChunks, retrieveForWholeSet, formatRetrievedContext, emptyRetrievalError, type RetrievedChunk } from "@/lib/retrieval";
 import { createAnchorsForChunks } from "@/lib/pipelines/anchors";
 import { quizSchema, type QuizQuestionDraft } from "@/lib/pipelines/schemas";
 import { validateQuizQuestion } from "@/lib/pipelines/validation";
@@ -24,10 +24,10 @@ export async function generateQuizJob(ctx: JobContext<QuizJobPayload>): Promise<
   const config = quiz.config as { topic?: string; count?: number; types?: string[]; difficulty?: string; sourceIds?: string[] };
 
   await ctx.updateStage("retrieving-sources", 15);
-  const chunks = await searchChunks(quiz.studySet.id, config.topic ?? quiz.studySet.title, {
-    k: 18,
-    sourceIds: config.sourceIds,
-  });
+  // An explicit topic is a real query; without one the quiz covers the set.
+  const chunks = config.topic
+    ? await searchChunks(quiz.studySet.id, config.topic, { k: 18, sourceIds: config.sourceIds })
+    : await retrieveForWholeSet(quiz.studySet.id, quiz.studySet.title, { k: 18, sourceIds: config.sourceIds });
   if (chunks.length === 0) throw await emptyRetrievalError(quiz.studySet.id);
 
   await ctx.updateStage("generating-questions", 45);

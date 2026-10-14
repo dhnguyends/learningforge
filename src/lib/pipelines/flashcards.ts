@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { getGenerator, isMockAI } from "@/lib/ai";
-import { searchChunks, formatRetrievedContext, emptyRetrievalError, type RetrievedChunk } from "@/lib/retrieval";
+import { searchChunks, retrieveForWholeSet, formatRetrievedContext, emptyRetrievalError, type RetrievedChunk } from "@/lib/retrieval";
 import { createAnchorsForChunks } from "@/lib/pipelines/anchors";
 import { flashcardsSchema, type FlashcardDraft } from "@/lib/pipelines/schemas";
 import { dedupeFlashcards } from "@/lib/pipelines/validation";
@@ -27,8 +27,10 @@ export async function generateFlashcardsJob(ctx: JobContext<FlashcardsJobPayload
   await prisma.flashcardDeck.update({ where: { id: deckId }, data: {} }).catch(() => undefined);
 
   await ctx.updateStage("retrieving-sources", 15);
-  const query = ctx.payload.focus ?? deck.studySet.title;
-  const chunks = await searchChunks(deck.studySet.id, query, { k: 20 });
+  // An explicit focus is a real query; without one the deck covers the set.
+  const chunks = ctx.payload.focus
+    ? await searchChunks(deck.studySet.id, ctx.payload.focus, { k: 20 })
+    : await retrieveForWholeSet(deck.studySet.id, deck.studySet.title, { k: 20 });
   if (chunks.length === 0) throw await emptyRetrievalError(deck.studySet.id);
 
   await ctx.updateStage("generating-cards", 45);

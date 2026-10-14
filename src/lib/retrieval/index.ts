@@ -121,12 +121,109 @@ export async function searchChunks(
 }
 
 /**
+ * Retrieval for artifacts that cover the WHOLE study set (study guide, and
+ * flashcards / quizzes / exercises requested without a topic).
+ *
+ * Similarity search alone is the wrong tool there: the only "query" is the
+ * set's title/subject, which need not share vocabulary — or even a language —
+ * with the material (a French-titled set over an English PDF matched nothing
+ * and every guide generation failed). Ranked matches come first; the rest of
+ * the `k` budget is filled with chunks sampled evenly across every READY
+ * source (score 0), so generation always sees representative content once
+ * anything is indexed. Returns [] only when nothing is indexed yet.
+ */
+export async function retrieveForWholeSet(
+  studySetId: string,
+  query: string,
+  { k, sourceIds }: { k: number; sourceIds?: string[] },
+): Promise<RetrievedChunk[]> {
+  const ranked = await searchChunks(studySetId, query, { k, sourceIds });
+  if (ranked.length >= k) return ranked;
+
+  const taken = new Set(ranked.map((c) => c.id));
+  const candidates = await prisma.extractedChunk.findMany({
+    where: {
+      source: { studySetId, status: "READY", ...(sourceIds?.length ? { id: { in: sourceIds } } : {}) },
+      id: { notIn: [...taken] },
+    },
+    select: { id: true, sourceId: true, ordinal: true },
+    orderBy: [{ sourceId: "asc" }, { ordinal: "asc" }],
+  });
+  const sampledIds = sampleForCoverage(candidates, k - ranked.length).map((c) => c.id);
+  if (sampledIds.length === 0) return ranked;
+
+  const rows = await prisma.extractedChunk.findMany({
+    where: { id: { in: sampledIds } },
+    include: { source: { select: { type: true, title: true } } },
+  });
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const sampled: RetrievedChunk[] = sampledIds
+    .map((id) => byId.get(id))
+    .filter((r): r is (typeof rows)[number] => Boolean(r))
+    .map((r) => ({
+      id: r.id,
+      sourceId: r.sourceId,
+      sourceType: r.source.type,
+      sourceTitle: r.source.title,
+      ordinal: r.ordinal,
+      kind: r.kind,
+      content: r.content,
+      heading: r.heading,
+      page: r.page,
+      startMs: r.startMs,
+      endMs: r.endMs,
+      score: 0,
+    }));
+  return [...ranked, ...sampled];
+}
+
+/**
+ * Pick up to `limit` chunks spread evenly over sources (round-robin quota per
+ * source) and, within each source, evenly over its ordinals — so a 3-hour
+ * lecture contributes its beginning, middle and end, not just its intro.
+ * Pure; result is grouped by source in ordinal order.
+ */
+export function sampleForCoverage<T extends { sourceId: string; ordinal: number }>(chunks: T[], limit: number): T[] {
+  if (limit <= 0 || chunks.length === 0) return [];
+  const bySource = new Map<string, T[]>();
+  for (const c of chunks) {
+    const list = bySource.get(c.sourceId) ?? [];
+    list.push(c);
+    bySource.set(c.sourceId, list);
+  }
+  const groups = [...bySource.entries()]
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([, list]) => list.sort((a, b) => a.ordinal - b.ordinal));
+
+  const quota = groups.map(() => 0);
+  let remaining = Math.min(limit, chunks.length);
+  while (remaining > 0) {
+    let progressed = false;
+    for (let i = 0; i < groups.length && remaining > 0; i++) {
+      if (quota[i] < groups[i].length) {
+        quota[i]++;
+        remaining--;
+        progressed = true;
+      }
+    }
+    if (!progressed) break;
+  }
+
+  const out: T[] = [];
+  groups.forEach((list, i) => {
+    const q = quota[i];
+    for (let j = 0; j < q; j++) out.push(list[Math.floor(((j + 0.5) * list.length) / q)]);
+  });
+  return out;
+}
+
+/**
  * Error for generators when retrieval came back empty. Distinguishes "nothing
  * indexed yet" (processing genuinely still pending) from "chunks are indexed
- * but none matched" — the latter usually means the study set's title/subject
- * shares no vocabulary with the source material (typical in offline mock
- * embeddings, e.g. French metadata over English documents), and telling the
- * user to "wait for processing" would point at something already finished.
+ * but none matched" — since whole-set generation uses retrieveForWholeSet, the
+ * latter only happens for an explicit topic that shares no vocabulary with the
+ * source material (typical with offline mock embeddings), and telling the user
+ * to "wait for processing" would point at something already finished.
  */
 export async function emptyRetrievalError(studySetId: string): Promise<Error> {
   const indexedChunks = await prisma.extractedChunk.count({
@@ -136,9 +233,9 @@ export async function emptyRetrievalError(studySetId: string): Promise<Error> {
     return new Error("No indexed sources yet — add sources and wait for processing to finish.");
   }
   return new Error(
-    `Retrieval matched none of the ${indexedChunks} indexed chunk(s) for this study set — ` +
-      "the set's title/subject may share no vocabulary with the source material " +
-      "(common with offline mock embeddings); check the language of both, or configure a real embeddings provider.",
+    `Retrieval matched none of the ${indexedChunks} indexed chunk(s) for the requested topic — ` +
+      "it may share no vocabulary with the source material " +
+      "(common with offline mock embeddings); rephrase it in the sources' own terms and language, leave the topic empty to cover the whole set, or configure a real embeddings provider.",
   );
 }
 

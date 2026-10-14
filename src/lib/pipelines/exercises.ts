@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { getGenerator } from "@/lib/ai";
-import { searchChunks, formatRetrievedContext, emptyRetrievalError, type RetrievedChunk } from "@/lib/retrieval";
+import { searchChunks, retrieveForWholeSet, formatRetrievedContext, emptyRetrievalError, type RetrievedChunk } from "@/lib/retrieval";
 import { createAnchorsForChunks } from "@/lib/pipelines/anchors";
 import { exercisesSchema, type ExerciseDraft } from "@/lib/pipelines/schemas";
 import { validateExercise } from "@/lib/pipelines/validation";
@@ -30,7 +30,10 @@ export async function generateExercisesJob(ctx: JobContext<ExercisesJobPayload>)
   };
 
   await ctx.updateStage("retrieving-sources", 15);
-  const chunks = await searchChunks(exerciseSet.studySet.id, config.topic ?? exerciseSet.studySet.title, { k: 16 });
+  // An explicit topic is a real query; without one the exercises cover the set.
+  const chunks = config.topic
+    ? await searchChunks(exerciseSet.studySet.id, config.topic, { k: 16 })
+    : await retrieveForWholeSet(exerciseSet.studySet.id, exerciseSet.studySet.title, { k: 16 });
   if (chunks.length === 0) throw await emptyRetrievalError(exerciseSet.studySet.id);
 
   await ctx.updateStage("generating-exercises", 45);
