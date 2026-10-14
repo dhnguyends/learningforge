@@ -12,7 +12,10 @@
 #   DATA_DIR     where data/logs/secrets live (default /home/ubuntu/lectureforge-data;
 #                point it at a persistent volume, e.g. /mnt/shared/lectureforge)
 #   APP_DIR      unpacked app (default: this repo's root)
-#   PUBLIC_URL   e.g. http://203.0.113.10:31234 (sets NEXTAUTH_URL / APP_URL)
+#   PUBLIC_URL   e.g. https://203.0.113.10:31234 (sets NEXTAUTH_URL / APP_URL).
+#                https:// puts Caddy in front of the app on the exposed pod port
+#                (TLS from Caddy's internal CA — bare IPs cannot get public
+#                certificates); the app then listens on 127.0.0.1 only.
 #   OLLAMA_MODEL default gemma4:latest
 set -euo pipefail
 
@@ -64,6 +67,56 @@ if ! command -v ollama >/dev/null 2>&1; then
   log "Ollama"
   curl -fsSL https://ollama.com/install.sh | sh
 fi
+
+# --- HTTPS front (Caddy) when PUBLIC_URL is https:// -----------------------------------
+PUBLIC_SCHEME="${PUBLIC_URL%%://*}"
+PUBLIC_HOST="$(echo "$PUBLIC_URL" | sed -E 's#^[a-z]+://##; s#[:/].*$##')"
+PROXY_PORT=3000          # the pod port the packet.ai service exposes
+if [ "$PUBLIC_SCHEME" = "https" ]; then
+  if ! command -v caddy >/dev/null 2>&1; then
+    log "Caddy (TLS reverse proxy)"
+    $SUDO apt-get install -y -qq debian-keyring debian-archive-keyring apt-transport-https >/dev/null
+    curl -fsSL 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | $SUDO gpg --batch --yes --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+    curl -fsSL 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | $SUDO tee /etc/apt/sources.list.d/caddy-stable.list >/dev/null
+    $SUDO apt-get update -y -qq
+    $SUDO apt-get install -y -qq caddy >/dev/null
+  fi
+  log "Writing /etc/caddy/Caddyfile for https://$PUBLIC_HOST"
+  # Browsers send no SNI for IP addresses: default_sni picks the IP certificate.
+  # http_redirect turns plain-HTTP requests arriving on the TLS port into
+  # redirects to https:// on the same (public) host:port.
+  $SUDO tee /etc/caddy/Caddyfile >/dev/null <<EOF
+{
+	default_sni $PUBLIC_HOST
+	skip_install_trust
+	servers :$PROXY_PORT {
+		listener_wrappers {
+			http_redirect
+			tls
+		}
+	}
+}
+
+https://$PUBLIC_HOST:$PROXY_PORT {
+	bind 0.0.0.0
+	tls internal
+	encode zstd gzip
+	header -Server
+	reverse_proxy 127.0.0.1:3001
+}
+EOF
+  $SUDO caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null
+  RUNTIME="TLS_PROXY=1
+APP_BIND=127.0.0.1
+APP_PORT=3001
+PROXY_PORT=$PROXY_PORT
+PUBLIC_HOST=$PUBLIC_HOST"
+else
+  RUNTIME="TLS_PROXY=0
+APP_BIND=0.0.0.0
+APP_PORT=3000"
+fi
+printf '%s\n' "$RUNTIME" > "$DATA_DIR/runtime.env"
 
 # --- Secrets (generated once, kept on the data dir) -----------------------------------
 SECRETS="$DATA_DIR/secrets.env"
