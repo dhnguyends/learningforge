@@ -1,0 +1,33 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# next.js
+.next/
+out/
+build/
+next-env.d.ts
+
+# testing
+coverage/
+playwright-report/
+test-results/
+.blob/
+
+# local runtime data (local storage driver, sqlite, logs)
+.data/
+*.log
+
+# env
+.env
+.env.local
+.env.*.local
+.env.test
+
+# misc
+.DS_Store
+*.pem
+.vscode/
+.idea/
+tsconfig.tsbuildinfo

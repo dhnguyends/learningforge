@@ -1,0 +1,118 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 40 25% 97%;
+    --foreground: 222 30% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 30% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 30% 12%;
+    --primary: 174 68% 26%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 40 16% 92%;
+    --secondary-foreground: 222 28% 20%;
+    --muted: 40 16% 93%;
+    --muted-foreground: 222 10% 42%;
+    --accent: 174 40% 92%;
+    --accent-foreground: 174 68% 18%;
+    --destructive: 0 68% 46%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 35 14% 86%;
+    --input: 35 14% 80%;
+    --ring: 174 68% 30%;
+    --radius: 0.5rem;
+    --citation: 38 92% 50%;
+    --citation-foreground: 30 60% 12%;
+    --success: 152 60% 32%;
+    --warning: 32 95% 44%;
+  }
+
+  .dark {
+    --background: 222 30% 8%;
+    --foreground: 40 20% 92%;
+    --card: 222 26% 11%;
+    --card-foreground: 40 20% 92%;
+    --popover: 222 26% 11%;
+    --popover-foreground: 40 20% 92%;
+    --primary: 172 55% 55%;
+    --primary-foreground: 222 35% 8%;
+    --secondary: 222 20% 16%;
+    --secondary-foreground: 40 16% 88%;
+    --muted: 222 20% 15%;
+    --muted-foreground: 40 8% 62%;
+    --accent: 172 30% 18%;
+    --accent-foreground: 172 60% 75%;
+    --destructive: 0 62% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 222 16% 20%;
+    --input: 222 16% 26%;
+    --ring: 172 55% 55%;
+    --citation: 40 90% 58%;
+    --citation-foreground: 30 80% 8%;
+    --success: 152 55% 55%;
+    --warning: 32 90% 60%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  ::selection {
+    background: hsl(var(--citation) / 0.35);
+  }
+}
+
+@layer components {
+  /* Long-form study text: legible serif, generous measure. */
+  .prose-study {
+    @apply text-foreground;
+    font-family: var(--font-serif), Georgia, serif;
+    line-height: 1.75;
+  }
+  .prose-study h1, .prose-study h2, .prose-study h3, .prose-study h4 {
+    font-family: var(--font-sans), system-ui, sans-serif;
+    @apply font-semibold tracking-tight;
+  }
+  .prose-study h2 { @apply mt-8 mb-3 text-xl; }
+  .prose-study h3 { @apply mt-6 mb-2 text-lg; }
+  .prose-study p { @apply my-3; }
+  .prose-study ul { @apply my-3 list-disc pl-6; }
+  .prose-study ol { @apply my-3 list-decimal pl-6; }
+  .prose-study li { @apply my-1; }
+  .prose-study blockquote {
+    @apply my-4 border-l-2 border-primary/50 pl-4 italic text-muted-foreground;
+  }
+  .prose-study code {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    @apply rounded bg-muted px-1 py-0.5 text-[0.9em];
+  }
+  .prose-study pre {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    @apply my-4 overflow-x-auto rounded-lg border bg-muted/60 p-4 text-sm leading-relaxed;
+  }
+  .prose-study pre code { @apply bg-transparent p-0; }
+  .prose-study table { @apply my-4 w-full border-collapse text-sm; }
+  .prose-study th { @apply border-b px-3 py-2 text-left font-semibold; }
+  .prose-study td { @apply border-b px-3 py-2 align-top; }
+  .prose-study a { @apply underline underline-offset-2; }
+  .prose-study .katex { font-size: 1.05em; }
+  .prose-study .katex-display { @apply my-4 overflow-x-auto overflow-y-hidden py-1; }
+}
+
+/* Thin scrollbars for dense panels (transcripts, chat). */
+.scroll-thin::-webkit-scrollbar { width: 8px; height: 8px; }
+.scroll-thin::-webkit-scrollbar-thumb { background: hsl(var(--muted-foreground) / 0.3); border-radius: 8px; }
+.scroll-thin::-webkit-scrollbar-track { background: transparent; }
+
+/* Transcript auto-scroll target highlight */
+.highlight-flash {
+  animation: fade-in 0.25s ease-out, pulse-soft 2s ease-in-out 2;
+}

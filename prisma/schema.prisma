@@ -1,0 +1,840 @@
+// LectureForge — Prisma schema
+// The StudySet is the central unit: it groups Sources (video/audio/PDF/slides/
+// notes) and every generated artifact retains provenance back to ExtractedChunks
+// and CitationAnchors.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider     = "postgresql"
+  url          = env("DATABASE_URL")
+  extensions   = [vector]
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum WorkspaceRole {
+  OWNER
+  EDITOR
+  VIEWER
+}
+
+enum LearnerLevel {
+  INTRODUCTORY
+  ADVANCED_UNDERGRAD
+  GRADUATE
+}
+
+enum SourceType {
+  VIDEO
+  AUDIO
+  PDF
+  SLIDES
+  NOTE
+  IMAGE
+  YOUTUBE
+}
+
+enum SourceStatus {
+  PENDING_UPLOAD
+  UPLOADED
+  PROCESSING
+  READY
+  FAILED
+}
+
+enum AssetKind {
+  ORIGINAL
+  AUDIO // ffmpeg audio extraction from video/youtube
+  THUMBNAIL
+  OCR
+  RECAP_AUDIO
+}
+
+enum ChunkKind {
+  TRANSCRIPT
+  DOCUMENT
+  SLIDE
+  OCR
+  NOTE
+}
+
+enum ClaimType {
+  SOURCE_GROUNDED
+  INFERENCE
+  EXTERNAL
+}
+
+enum JobType {
+  INGEST_SOURCE
+  EXTRACT_AUDIO
+  TRANSCRIBE
+  PARSE_DOCUMENT
+  INDEX_CHUNKS
+  GENERATE_GUIDE
+  GENERATE_FLASHCARDS
+  GENERATE_QUIZ
+  GENERATE_EXERCISES
+  GENERATE_AUDIO_RECAP
+  YOUTUBE_IMPORT
+}
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum GuideStatus {
+  QUEUED
+  GENERATING
+  READY
+  FAILED
+}
+
+enum GuideStyle {
+  EXAM_REVISION
+  LECTURE_NOTES
+  TECHNICAL_OUTLINE
+  CORNELL
+  PAPER_NOTES
+}
+
+enum SectionKind {
+  OBJECTIVES
+  VOCABULARY
+  CONCEPT
+  DEFINITION
+  EQUATIONS
+  DERIVATION
+  WORKED_EXAMPLE
+  MISCONCEPTIONS
+  PREREQUISITES
+  RECALL
+  SUMMARY
+}
+
+enum CardType {
+  BASIC
+  CLOZE
+  EQUATION
+  IMAGE_LABEL
+  CODE_COMPLETION
+  CONCEPTUAL
+}
+
+enum CardState {
+  NEW
+  LEARNING
+  REVIEW
+  RELEARNING
+}
+
+enum QuestionType {
+  MULTIPLE_CHOICE
+  MULTI_SELECT
+  SHORT_ANSWER
+  ORDERING
+  MATCHING
+  DERIVATION_STEPS
+  CODE_TRACING
+  NUMERICAL
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+  ADVANCED
+}
+
+enum ExerciseType {
+  DERIVATION
+  QUANTITATIVE
+  PROOF
+  ALGORITHM_DESIGN
+  CODE_COMPLETION
+  CODE_DEBUGGING
+  CONCEPTUAL_TRANSFER
+  PAPER_CRITIQUE
+}
+
+enum AttemptSubjectType {
+  QUIZ_QUESTION
+  EXERCISE
+  FLASHCARD
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+enum OutputType {
+  GUIDE
+  FLASHCARDS
+  QUIZ
+  EXERCISES
+  AUDIO_RECAP
+  TUTOR
+}
+
+enum SessionKind {
+  FLASHCARD_REVIEW
+  QUIZ
+  EXERCISE
+  TUTOR
+  READING
+}
+
+// ---------------------------------------------------------------------------
+// Identity & workspaces
+// ---------------------------------------------------------------------------
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  passwordHash  String?
+  preferences   Json      @default("{}")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts        Account[]
+  sessions        Session[]
+  studySets       StudySet[]         @relation("StudySetCreator")
+  tutorChats      TutorConversation[]
+  attempts        Attempt[]
+  studySessions   StudySession[]
+  progressMetrics ProgressMetric[]
+  flashcardLogs   FlashcardReview[]
+  edits           ArtifactEdit[]
+  auditLogs       AuditLog[]
+  workspaces      WorkspaceMember[]
+  ownedWorkspaces Workspace[]     @relation("WorkspaceOwner")
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+model Workspace {
+  id        String   @id @default(cuid())
+  name      String
+  ownerId   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner     User             @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members   WorkspaceMember[]
+  studySets StudySet[]
+
+  @@map("workspaces")
+}
+
+model WorkspaceMember {
+  id          String        @id @default(cuid())
+  workspaceId String
+  userId      String
+  role        WorkspaceRole @default(EDITOR)
+  createdAt   DateTime      @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@map("workspace_members")
+}
+
+// ---------------------------------------------------------------------------
+// Study sets & sources
+// ---------------------------------------------------------------------------
+
+model StudySet {
+  id           String       @id @default(cuid())
+  workspaceId  String
+  createdById  String
+  title        String
+  course       String?
+  subject      String?
+  learnerLevel LearnerLevel @default(ADVANCED_UNDERGRAD)
+  examDate     DateTime?
+  language     String       @default("en")
+  outputTypes  OutputType[] @default([])
+  settings     Json         @default("{}")
+  archivedAt   DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  workspace    Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy    User               @relation("StudySetCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  sources      Source[]
+  guides       StudyGuide[]
+  decks        FlashcardDeck[]
+  quizzes      Quiz[]
+  exerciseSets ExerciseSet[]
+  conversations TutorConversation[]
+  jobs         GenerationJob[]
+  plans        StudyPlan[]
+  sessions     StudySession[]
+  metrics      ProgressMetric[]
+  attempts     Attempt[]
+
+  @@index([workspaceId])
+  @@map("study_sets")
+}
+
+model Source {
+  id                String      @id @default(cuid())
+  studySetId        String
+  type              SourceType
+  title             String
+  description       String?
+  status            SourceStatus @default(PENDING_UPLOAD)
+  externalUrl       String?
+  durationSec       Float?
+  language          String?
+  consentConfirmedAt DateTime?
+  metadata          Json        @default("{}")
+  error             String?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  studySet  StudySet       @relation(fields: [studySetId], references: [id], onDelete: Cascade)
+  assets    SourceAsset[]
+  transcripts Transcript[]
+  chunks    ExtractedChunk[]
+  anchors   CitationAnchor[]
+  jobs      GenerationJob[]
+
+  @@index([studySetId])
+  @@map("sources")
+}
+
+model SourceAsset {
+  id          String    @id @default(cuid())
+  sourceId    String
+  kind        AssetKind
+  storageKey  String
+  filename    String
+  mimeType    String
+  sizeBytes   BigInt?
+  durationSec Float?
+  checksum    String?
+  metadata    Json      @default("{}")
+  createdAt   DateTime  @default(now())
+
+  source Source @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@index([sourceId])
+  @@map("source_assets")
+}
+
+model Transcript {
+  id           String   @id @default(cuid())
+  sourceId     String
+  language     String   @default("en")
+  provider     String
+  isPrimary    Boolean  @default(true)
+  status       GuideStatus @default(QUEUED)
+  wordCount    Int      @default(0)
+  segmentCount Int      @default(0)
+  metadata     Json     @default("{}")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  source   Source              @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  segments TranscriptSegment[]
+
+  @@index([sourceId])
+  @@map("transcripts")
+}
+
+model TranscriptSegment {
+  id           String   @id @default(cuid())
+  transcriptId String
+  idx          Int
+  startMs      Int
+  endMs        Int
+  speaker      String?
+  text         String   @db.Text
+  confidence   Float?
+  edited       Boolean  @default(false)
+  flagged      Boolean  @default(false)
+  note         String?
+
+  transcript Transcript @relation(fields: [transcriptId], references: [id], onDelete: Cascade)
+
+  @@unique([transcriptId, idx])
+  @@index([transcriptId, startMs])
+  @@map("transcript_segments")
+}
+
+/// Semantic chunk of a source, preserving citation anchors (time range or page).
+/// Embedding column is managed via raw SQL (pgvector); Prisma treats it as null.
+model ExtractedChunk {
+  id         String    @id @default(cuid())
+  sourceId   String
+  ordinal    Int
+  kind       ChunkKind
+  heading    String?
+  content    String    @db.Text
+  page       Int?
+  startMs    Int?
+  endMs      Int?
+  speaker    String?
+  tokenCount Int
+  embedding  Unsupported("vector(1536)")?
+  createdAt  DateTime  @default(now())
+
+  source Source           @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  anchors CitationAnchor[]
+
+  @@index([sourceId, ordinal])
+  @@map("extracted_chunks")
+}
+
+/// A verifiable pointer into a source: time range for A/V, page for documents,
+/// plus a short excerpt for human verification. Shared by all artifacts.
+model CitationAnchor {
+  id         String     @id @default(cuid())
+  sourceId   String
+  chunkId    String?
+  sourceType SourceType
+  startMs    Int?
+  endMs      Int?
+  page       Int?
+  excerpt    String     @db.Text
+  createdAt  DateTime   @default(now())
+
+  source Source              @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  chunk  ExtractedChunk?     @relation(fields: [chunkId], references: [id], onDelete: SetNull)
+
+  guideSections  StudyGuideSection[]
+  flashcards     Flashcard[]
+  quizQuestions  QuizQuestion[]
+  exercises      Exercise[]
+  tutorMessages  TutorMessage[]
+
+  @@index([sourceId])
+  @@map("citation_anchors")
+}
+
+// ---------------------------------------------------------------------------
+// Generated artifacts
+// ---------------------------------------------------------------------------
+
+model StudyGuide {
+  id          String      @id @default(cuid())
+  studySetId  String
+  style       GuideStyle  @default(LECTURE_NOTES)
+  status      GuideStatus @default(QUEUED)
+  version     Int         @default(1)
+  title       String
+  generatedAt DateTime?
+  metadata    Json        @default("{}")
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  studySet StudySet             @relation(fields: [studySetId], references: [id], onDelete: Cascade)
+  sections StudyGuideSection[]
+
+  @@index([studySetId])
+  @@map("study_guides")
+}
+
+model StudyGuideSection {
+  id                String      @id @default(cuid())
+  guideId           String
+  parentId          String?
+  ordinal           Int
+  kind              SectionKind
+  title             String
+  content           String      @default("") @db.Text
+  claimType         ClaimType   @default(SOURCE_GROUNDED)
+  confidence        Float?
+  warnings          String[]    @default([])
+  learningObjective String?
+  edited            Boolean     @default(false)
+  version           Int         @default(1)
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  guide    StudyGuide          @relation(fields: [guideId], references: [id], onDelete: Cascade)
+  parent   StudyGuideSection?  @relation("SectionTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children StudyGuideSection[] @relation("SectionTree")
+  anchors  CitationAnchor[]
+
+  @@index([guideId])
+  @@map("study_guide_sections")
+}
+
+model FlashcardDeck {
+  id           String   @id @default(cuid())
+  studySetId   String
+  name         String
+  algorithm    String   @default("fsrs-4.5")
+  generatedFrom Json?   // { sourceIds?, guideSectionIds? }
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  studySet StudySet    @relation(fields: [studySetId], references: [id], onDelete: Cascade)
+  cards    Flashcard[]
+
+  @@index([studySetId])
+  @@map("flashcard_decks")
+}
+
+model Flashcard {
+  id            String    @id @default(cuid())
+  deckId        String
+  type          CardType
+  front         String    @db.Text
+  back          String    @db.Text
+  context       String?   @db.Text // extra source excerpt shown after reveal
+  tags          String[]  @default([])
+  suspended     Boolean   @default(false)
+  warnings      String[]  @default([])
+  // Scheduling state (FSRS-4.5 by default; algorithm is swappable per deck)
+  algorithm     String    @default("fsrs-4.5")
+  state         CardState @default(NEW)
+  stability     Float?
+  difficulty    Float?
+  dueAt         DateTime  @default(now())
+  reps          Int       @default(0)
+  lapses        Int       @default(0)
+  lastReviewedAt DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  deck      FlashcardDeck      @relation(fields: [deckId], references: [id], onDelete: Cascade)
+  anchors   CitationAnchor[]
+  reviews   FlashcardReview[]
+
+  @@index([deckId, dueAt])
+  @@map("flashcards")
+}
+
+model FlashcardReview {
+  id           String   @id @default(cuid())
+  cardId       String
+  userId       String
+  grade        Int // 1=Again 2=Hard 3=Good 4=Easy
+  stateBefore  Json
+  stateAfter   Json
+  scheduledFor DateTime
+  reviewedAt   DateTime @default(now())
+
+  card Flashcard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  user User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([cardId])
+  @@index([userId, reviewedAt])
+  @@map("flashcard_reviews")
+}
+
+model Quiz {
+  id          String      @id @default(cuid())
+  studySetId  String
+  title       String
+  status      GuideStatus @default(QUEUED)
+  config      Json        @default("{}") // { topic?, sourceIds?, count, types[], difficulty, adaptive }
+  generatedAt DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  studySet  StudySet       @relation(fields: [studySetId], references: [id], onDelete: Cascade)
+  questions QuizQuestion[]
+
+  @@index([studySetId])
+  @@map("quizzes")
+}
+
+model QuizQuestion {
+  id                 String       @id @default(cuid())
+  quizId             String
+  ordinal            Int
+  type               QuestionType
+  stem               String       @db.Text
+  options            Json? // [{id, text}]
+  answer             Json // correct option ids / expected text / numeric + tolerance / order / pairs
+  explanation        String?      @db.Text
+  distractorRationale Json? // { optionId: why it is wrong }
+  learningObjective  String
+  difficulty         Difficulty
+  points             Float        @default(1)
+  warnings           String[]     @default([])
+
+  quiz     Quiz             @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  anchors  CitationAnchor[]
+
+  @@index([quizId])
+  @@map("quiz_questions")
+}
+
+model ExerciseSet {
+  id        String      @id @default(cuid())
+  studySetId String
+  title     String
+  status    GuideStatus @default(QUEUED)
+  config    Json        @default("{}")
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  studySet  StudySet   @relation(fields: [studySetId], references: [id], onDelete: Cascade)
+  exercises Exercise[]
+
+  @@index([studySetId])
+  @@map("exercise_sets")
+}
+
+model Exercise {
+  id               String       @id @default(cuid())
+  exerciseSetId    String
+  ordinal          Int
+  type             ExerciseType
+  title            String
+  prompt           String       @db.Text
+  prerequisites    String[]     @default([])
+  assumptions      String[]     @default([])
+  requiredKnowledge String[]    @default([])
+  expectedOutput   String?      @db.Text
+  estimatedMinutes Int          @default(15)
+  difficulty       Difficulty   @default(HARD)
+  grounded         Boolean      @default(true) // true = derived from source, false = transfer/practice
+  hints            String[]     @default([])
+  solution         String?      @db.Text // hidden until explicitly revealed
+  rubric           Json? // { criteria: [{id, description, weight}] }
+  warnings         String[]     @default([])
+
+  exerciseSet ExerciseSet       @relation(fields: [exerciseSetId], references: [id], onDelete: Cascade)
+  anchors     CitationAnchor[]
+
+  @@index([exerciseSetId])
+  @@map("exercises")
+}
+
+// ---------------------------------------------------------------------------
+// Tutor
+// ---------------------------------------------------------------------------
+
+model TutorConversation {
+  id        String   @id @default(cuid())
+  studySetId String
+  userId    String
+  title     String   @default("New conversation")
+  hintsUsed Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  studySet StudySet       @relation(fields: [studySetId], references: [id], onDelete: Cascade)
+  user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages TutorMessage[]
+
+  @@index([studySetId])
+  @@map("tutor_conversations")
+}
+
+model TutorMessage {
+  id              String      @id @default(cuid())
+  conversationId  String
+  role            MessageRole
+  content         String      @db.Text
+  claimType       ClaimType?
+  mode            String? // "answer" | "hint" | "explain_differently" | "challenge" | "reveal_solution"
+  metadata        Json        @default("{}") // { retrievalScores, notFoundInSources, ... }
+  createdAt       DateTime    @default(now())
+
+  conversation TutorConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  anchors      CitationAnchor[]
+
+  @@index([conversationId])
+  @@map("tutor_messages")
+}
+
+// ---------------------------------------------------------------------------
+// Jobs, attempts, plans, analytics
+// ---------------------------------------------------------------------------
+
+model GenerationJob {
+  id             String    @id @default(cuid())
+  studySetId     String?
+  sourceId       String?
+  type           JobType
+  status         JobStatus @default(QUEUED)
+  stage          String? // e.g. "transcribing" | "segmenting" | "vectorizing" | "indexing"
+  progress       Int       @default(0) // 0..100
+  payload        Json      @default("{}")
+  result         Json?
+  error          String?
+  attempts       Int       @default(0)
+  maxAttempts    Int       @default(3)
+  idempotencyKey String?   @unique
+  startedAt      DateTime?
+  finishedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  studySet StudySet? @relation(fields: [studySetId], references: [id], onDelete: Cascade)
+  source   Source?   @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@index([studySetId, status])
+  @@index([status, createdAt])
+  @@map("generation_jobs")
+}
+
+model Attempt {
+  id          String            @id @default(cuid())
+  userId      String
+  studySetId  String
+  subjectType AttemptSubjectType
+  subjectId   String // QuizQuestion.id | Exercise.id | Flashcard.id (no FK: polymorphic)
+  response    Json              @default("{}")
+  score       Float? // 0..1
+  feedback    Json? // { summary, criteria[], correctAnswer? }
+  durationMs  Int?
+  createdAt   DateTime          @default(now())
+
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  studySet   StudySet      @relation(fields: [studySetId], references: [id], onDelete: Cascade)
+  // subjectId is deliberately NOT a foreign key: it points at QuizQuestion,
+  // Exercise, or Flashcard depending on subjectType (polymorphic association).
+  // Referential integrity is enforced in application code; the target rows are
+  // cascade-deleted through their parents, and stale attempts are ignored by readers.
+
+  @@index([userId, studySetId])
+  @@index([subjectType, subjectId])
+  @@map("attempts")
+}
+
+model StudyPlan {
+  id         String    @id @default(cuid())
+  studySetId String
+  targetDate DateTime?
+  items      Json      @default("[]") // [{ date, kind, label, refId?, minutes, reason }]
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  studySet StudySet @relation(fields: [studySetId], references: [id], onDelete: Cascade)
+
+  @@index([studySetId])
+  @@map("study_plans")
+}
+
+model StudySession {
+  id        String      @id @default(cuid())
+  userId    String
+  studySetId String
+  kind      SessionKind
+  startedAt DateTime    @default(now())
+  endedAt   DateTime?
+  metrics   Json        @default("{}")
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  studySet StudySet @relation(fields: [studySetId], references: [id], onDelete: Cascade)
+
+  @@index([userId, startedAt])
+  @@map("study_sessions")
+}
+
+model ProgressMetric {
+  id             String   @id @default(cuid())
+  userId         String
+  studySetId     String
+  topic          String // learning objective / tagged topic
+  mastery        Float    @default(0) // 0..1 EWMA over attempt outcomes
+  retention      Float? // estimated retrievability from FSRS states
+  attempts       Int      @default(0)
+  correct        Int      @default(0)
+  lastActivityAt DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  studySet StudySet @relation(fields: [studySetId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, studySetId, topic])
+  @@index([studySetId])
+  @@map("progress_metrics")
+}
+
+/// Version history for every user edit of AI-generated content.
+model ArtifactEdit {
+  id         String   @id @default(cuid())
+  entityType String // "guide_section" | "flashcard" | "quiz_question" | "exercise" | "transcript_segment"
+  entityId   String
+  version    Int
+  snapshot   Json
+  note       String?
+  editedById String
+  createdAt  DateTime @default(now())
+
+  editedBy User @relation(fields: [editedById], references: [id], onDelete: Cascade)
+
+  @@unique([entityType, entityId, version])
+  @@index([entityType, entityId])
+  @@map("artifact_edits")
+}
+
+/// Audit trail for AI generations and privacy-sensitive actions.
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  action     String // e.g. "ai.generation", "source.delete", "account.export"
+  entityType String?
+  entityId   String?
+  metadata   Json     @default("{}")
+  createdAt  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([action, createdAt])
+  @@map("audit_logs")
+}
