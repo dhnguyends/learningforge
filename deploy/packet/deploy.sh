@@ -29,7 +29,8 @@ echo "==> Shipping $(git rev-parse --short "$REF") to $PACKET_USER@$PACKET_HOST:
 git -c core.autocrlf=false archive --format=tar "$REF" | "${SSH[@]}" "mkdir -p '$REMOTE_DIR' && tar -x -C '$REMOTE_DIR' && echo '$(git rev-parse "$REF")' > '$REMOTE_DIR/REVISION'"
 
 echo "==> Setup + build on the pod"
-"${SSH[@]}" "cd '$REMOTE_DIR' && DATA_DIR='$DATA_DIR' PUBLIC_URL='$PUBLIC_URL' bash deploy/packet/setup.sh"
+# LECTURE_ACCESS_KEY (optional) travels on stdin, never on a command line.
+printf '%s\n' "${LECTURE_ACCESS_KEY:-}" | "${SSH[@]}" "read -r k; [ -n \"\$k\" ] && export LECTURE_ACCESS_KEY=\"\$k\"; cd '$REMOTE_DIR' && DATA_DIR='$DATA_DIR' PUBLIC_URL='$PUBLIC_URL' bash deploy/packet/setup.sh"
 
 echo "==> Starting"
 "${SSH[@]}" "cd '$REMOTE_DIR' && DATA_DIR='$DATA_DIR' bash deploy/packet/start.sh"
