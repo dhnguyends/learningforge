@@ -31,7 +31,7 @@ mkdir -p "$DATA_DIR"/{storage,logs}
 log "System packages"
 export DEBIAN_FRONTEND=noninteractive
 $SUDO apt-get update -y -qq
-$SUDO apt-get install -y -qq curl ca-certificates gnupg lsb-release git build-essential ffmpeg python3-pip openssl >/dev/null
+$SUDO apt-get install -y -qq curl ca-certificates gnupg lsb-release git build-essential ffmpeg python3-pip openssl psmisc >/dev/null
 
 # --- PostgreSQL 16 + pgvector (PGDG repo) -----------------------------------------
 if ! command -v "/usr/lib/postgresql/$PG_VERSION/bin/postgres" >/dev/null 2>&1; then

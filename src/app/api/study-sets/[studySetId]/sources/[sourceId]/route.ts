@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { prisma, jsonSafe } from "@/lib/db";
-import { apiHandler, ok, parseJsonBody, requireSession, notFound } from "@/lib/api";
+import { apiHandler, ok, parseJsonBody, requireSession, notFound, publicOrigin } from "@/lib/api";
 import { assertStudySetAccess } from "@/lib/access";
 import { getStorage } from "@/lib/storage";
 import { audit } from "@/lib/audit";
@@ -30,7 +30,7 @@ export const GET = apiHandler<Ctx>(async (req, { params }) => {
         : source.assets.find((a) => a.kind === "AUDIO") ?? originalAsset;
 
   const assetUrls: Record<string, string> = {};
-  const origin = new URL(req.url).origin;
+  const origin = publicOrigin(req);
   for (const asset of source.assets) {
     assetUrls[asset.id] = await storage.readUrl(asset.storageKey, undefined, origin);
   }

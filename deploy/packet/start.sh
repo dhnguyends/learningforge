@@ -42,21 +42,36 @@ start_ollama() {
   echo "Ollama did not become ready" >&2; exit 1
 }
 
+port_in_use() { ss -ltn "sport = :$APP_PORT" | grep -q LISTEN; }
+
 stop_app() {
-  if [ -f "$DATA_DIR/app.pid" ] && kill -0 "$(cat "$DATA_DIR/app.pid")" 2>/dev/null; then
-    kill "$(cat "$DATA_DIR/app.pid")" && sleep 2
+  # The app runs in its own session (setsid), so its pid is also its process
+  # group id: signal the whole group — killing only `npx` leaves next-server
+  # holding the port and the "restarted" app silently never starts.
+  if [ -f "$DATA_DIR/app.pid" ]; then
+    local pgid; pgid="$(cat "$DATA_DIR/app.pid")"
+    kill -TERM -- "-$pgid" 2>/dev/null || kill -TERM "$pgid" 2>/dev/null || true
+    for _ in $(seq 1 15); do port_in_use || break; sleep 1; done
   fi
   rm -f "$DATA_DIR/app.pid"
+  # Anything still bound (e.g. started by an older version of this script).
+  if port_in_use; then
+    $SUDO fuser -k -TERM "$APP_PORT/tcp" >/dev/null 2>&1 || true
+    for _ in $(seq 1 15); do port_in_use || break; sleep 1; done
+  fi
+  if port_in_use; then echo "Port $APP_PORT is still in use — refusing to start a second server" >&2; exit 1; fi
 }
 
 start_app() {
   stop_app
   cd "$APP_DIR"
   # Bind to all interfaces so the packet.ai NodePort service can reach it.
-  NODE_ENV=production nohup npx next start -H 0.0.0.0 -p "$APP_PORT" >>"$LOGS/app.log" 2>&1 &
-  echo $! > "$DATA_DIR/app.pid"
+  NODE_ENV=production setsid nohup npx next start -H 0.0.0.0 -p "$APP_PORT" >>"$LOGS/app.log" 2>&1 < /dev/null &
+  local pid=$!
+  echo "$pid" > "$DATA_DIR/app.pid"
   for _ in $(seq 1 60); do
-    curl -fsS -o /dev/null "http://127.0.0.1:$APP_PORT/" && { echo "LectureForge is up on port $APP_PORT"; return; }
+    kill -0 "$pid" 2>/dev/null || { echo "App exited during startup — see $LOGS/app.log" >&2; exit 1; }
+    curl -fsS -o /dev/null "http://127.0.0.1:$APP_PORT/" && { echo "LectureForge is up on port $APP_PORT (pid $pid)"; return; }
     sleep 1
   done
   echo "App did not answer on port $APP_PORT — see $LOGS/app.log" >&2; exit 1

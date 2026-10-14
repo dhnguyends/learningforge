@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { apiHandler, ok, parseJsonBody, requireSession, badRequest } from "@/lib/api";
+import { apiHandler, ok, parseJsonBody, requireSession, badRequest, publicOrigin } from "@/lib/api";
 import { ensureUserWorkspace } from "@/lib/auth";
 import { assertStudySetAccess, listUserWorkspaceIds } from "@/lib/access";
 import { getStorage, sourceAssetKey } from "@/lib/storage";
@@ -161,7 +161,7 @@ export const POST = apiHandler(async (req) => {
       // See sources/route.ts — tickets must point back at the requesting origin.
       const ticket = await storage.createUpload(assetKey, {
         contentType: input.mimeType,
-        baseUrl: new URL(req.url).origin,
+        baseUrl: publicOrigin(req),
         userId: session.user.id,
         maxBytes: input.sizeBytes,
       });

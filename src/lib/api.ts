@@ -3,6 +3,7 @@ import { ZodError, type ZodTypeAny, type output } from "zod";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import type { Session } from "next-auth";
+import { getEnv, type Env } from "@/lib/env";
 
 export class ApiError extends Error {
   status: number;
@@ -69,4 +70,26 @@ export async function parseJsonBody<S extends ZodTypeAny>(req: NextRequest, sche
 
 export function ok<T>(data: T, init?: ResponseInit): NextResponse {
   return NextResponse.json(data, init);
+}
+
+/**
+ * Origin the BROWSER used to reach us, for URLs we hand back to it (local
+ * upload tickets, playback links).
+ *
+ * Not `new URL(req.url).origin`: under `next start` Next builds req.url from
+ * the server's own bind address (e.g. http://localhost:3000), not from the
+ * Host header — behind a port mapping (packet.ai NodePort :20002 → :3000) the
+ * browser was told to PUT uploads to a port it cannot reach, and uploads hung.
+ *
+ * Production: APP_URL is authoritative (operator-set; a forged Host header
+ * cannot redirect uploads elsewhere). Development: the Host header, so the
+ * dev server works on whatever port it runs on.
+ */
+export function publicOrigin(req: Request, env: Pick<Env, "NODE_ENV" | "APP_URL"> = getEnv()): string {
+  if (env.NODE_ENV === "production" && env.APP_URL) return env.APP_URL.replace(/\/+$/, "");
+  const host = req.headers.get("x-forwarded-host")?.split(",")[0]?.trim() || req.headers.get("host");
+  if (!host) return new URL(req.url).origin;
+  const forwardedProto = req.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
+  const proto = forwardedProto === "https" || forwardedProto === "http" ? forwardedProto : new URL(req.url).protocol.replace(":", "");
+  return `${proto}://${host}`;
 }

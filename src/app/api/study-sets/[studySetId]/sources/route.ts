@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { prisma, jsonSafe } from "@/lib/db";
-import { apiHandler, ok, parseJsonBody, requireSession, badRequest } from "@/lib/api";
+import { apiHandler, ok, parseJsonBody, requireSession, badRequest, publicOrigin } from "@/lib/api";
 import { assertStudySetAccess } from "@/lib/access";
 import { getStorage, sourceAssetKey } from "@/lib/storage";
 import { validateUploadIntent, isRecordingType, estimateProcessingSec } from "@/lib/uploads";
@@ -68,7 +68,7 @@ export const POST = apiHandler<Ctx>(async (req, { params }) => {
     // uploads to this server whatever port it's reachable on.
     const ticket = await storage.createUpload(assetKey, {
       contentType: input.mimeType,
-      baseUrl: new URL(req.url).origin,
+      baseUrl: publicOrigin(req),
       userId: session.user.id,
       maxBytes: input.sizeBytes,
     });
