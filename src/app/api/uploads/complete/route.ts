@@ -2,7 +2,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { apiHandler, ok, parseJsonBody, requireSession, notFound, badRequest } from "@/lib/api";
 import { assertStudySetAccess } from "@/lib/access";
-import { getStorage } from "@/lib/storage";
+import { getStorage, sourcePrefix } from "@/lib/storage";
 import { enqueue } from "@/lib/queue";
 import { validateUploadIntent } from "@/lib/uploads";
 
@@ -19,10 +19,16 @@ export const POST = apiHandler(async (req) => {
 
   const source = await prisma.source.findUnique({ where: { id: sourceId }, include: { assets: true } });
   if (!source) throw notFound("Source");
-  await assertStudySetAccess(session.user.id, source.studySetId, "write");
+  const studySet = await assertStudySetAccess(session.user.id, source.studySetId, "write");
 
   const original = source.assets.find((a) => a.kind === "ORIGINAL");
   if (!original) throw badRequest("Source has no pending upload");
+  // Only ever read the object from this source's own prefix — legacy rows
+  // whose key was built from a client filename may point anywhere.
+  if (!original.storageKey.startsWith(`${sourcePrefix(studySet.workspaceId, studySet.id, source.id)}/`)) {
+    await prisma.source.update({ where: { id: sourceId }, data: { status: "FAILED", error: "Upload location is invalid — re-add this file." } });
+    throw badRequest("Upload could not be verified: invalid storage location");
+  }
 
   // Confirm the object actually landed in storage.
   const storage = getStorage();

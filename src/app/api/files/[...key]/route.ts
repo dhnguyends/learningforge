@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { open, stat } from "node:fs/promises";
-import path from "node:path";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/db";
+import { ApiError } from "@/lib/api";
+import { assertStudySetAccess } from "@/lib/access";
 import { getEnv } from "@/lib/env";
+import { parseTenantKey } from "@/lib/storage";
+import { localStoragePath } from "@/lib/storage/local";
 
 const MIME: Record<string, string> = {
   mp4: "video/mp4",
@@ -23,8 +25,12 @@ const MIME: Record<string, string> = {
 
 /**
  * Local-storage file streaming with Range support (video seeking).
- * Authorization: the key embeds the workspace id — membership is verified
- * before any byte is served.
+ * Authorization: the key must be a safe tenant key
+ * (workspaces/<ws>/study-sets/<set>/…, no `..` or other traversal segments)
+ * and the caller must have read access to that study set, which must belong
+ * to that workspace. Validation happens on the exact key that is resolved on
+ * disk — authorizing one path and then serving a normalized other one is how
+ * `workspaces/<mine>/..%2F<theirs>/…` used to leak other tenants' files.
  */
 export async function GET(req: NextRequest, { params }: { params: { key: string[] } }) {
   if (getEnv().STORAGE_DRIVER !== "local") {
@@ -34,18 +40,25 @@ export async function GET(req: NextRequest, { params }: { params: { key: string[
   if (!session?.user?.id) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
 
   const key = params.key.join("/");
-  // workspaces/<workspaceId>/...
-  const workspaceId = params.key[1];
-  if (!workspaceId) return NextResponse.json({ error: "Invalid key" }, { status: 400 });
+  const tenant = parseTenantKey(key);
+  if (!tenant) return NextResponse.json({ error: "Invalid key" }, { status: 400 });
 
-  const member = await prisma.workspaceMember.findUnique({
-    where: { workspaceId_userId: { workspaceId, userId: session.user.id } },
-  });
-  if (!member) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  try {
+    const studySet = await assertStudySetAccess(session.user.id, tenant.studySetId);
+    if (studySet.workspaceId !== tenant.workspaceId) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+  } catch (err) {
+    if (err instanceof ApiError) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
 
-  const root = path.join(process.cwd(), ".data", "storage");
-  const target = path.normalize(path.join(root, key));
-  if (!target.startsWith(root)) return NextResponse.json({ error: "Invalid key" }, { status: 400 });
+  let target: string;
+  try {
+    target = localStoragePath(key);
+  } catch {
+    return NextResponse.json({ error: "Invalid key" }, { status: 400 });
+  }
 
   let size: number;
   try {

@@ -12,5 +12,14 @@ export function getStorage(): StorageDriver {
   return cached;
 }
 
-export { sourceAssetKey } from "@/lib/storage/types";
-export type { StorageDriver, UploadTicket } from "@/lib/storage/types";
+export {
+  assertSafeKey,
+  parseTenantKey,
+  sourceAssetKey,
+  sourceDerivedKey,
+  sourcePrefix,
+  studySetPrefix,
+  studySetRecapKey,
+  UnsafeStorageKeyError,
+} from "@/lib/storage/keys";
+export type { StorageDriver, UploadTicket, CreateUploadOptions } from "@/lib/storage/types";

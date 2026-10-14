@@ -1,6 +1,6 @@
-import type { Source, SourceAsset } from "@prisma/client";
+import type { Source, SourceAsset, StudySet } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { getStorage } from "@/lib/storage";
+import { getStorage, sourceDerivedKey } from "@/lib/storage";
 import { getTranscriber } from "@/lib/transcription";
 import { extractAudio, probeMedia, fetchYouTubeAudio } from "@/lib/media/ffmpeg";
 import { parseDocument } from "@/lib/documents/parse";
@@ -53,8 +53,14 @@ export async function ingestSource(ctx: JobContext<{ sourceId: string }>): Promi
 
 // --- Audio / video path -------------------------------------------------------
 
-async function ingestAudioVideo(source: Source & { assets: SourceAsset[] }, ctx: JobContext<{ sourceId: string }>): Promise<void> {
+async function ingestAudioVideo(
+  source: Source & { assets: SourceAsset[]; studySet: StudySet },
+  ctx: JobContext<{ sourceId: string }>,
+): Promise<void> {
   await ctx.updateStage("probing", 5);
+  // Derived audio lives under the source's own prefix: source / study-set /
+  // account deletion purges it, and file serving can authorize it.
+  const audioKey = sourceDerivedKey(source.studySet.workspaceId, source.studySetId, source.id, "audio.mp3");
 
   let audioBuffer: Buffer;
   let durationSec = source.durationSec ?? 0;
@@ -62,7 +68,7 @@ async function ingestAudioVideo(source: Source & { assets: SourceAsset[] }, ctx:
 
   if (source.type === "YOUTUBE" && source.externalUrl) {
     await ctx.updateStage("fetching-source", 15);
-    const key = `${source.id}/audio.mp3`;
+    const key = audioKey;
     const fetched = await fetchYouTubeAudio(source.externalUrl, key);
     audioBuffer = await getStorage().read(key);
     durationSec = fetched.durationSec || durationSec;
@@ -95,7 +101,7 @@ async function ingestAudioVideo(source: Source & { assets: SourceAsset[] }, ctx:
       }
 
       await ctx.updateStage("extracting-audio", 20);
-      const key = `${source.id}/audio.mp3`;
+      const key = audioKey;
       const extracted = await extractAudio(originalBuffer, original.filename, key);
       durationSec = extracted.durationSec || durationSec;
       audioBuffer = await getStorage().read(key);

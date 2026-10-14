@@ -61,10 +61,17 @@ export const POST = apiHandler<Ctx>(async (req, { params }) => {
         ...(isRecordingType(sourceType) ? { consentConfirmedAt: new Date() } : {}),
       },
     });
-    const assetKey = sourceAssetKey(studySet.workspaceId, studySet.id, source.id, input.filename);
+    // The filename is display metadata only — never part of the storage key
+    // (a "../../<otherWorkspace>/…" name used to resolve into another tenant).
+    const assetKey = sourceAssetKey(studySet.workspaceId, studySet.id, source.id, input.mimeType);
     // Tickets point back at the origin this request came from, so the client
     // uploads to this server whatever port it's reachable on.
-    const ticket = await storage.createUpload(assetKey, { contentType: input.mimeType, baseUrl: new URL(req.url).origin });
+    const ticket = await storage.createUpload(assetKey, {
+      contentType: input.mimeType,
+      baseUrl: new URL(req.url).origin,
+      userId: session.user.id,
+      maxBytes: input.sizeBytes,
+    });
     await prisma.sourceAsset.create({
       data: {
         sourceId: source.id,

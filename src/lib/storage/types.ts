@@ -9,16 +9,25 @@ export interface UploadTicket {
   method: "PUT";
 }
 
-export interface StorageDriver {
-  readonly name: string;
+export interface CreateUploadOptions {
+  contentType: string;
   /**
-   * Allocate an upload location for a new object. `baseUrl` is the origin of
-   * the request asking for the ticket: the local driver embeds it in the
-   * upload URL so tickets always point back at the server the client is
-   * actually using (the S3 driver ignores it — presigned URLs are
+   * Origin of the request asking for the ticket: the local driver embeds it
+   * in the upload URL so tickets always point back at the server the client
+   * is actually using (the S3 driver ignores it — presigned URLs are
    * provider-hosted).
    */
-  createUpload(key: string, opts: { contentType: string; baseUrl?: string }): Promise<UploadTicket>;
+  baseUrl?: string;
+  /** User the ticket is issued to (local driver binds the ticket to them). */
+  userId: string;
+  /** Size ceiling the upload may not exceed. */
+  maxBytes: number;
+}
+
+export interface StorageDriver {
+  readonly name: string;
+  /** Allocate an upload location for a new object. */
+  createUpload(key: string, opts: CreateUploadOptions): Promise<UploadTicket>;
   /** Store bytes directly (server-side writes, e.g. ffmpeg output). */
   put(key: string, body: Buffer | Uint8Array, opts: { contentType: string }): Promise<void>;
   /** Time-limited read URL (media streaming / downloads). `baseUrl` as above. */
@@ -28,8 +37,4 @@ export interface StorageDriver {
   /** Permanently delete an object. */
   delete(key: string): Promise<void>;
   deletePrefix(prefix: string): Promise<void>;
-}
-
-export function sourceAssetKey(workspaceId: string, studySetId: string, sourceId: string, filename: string): string {
-  return `workspaces/${workspaceId}/study-sets/${studySetId}/sources/${sourceId}/${filename}`;
 }

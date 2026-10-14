@@ -7,12 +7,14 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type { Env } from "@/lib/env";
-import type { StorageDriver, UploadTicket } from "@/lib/storage/types";
+import { assertSafeKey } from "@/lib/storage/keys";
+import type { CreateUploadOptions, StorageDriver, UploadTicket } from "@/lib/storage/types";
 
 /**
  * S3-compatible object storage (AWS S3, Cloudflare R2, MinIO).
- * All keys are opaque to the driver; access control happens in the app layer
- * (signed URLs are short-lived and scoped to a single key).
+ * Access control happens in the app layer (signed URLs are short-lived and
+ * scoped to a single key); keys are still validated here so a `..` segment
+ * can never reach a provider or proxy that normalizes paths.
  */
 export class S3Storage implements StorageDriver {
   readonly name = "s3";
@@ -33,10 +35,10 @@ export class S3Storage implements StorageDriver {
   }
 
   private objectName(key: string) {
-    return { Bucket: this.bucket, Key: key };
+    return { Bucket: this.bucket, Key: assertSafeKey(key) };
   }
 
-  async createUpload(key: string, opts: { contentType: string }): Promise<UploadTicket> {
+  async createUpload(key: string, opts: CreateUploadOptions): Promise<UploadTicket> {
     const url = await getSignedUrl(
       this.client,
       new PutObjectCommand({ ...this.objectName(key), ContentType: opts.contentType }),
@@ -72,10 +74,12 @@ export class S3Storage implements StorageDriver {
     let token: string | undefined;
     do {
       const listed = await this.client.send(
-        new ListObjectsV2Command({ Bucket: this.bucket, Prefix: prefix, ContinuationToken: token }),
+        new ListObjectsV2Command({ Bucket: this.bucket, Prefix: `${assertSafeKey(prefix)}/`, ContinuationToken: token }),
       );
       for (const obj of listed.Contents ?? []) {
-        if (obj.Key) await this.client.send(new DeleteObjectCommand(this.objectName(obj.Key)));
+        // Listed keys come from the bucket itself — delete them verbatim, even
+        // legacy ones that would no longer pass assertSafeKey.
+        if (obj.Key) await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: obj.Key }));
       }
       token = listed.IsTruncated ? listed.NextContinuationToken : undefined;
     } while (token);

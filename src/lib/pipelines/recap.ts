@@ -4,14 +4,14 @@ import { getGenerator } from "@/lib/ai";
 import { recapSchema } from "@/lib/pipelines/schemas";
 import { AUDIO_RECAP_SYSTEM, PROMPT_VERSION } from "@/lib/prompts";
 import type { JobContext } from "@/lib/queue/types";
-import { getStorage } from "@/lib/storage";
+import { getStorage, studySetRecapKey } from "@/lib/storage";
 import { audit } from "@/lib/audit";
 
 /** Audio recap: guide sections → 90s script → TTS audio asset (when provider available). */
 export async function generateAudioRecapJob(ctx: JobContext<{ studySetId: string; guideId: string }>): Promise<void> {
   const guide = await prisma.studyGuide.findUnique({
     where: { id: ctx.payload.guideId },
-    include: { sections: { orderBy: { ordinal: "asc" } }, studySet: { select: { id: true, title: true } } },
+    include: { sections: { orderBy: { ordinal: "asc" } }, studySet: { select: { id: true, title: true, workspaceId: true } } },
   });
   if (!guide) throw new Error("Guide not found");
   const grounded = guide.sections.filter((s) => s.claimType === "SOURCE_GROUNDED");
@@ -47,7 +47,7 @@ export async function generateAudioRecapJob(ctx: JobContext<{ studySetId: string
       input: result.data.script.slice(0, 4000),
     });
     const buffer = Buffer.from(await mp3.arrayBuffer());
-    audioKey = `study-sets/${ctx.payload.studySetId}/recap-${Date.now()}.mp3`;
+    audioKey = studySetRecapKey(guide.studySet.workspaceId, guide.studySet.id, guide.id, Date.now());
     await getStorage().put(audioKey, buffer, { contentType: "audio/mpeg" });
   }
 
