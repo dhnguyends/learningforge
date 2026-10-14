@@ -339,6 +339,10 @@ export function useSource(studySetId: string, sourceId: string) {
   return useQuery({
     queryKey: qk.source(studySetId, sourceId),
     queryFn: () => api<SourceDetail>(`/api/study-sets/${studySetId}/sources/${sourceId}`),
+    // Without an id the URL ends in ".../sources/", which is the LIST route —
+    // its { sources } payload has no `source` and crashed the transcript page
+    // for study sets with no audio/video source.
+    enabled: Boolean(studySetId && sourceId),
     refetchInterval: (q) => (q.state.data?.source.status === "PROCESSING" || q.state.data?.source.status === "PENDING_UPLOAD" ? 2000 : false),
   });
 }

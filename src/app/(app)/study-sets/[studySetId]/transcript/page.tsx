@@ -39,7 +39,7 @@ function TranscriptPageInner() {
   const [query, setQuery] = useState("");
   const [flaggedOnly, setFlaggedOnly] = useState(false);
 
-  const allSegments = useMemo(() => data?.source.transcripts[0]?.segments ?? [], [data]);
+  const allSegments = useMemo(() => data?.source?.transcripts?.[0]?.segments ?? [], [data]);
   const segments = useMemo(() => (flaggedOnly ? allSegments.filter((s) => s.flagged) : allSegments), [allSegments, flaggedOnly]);
   const editedCount = allSegments.filter((s) => s.edited).length;
   const flaggedCount = allSegments.filter((s) => s.flagged).length;
@@ -75,7 +75,8 @@ function TranscriptPageInner() {
       {!sourceId ? (
         <Card>
           <CardContent className="py-12 text-center text-sm text-muted-foreground">
-            No transcribed sources yet — add a lecture recording or YouTube link first.
+            This study set has no lecture recordings yet — transcripts come from audio, video or YouTube sources. Documents
+            (PDFs, slides, notes) are read directly and appear under Sources.
           </CardContent>
         </Card>
       ) : (
