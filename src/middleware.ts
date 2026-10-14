@@ -1,6 +1,6 @@
 import { NextResponse, type NextFetchEvent, type NextRequest } from "next/server";
 import { withAuth, type NextRequestWithAuth } from "next-auth/middleware";
-import { ACCESS_COOKIE, accessKey, isGateExempt, verifyAccessToken } from "@/lib/access-gate";
+import { ACCESS_COOKIE, accessKey, browserOrigin, isGateExempt, verifyAccessToken } from "@/lib/access-gate";
 
 /** App pages that need a signed-in user (/create was missing before). */
 const SIGNED_IN_PAGES = ["/dashboard", "/study-sets", "/settings", "/create", "/admin"];
@@ -25,10 +25,8 @@ export default async function middleware(req: NextRequest, event: NextFetchEvent
       if (pathname.startsWith("/api/")) {
         return NextResponse.json({ error: "Access key required", code: "access_required" }, { status: 401 });
       }
-      const url = req.nextUrl.clone();
-      url.pathname = "/access";
-      url.search = `?next=${encodeURIComponent(pathname + search)}`;
-      return NextResponse.redirect(url);
+      // Absolute URL on the browser's origin (not the app's internal one behind a proxy).
+      return NextResponse.redirect(`${browserOrigin(req)}/access?next=${encodeURIComponent(pathname + search)}`);
     }
   }
 

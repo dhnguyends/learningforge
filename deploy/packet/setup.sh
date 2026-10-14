@@ -89,7 +89,7 @@ if [ "$PUBLIC_SCHEME" = "https" ]; then
 {
 	default_sni $PUBLIC_HOST
 	skip_install_trust
-	servers :$PROXY_PORT {
+	servers {
 		listener_wrappers {
 			http_redirect
 			tls

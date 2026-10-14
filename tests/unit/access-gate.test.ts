@@ -81,6 +81,23 @@ describe("middleware gate", () => {
     expect(unlock.status).toBe(200);
   });
 
+  it("redirects to the public origin behind a TLS proxy, not the app's internal address", async () => {
+    process.env.LECTURE_ACCESS_KEY = KEY;
+    const env = process.env as Record<string, string | undefined>;
+    const prevNodeEnv = env.NODE_ENV;
+    const prevAppUrl = env.APP_URL;
+    env.NODE_ENV = "production";
+    env.APP_URL = "https://203.0.113.10:20002";
+    try {
+      // What Next sees behind Caddy: its own bind address in the URL.
+      const res = await middleware(new NextRequest("https://localhost:3001/dashboard"), event);
+      expect(res.headers.get("location")).toBe("https://203.0.113.10:20002/access?next=%2Fdashboard");
+    } finally {
+      env.NODE_ENV = prevNodeEnv;
+      env.APP_URL = prevAppUrl;
+    }
+  });
+
   it("lets a valid cookie through and rejects a forged one", async () => {
     process.env.LECTURE_ACCESS_KEY = KEY;
     process.env.NEXTAUTH_SECRET = SECRET;

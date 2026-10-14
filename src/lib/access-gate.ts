@@ -63,6 +63,21 @@ export async function verifyAccessToken(
   return safeEqual(sig, await hmac(secret, `access:${expStr}:${key}`));
 }
 
+/**
+ * Origin the browser used, for redirects issued by the middleware. Behind a
+ * TLS proxy req.nextUrl carries the app's internal address
+ * (https://localhost:3001), so production uses APP_URL; elsewhere the
+ * forwarded / Host headers. Edge-safe (no getEnv).
+ */
+export function browserOrigin(req: { headers: Headers; nextUrl: URL }): string {
+  const appUrl = process.env.APP_URL?.trim();
+  if (process.env.NODE_ENV === "production" && appUrl) return appUrl.replace(/\/+$/, "");
+  const host = req.headers.get("x-forwarded-host")?.split(",")[0]?.trim() || req.headers.get("host");
+  const proto = req.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
+  if (!host) return req.nextUrl.origin;
+  return `${proto === "https" || proto === "http" ? proto : req.nextUrl.protocol.replace(":", "")}://${host}`;
+}
+
 /** Paths reachable without the access cookie. */
 export function isGateExempt(pathname: string): boolean {
   return (
