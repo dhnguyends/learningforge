@@ -2,7 +2,7 @@ import type { Config } from "tailwindcss";
 import animate from "tailwindcss-animate";
 
 /**
- * LectureForge design tokens.
+ * LearningForge design tokens.
  * Calm, technical palette: deep ink surfaces, verdigris accent for actions,
  * amber reserved exclusively for citations so source links stay visually loud.
  */

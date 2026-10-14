@@ -1,4 +1,4 @@
-# LectureForge — Architecture & Robustness Review
+# LearningForge — Architecture & Robustness Review
 
 _Reviewer: lead architect review (Claude Code) · Date: 2026-10-14 · Commit reviewed: `0de1a5c` (main, clean tree)_
 _Audience: the development team / AI code assistant that will implement the fixes._
@@ -7,7 +7,7 @@ _Audience: the development team / AI code assistant that will implement the fixe
 
 ## 1. Executive summary
 
-LectureForge is well structured for an early-stage product. It has a clean provider abstraction (AI, embeddings, transcription, storage, queue), Zod validation at every API boundary, a server-authoritative quiz grader, citation anchors built into the data model, and a fully offline mock mode. Typecheck and lint are clean and **all 108 automated tests pass**.
+LearningForge is well structured for an early-stage product. It has a clean provider abstraction (AI, embeddings, transcription, storage, queue), Zod validation at every API boundary, a server-authoritative quiz grader, citation anchors built into the data model, and a fully offline mock mode. Typecheck and lint are clean and **all 108 automated tests pass**.
 
 **The green suite hides real defects.** The tests cover happy paths with the seeded demo account. Nothing tests tenant isolation, the upload/file-serving layer, editing, regeneration, or failure paths. Live probes against the running app confirmed:
 

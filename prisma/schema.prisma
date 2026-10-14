@@ -1,4 +1,4 @@
-// LectureForge — Prisma schema
+// LearningForge — Prisma schema
 // The StudySet is the central unit: it groups Sources (video/audio/PDF/slides/
 // notes) and every generated artifact retains provenance back to ExtractedChunks
 // and CitationAnchors.

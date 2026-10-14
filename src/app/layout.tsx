@@ -9,9 +9,9 @@ const sourceSerif = Source_Serif_4({ subsets: ["latin"], variable: "--font-serif
 const jetbrains = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono", display: "swap" });
 
 export const metadata: Metadata = {
-  title: { default: "LectureForge — Turn lectures into source-linked study artifacts", template: "%s · LectureForge" },
+  title: { default: "LearningForge — Turn lectures into source-linked study artifacts", template: "%s · LearningForge" },
   description:
-    "LectureForge turns your lecture recordings, slides and papers into source-linked transcripts, study guides, flashcards, adaptive quizzes and a grounded Socratic tutor — with a citation on every claim.",
+    "LearningForge turns your lecture recordings, slides and papers into source-linked transcripts, study guides, flashcards, adaptive quizzes and a grounded Socratic tutor — with a citation on every claim.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

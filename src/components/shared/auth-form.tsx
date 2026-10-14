@@ -17,7 +17,7 @@ export function AuthShell({ title, subtitle, children, footer }: { title: string
   return (
     <div className="flex min-h-screen flex-col bg-muted/30">
       <header className="flex h-16 items-center justify-between px-4 sm:px-6">
-        <Link href="/" aria-label="LectureForge home">
+        <Link href="/" aria-label="LearningForge home">
           <LogoWordmark />
         </Link>
         <ThemeToggle />
@@ -103,7 +103,7 @@ export function SignUpForm() {
         toast.success("Account created — please sign in");
         router.push("/auth/sign-in");
       } else {
-        toast.success("Account created. Welcome to LectureForge.");
+        toast.success("Account created. Welcome to LearningForge.");
         router.push("/dashboard");
         router.refresh();
       }

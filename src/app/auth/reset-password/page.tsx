@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { AuthShell, ResetRequestForm } from "@/components/shared/auth-form";
 
-export const metadata: Metadata = { title: "Reset password — LectureForge" };
+export const metadata: Metadata = { title: "Reset password — LearningForge" };
 
 export default function ResetPasswordPage() {
   return (

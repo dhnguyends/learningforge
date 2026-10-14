@@ -1,9 +1,9 @@
-# LectureForge
+# LearningForge
 
 Turn your course materials into study tools that stay honest about where every
 claim comes from. Upload lecture recordings, conference videos, PDFs, slide
 decks, handwritten notes, or paste a YouTube link you have rights to —
-LectureForge transcribes, indexes, and generates **source-linked study guides,
+LearningForge transcribes, indexes, and generates **source-linked study guides,
 spaced-repetition flashcards, adaptive quizzes, and advanced exercises**, plus
 a Socratic tutor that cites your materials and gives hints before solutions.
 
@@ -50,7 +50,7 @@ npm run db:seed                # demo data: an advanced ML lecture, fully proces
 npm run dev                    # http://localhost:3000
 ```
 
-Sign in as **demo@lectureforge.app / demo-password** — the seeded
+Sign in as **demo@learningforge.app / demo-password** — the seeded
 "Backpropagation & Optimization" study set has a processed lecture video,
 slide deck, recitation notes, a study guide, a 9-card FSRS deck with due
 cards, an 8-question quiz, exercises, and tutor history.

@@ -1,4 +1,4 @@
-// Live probes against the LectureForge dev server (local test accounts only).
+// Live probes against the LearningForge dev server (local test accounts only).
 const BASE = process.env.BASE ?? "http://localhost:3001";
 const stamp = Date.now();
 const results = [];

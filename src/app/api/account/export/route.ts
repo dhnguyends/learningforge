@@ -37,7 +37,7 @@ export const GET = apiHandler(async (req: NextRequest) => {
 
   const payload = {
     exportedAt: new Date().toISOString(),
-    product: "LectureForge",
+    product: "LearningForge",
     user,
     workspaces: workspaces.map((w) => w.workspace),
     studySets,
@@ -48,7 +48,7 @@ export const GET = apiHandler(async (req: NextRequest) => {
   return new Response(JSON.stringify(payload, null, 2), {
     headers: {
       "Content-Type": "application/json",
-      "Content-Disposition": `attachment; filename="lectureforge-export-${new Date().toISOString().slice(0, 10)}.json"`,
+      "Content-Disposition": `attachment; filename="learningforge-export-${new Date().toISOString().slice(0, 10)}.json"`,
     },
   });
 });

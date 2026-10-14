@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { AuthShell, SignInForm } from "@/components/shared/auth-form";
 
-export const metadata: Metadata = { title: "Sign in — LectureForge" };
+export const metadata: Metadata = { title: "Sign in — LearningForge" };
 
 export default function SignInPage() {
   return (

@@ -25,7 +25,7 @@ const FEATURES = [
   {
     icon: FileVideo,
     title: "Lecture video → structured guide",
-    body: "Drop in a lecture recording, conference talk, or YouTube link. LectureForge transcribes it, segments the content, and writes a clean study guide with equations, code, and definitions preserved.",
+    body: "Drop in a lecture recording, conference talk, or YouTube link. LearningForge transcribes it, segments the content, and writes a clean study guide with equations, code, and definitions preserved.",
   },
   {
     icon: Quote,
@@ -78,7 +78,7 @@ export default function LandingPage() {
       {/* Header */}
       <header className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
-          <Link href="/" aria-label="LectureForge home">
+          <Link href="/" aria-label="LearningForge home">
             <LogoWordmark />
           </Link>
           <nav className="flex items-center gap-2 sm:gap-4">
@@ -119,7 +119,7 @@ export default function LandingPage() {
                 <span className="text-primary">actually trust</span>.
               </h1>
               <p className="mx-auto mt-6 max-w-2xl text-pretty text-lg text-muted-foreground">
-                LectureForge converts your own course recordings, papers, and notes into editable study guides,
+                LearningForge converts your own course recordings, papers, and notes into editable study guides,
                 citation-linked flashcards, adaptive quizzes, and advanced STEM exercises — every claim traceable to the
                 exact moment it came from.
               </p>

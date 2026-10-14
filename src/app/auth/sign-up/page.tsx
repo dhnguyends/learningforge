@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { AuthShell, SignUpForm } from "@/components/shared/auth-form";
 
-export const metadata: Metadata = { title: "Create account — LectureForge" };
+export const metadata: Metadata = { title: "Create account — LearningForge" };
 
 export default function SignUpPage() {
   return (

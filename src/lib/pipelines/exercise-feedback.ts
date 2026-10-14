@@ -31,7 +31,7 @@ export async function gradeExerciseAttempt(opts: {
   const chunks = await searchChunks(opts.studySetId, opts.exercise.title, { k: 5 });
   return (
     await getGenerator().generate({
-      system: `You are LectureForge's exercise grader. Grade the learner's submission against the exercise requirements. Be specific about what is right, what is wrong, and the single most valuable next step. Do not reveal the full solution unless the submission is essentially complete; point at what to fix instead. Verify any arithmetic the learner shows.`,
+      system: `You are LearningForge's exercise grader. Grade the learner's submission against the exercise requirements. Be specific about what is right, what is wrong, and the single most valuable next step. Do not reveal the full solution unless the submission is essentially complete; point at what to fix instead. Verify any arithmetic the learner shows.`,
       user: `EXERCISE: ${opts.exercise.title}\nREQUIREMENTS: ${opts.exercise.prompt}\n${
         opts.exercise.expectedOutput ? `EXPECTED OUTPUT: ${opts.exercise.expectedOutput}\n` : ""
       }SOURCE EXCERPTS:\n${opts.exercise.anchors.map((a) => `- ${a.excerpt}`).join("\n")}\n\nLEARNER SUBMISSION:\n${opts.submission.slice(0, 8000)}\n\nREFERENCE SOLUTION (for grading only, do not quote verbatim):\n${opts.exercise.solution.slice(0, 4000)}\n\nRETRIEVED CONTEXT:\n${formatRetrievedContext(chunks)}`,

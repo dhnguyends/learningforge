@@ -1,7 +1,7 @@
 /**
- * LectureForge seed: a realistic advanced-ML study set.
+ * LearningForge seed: a realistic advanced-ML study set.
  *
- * Demo account:  demo@lectureforge.app / demo-password
+ * Demo account:  demo@learningforge.app / demo-password
  *
  * Creates one fully-processed study set ("Backpropagation & Optimization")
  * built from three sources (lecture video, slide deck, recitation notes),
@@ -26,14 +26,14 @@ async function main() {
   if (process.env.NODE_ENV === "production" && process.env.ALLOW_DEMO_SEED !== "true") {
     throw new Error("Refusing to seed demo data with NODE_ENV=production (set ALLOW_DEMO_SEED=true to override).");
   }
-  console.log("Seeding LectureForge demo data…");
+  console.log("Seeding LearningForge demo data…");
 
   // Idempotent: wipe the demo account (cascades to everything it owns).
-  await prisma.user.deleteMany({ where: { email: "demo@lectureforge.app" } });
+  await prisma.user.deleteMany({ where: { email: "demo@learningforge.app" } });
 
   const user = await prisma.user.create({
     data: {
-      email: "demo@lectureforge.app",
+      email: "demo@learningforge.app",
       name: "Demo Student",
       passwordHash: await bcrypt.hash("demo-password", 12),
       preferences: { theme: "system" },
@@ -896,7 +896,7 @@ async function main() {
     },
   });
 
-  console.log(`Seeded. Sign in with:\n  email:    demo@lectureforge.app\n  password: demo-password`);
+  console.log(`Seeded. Sign in with:\n  email:    demo@learningforge.app\n  password: demo-password`);
 }
 
 main()

@@ -1,6 +1,6 @@
 # Deployment guide
 
-LectureForge is two long-running processes plus managed infrastructure:
+LearningForge is two long-running processes plus managed infrastructure:
 
 | Piece | Recommended | Why |
 |---|---|---|

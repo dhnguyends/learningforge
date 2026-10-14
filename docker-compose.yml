@@ -1,4 +1,4 @@
-# Local development infrastructure for LectureForge.
+# Local development infrastructure for LearningForge.
 # `docker compose up -d` starts Postgres (with pgvector) and Redis.
 # `docker compose --profile storage up -d` also starts MinIO (S3-compatible).
 services:

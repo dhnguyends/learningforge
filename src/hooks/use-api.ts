@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * React Query data layer for LectureForge.
+ * React Query data layer for LearningForge.
  *
  * API conventions (src/lib/api.ts): success bodies ARE the payload (`ok(data)`),
  * errors are `{ error, code }` with a meaningful HTTP status.

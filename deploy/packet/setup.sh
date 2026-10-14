@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# LectureForge — one-box setup on a packet.ai GPU pod (Ubuntu 22.04 + CUDA).
+# LearningForge — one-box setup on a packet.ai GPU pod (Ubuntu 22.04 + CUDA).
 #
 # Installs and configures, idempotently:
 #   PostgreSQL 16 + pgvector · Node.js 20 · FFmpeg · yt-dlp · Ollama (+ model)

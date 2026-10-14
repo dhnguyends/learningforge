@@ -27,7 +27,7 @@ export function AppShell({ children, breadcrumb }: { children: React.ReactNode; 
       <header className="sticky top-0 z-40 border-b border-border/60 bg-background/85 backdrop-blur">
         <div className="flex h-14 max-w-[1600px] items-center justify-between gap-3 px-4 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
-            <Link href="/dashboard" aria-label="LectureForge dashboard" className="shrink-0">
+            <Link href="/dashboard" aria-label="LearningForge dashboard" className="shrink-0">
               <LogoWordmark />
             </Link>
             {breadcrumb && <div className="hidden min-w-0 items-center gap-2 text-sm text-muted-foreground md:flex">{breadcrumb}</div>}

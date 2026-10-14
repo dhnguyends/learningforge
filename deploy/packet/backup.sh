@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Back up / restore a LectureForge trial pod that has NO persistent storage.
+# Back up / restore a LearningForge trial pod that has NO persistent storage.
 # Everything on such a pod disappears when it stops — run `backup` first.
 #
 #   PACKET_HOST=… PACKET_PORT=… bash deploy/packet/backup.sh backup  [dir]

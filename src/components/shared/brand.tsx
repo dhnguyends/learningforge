@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 import { Hammer } from "lucide-react";
 
-/** LectureForge mark: an anvil struck by a spark — study material forged from raw lectures. */
+/** LearningForge mark: an anvil struck by a spark — study material forged from raw lectures. */
 export function Logo({ className, size = 24 }: { className?: string; size?: number }) {
   return (
     <span className={cn("inline-flex items-center gap-2", className)} aria-hidden="true">
@@ -20,7 +20,7 @@ export function LogoWordmark({ className }: { className?: string }) {
     <span className={cn("inline-flex items-center gap-2.5", className)}>
       <Logo size={26} />
       <span className="text-lg font-semibold tracking-tight">
-        Lecture<span className="text-primary">Forge</span>
+        Learning<span className="text-primary">Forge</span>
       </span>
     </span>
   );

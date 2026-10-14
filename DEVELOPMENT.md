@@ -17,7 +17,7 @@ npm run db:seed                    # demo account + fully processed study set
 npm run dev                        # http://localhost:3000
 ```
 
-Demo login: **demo@lectureforge.app / demo-password**.
+Demo login: **demo@learningforge.app / demo-password**.
 
 `npm run db:setup` exists because `prisma db push` cannot create the
 `vector` extension itself, and the `embedding vector(1536)` column plus the

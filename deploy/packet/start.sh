@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Start LectureForge's processes on a packet.ai pod. Pods may run without
+# Start LearningForge's processes on a packet.ai pod. Pods may run without
 # systemd (and dynamic pods restart during maintenance), so this script is
 # the single, re-runnable way to bring everything up.
 #
@@ -71,7 +71,7 @@ start_app() {
   echo "$pid" > "$DATA_DIR/app.pid"
   for _ in $(seq 1 60); do
     kill -0 "$pid" 2>/dev/null || { echo "App exited during startup — see $LOGS/app.log" >&2; exit 1; }
-    curl -fsS -o /dev/null "http://127.0.0.1:$APP_PORT/" && { echo "LectureForge is up on port $APP_PORT (pid $pid)"; return; }
+    curl -fsS -o /dev/null "http://127.0.0.1:$APP_PORT/" && { echo "LearningForge is up on port $APP_PORT (pid $pid)"; return; }
     sleep 1
   done
   echo "App did not answer on port $APP_PORT — see $LOGS/app.log" >&2; exit 1

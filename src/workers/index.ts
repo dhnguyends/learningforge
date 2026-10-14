@@ -1,5 +1,5 @@
 /**
- * LectureForge background worker.
+ * LearningForge background worker.
  * Runs alongside the web app when QUEUE_DRIVER=redis:
  *   npm run worker
  * Consumes the "lectureforge" BullMQ queue and executes the same processors
@@ -83,7 +83,7 @@ worker.on("failed", (job, err) => {
 });
 worker.on("error", (err) => console.error("[worker] worker error:", err));
 
-console.log(`LectureForge worker listening on queue "lectureforge" (${env.REDIS_URL})`);
+console.log(`LearningForge worker listening on queue "lectureforge" (${env.REDIS_URL})`);
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, async () => {

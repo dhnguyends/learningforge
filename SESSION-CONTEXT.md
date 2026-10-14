@@ -1,11 +1,11 @@
-# LectureForge — Session Context & Handoff
+# LearningForge — Session Context & Handoff
 
 _Last updated: 2026-10-14. Read this before resuming work; it captures everything not
 recorded in the code or the other docs (README / ARCHITECTURE / DEVELOPMENT / DEPLOYMENT)._
 
 ## 1. What this project is
 
-**LectureForge** — an AI-native study web app (Next.js 14 App Router + TS + Tailwind +
+**LearningForge** — an AI-native study web app (Next.js 14 App Router + TS + Tailwind +
 shadcn/ui + React Query, Prisma/PostgreSQL+pgvector, Auth.js, BullMQ-or-inline queue,
 model-agnostic AI layer, fully mockable providers). Students convert their own lecture
 materials (video/audio/PDF/slides/notes/YouTube) into source-linked transcripts, study
@@ -99,7 +99,7 @@ and the server must be running with matching `NEXTAUTH_URL`/`APP_URL` (see §5).
   `DATABASE_URL=postgresql://lectureforge:lectureforge@localhost:5433/lectureforge?schema=public`
 - **Port 3000 is occupied by the OTHER project** (`F:\Curiosity` — "Curiosity", its node
   dev server + its containers `curiosity-postgres-1`/`curiosity-redis-1`/
-  `curiosity-storage-1`). LectureForge therefore runs on **3001**. Those containers are
+  `curiosity-storage-1`). LearningForge therefore runs on **3001**. Those containers are
   the main memory hogs; the system's memory-pressure reaper has killed our background
   dev server twice because of them. If Curiosity isn't active, stopping its server +
   containers fixes the reaping.
@@ -142,7 +142,7 @@ $env:E2E_BASE_URL="http://localhost:3001"; npm run test:e2e   # 10, serial worke
 #  per the seed offsets — see §8.)
 ```
 
-Demo login: **demo@lectureforge.app / demo-password** (seeded; do NOT seed production).
+Demo login: **demo@learningforge.app / demo-password** (seeded; do NOT seed production).
 Everything runs in mock mode with zero external services; swap providers via `.env`.
 
 ## 6. Deliberately NOT done (do only if asked)

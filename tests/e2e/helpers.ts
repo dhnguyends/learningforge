@@ -15,7 +15,7 @@ export async function signInAsDemo(page: Page) {
   const csrf = await page.request.get("/api/auth/csrf");
   const { csrfToken } = (await csrf.json()) as { csrfToken: string };
   const res = await page.request.post("/api/auth/callback/credentials", {
-    form: { email: "demo@lectureforge.app", password: "demo-password", csrfToken, json: true },
+    form: { email: "demo@learningforge.app", password: "demo-password", csrfToken, json: true },
   });
   if (res.status() !== 200) {
     throw new Error(`credentials callback returned ${res.status()}`);

@@ -1,5 +1,5 @@
 /**
- * LectureForge prompt contracts.
+ * LearningForge prompt contracts.
  *
  * Every generation call is structured (Zod-validated JSON) and receives ONLY
  * retrieved chunks as evidence, so anchors can be verified against real chunk
@@ -47,7 +47,7 @@ function describeLevel(level?: string | null): string {
 // Study guide
 // ---------------------------------------------------------------------------
 
-export const GUIDE_OUTLINE_SYSTEM = `You are LectureForge's study-guide architect. Given retrieved source chunks from a study set, design a hierarchical, technically rigorous study guide outline.
+export const GUIDE_OUTLINE_SYSTEM = `You are LearningForge's study-guide architect. Given retrieved source chunks from a study set, design a hierarchical, technically rigorous study guide outline.
 
 ${CITATION_RULES}
 
@@ -75,7 +75,7 @@ SOURCES: ${ctx.sourceCount} indexed source(s)
 SOURCE CHUNKS (retrieved):
 ${ctx.chunkContext}`;
 
-export const GUIDE_SECTION_SYSTEM = `You are LectureForge's study-guide writer. You write ONE section of a technical study guide, grounded strictly in provided source chunks.
+export const GUIDE_SECTION_SYSTEM = `You are LearningForge's study-guide writer. You write ONE section of a technical study guide, grounded strictly in provided source chunks.
 
 ${CITATION_RULES}
 
@@ -107,7 +107,7 @@ ${ctx.chunkContext}`;
 // Flashcards
 // ---------------------------------------------------------------------------
 
-export const FLASHCARDS_SYSTEM = `You are LectureForge's flashcard author for advanced STEM study sets. Produce atomic, high-yield retrieval cards grounded in provided source chunks.
+export const FLASHCARDS_SYSTEM = `You are LearningForge's flashcard author for advanced STEM study sets. Produce atomic, high-yield retrieval cards grounded in provided source chunks.
 
 ${CITATION_RULES}
 
@@ -135,7 +135,7 @@ ${ctx.chunkContext}`;
 // Quiz
 // ---------------------------------------------------------------------------
 
-export const QUIZ_SYSTEM = `You are LectureForge's quiz builder for advanced STEM material. You write exam-quality questions grounded in provided source chunks.
+export const QUIZ_SYSTEM = `You are LearningForge's quiz builder for advanced STEM material. You write exam-quality questions grounded in provided source chunks.
 
 ${CITATION_RULES}
 
@@ -176,7 +176,7 @@ ${ctx.chunkContext}`;
 // Exercises
 // ---------------------------------------------------------------------------
 
-export const EXERCISES_SYSTEM = `You are LectureForge's exercise designer. You create advanced-undergraduate/graduate problem-solving exercises from lecture sources: derivations, quantitative problems, proofs, algorithm design, code debugging, conceptual transfer, and paper-critique prompts.
+export const EXERCISES_SYSTEM = `You are LearningForge's exercise designer. You create advanced-undergraduate/graduate problem-solving exercises from lecture sources: derivations, quantitative problems, proofs, algorithm design, code debugging, conceptual transfer, and paper-critique prompts.
 
 ${CITATION_RULES}
 
@@ -206,7 +206,7 @@ ${ctx.chunkContext}`;
 // Tutor
 // ---------------------------------------------------------------------------
 
-export const TUTOR_SYSTEM = `You are the LectureForge tutor: a Socratic study partner restricted to the learner's uploaded course materials.
+export const TUTOR_SYSTEM = `You are the LearningForge tutor: a Socratic study partner restricted to the learner's uploaded course materials.
 
 ${CITATION_RULES}
 
@@ -250,7 +250,7 @@ ${ctx.chunkContext}`;
 // Audio recap
 // ---------------------------------------------------------------------------
 
-export const AUDIO_RECAP_SYSTEM = `You are LectureForge's audio-recap writer. Produce a 90-second spoken summary script (roughly 220 words) of the study guide for listening on the go.
+export const AUDIO_RECAP_SYSTEM = `You are LearningForge's audio-recap writer. Produce a 90-second spoken summary script (roughly 220 words) of the study guide for listening on the go.
 
 Rules:
 - Spoken style: short sentences, no markdown, no URLs, spell out symbols ("the gradient of L with respect to W").

@@ -1,6 +1,6 @@
-# LectureForge — Technical Maintenance & Extension Guide
+# LearningForge — Technical Maintenance & Extension Guide
 
-_Audience: software engineers (human or AI coding assistants) who maintain, operate and extend LectureForge._
+_Audience: software engineers (human or AI coding assistants) who maintain, operate and extend LearningForge._
 _Last verified against the code: 2026-10-14 (branch `fix/storage-tenant-isolation`, commit `509147e`)._
 
 This guide explains:
@@ -20,7 +20,7 @@ It complements, and in places corrects, the shorter docs:
 
 ## 1. What the system does
 
-LectureForge turns a student's own course material into study tools that cite their sources. The inputs are lecture video and audio, PDFs, slide decks, notes, images and YouTube links. The outputs are:
+LearningForge turns a student's own course material into study tools that cite their sources. The inputs are lecture video and audio, PDFs, slide decks, notes, images and YouTube links. The outputs are:
 - transcripts;
 - study guides;
 - spaced-repetition flashcards (FSRS);
