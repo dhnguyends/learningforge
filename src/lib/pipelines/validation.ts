@@ -13,6 +13,48 @@ export function filterValidChunkIds(ids: string[], provided: Set<string>): strin
   return ids.filter((id) => provided.has(id));
 }
 
+// --- Inline chunk ids ---------------------------------------------------------
+
+/**
+ * Some models (e.g. Gemma 4) cite by writing chunk ids into the prose —
+ * "… measured in ohms [cmv8bahit0000730q…]." or, inside formulas,
+ * "$$Z = i L \omega \quad \text{cmv8bahjl…}$$" — which the UI would render as
+ * raw ids. Remove those citation tokens and return the KNOWN ids among them,
+ * so they can be merged into the structured anchor fields.
+ *
+ * A token counts as a citation when it is a provided chunk id, or looks like
+ * one (cuid-shaped: "c" + 20–32 lowercase alphanumerics) — models sometimes
+ * garble ids, and a garbled id is never meaningful to a reader; it is
+ * dropped from the text but never trusted as an anchor. Ordinary brackets
+ * (links, "[1]", intervals) are left untouched.
+ */
+export function extractInlineChunkIds(content: string, validIds: Iterable<string>): { content: string; ids: string[] } {
+  const known = new Set(validIds);
+  const isCitation = (token: string) => known.has(token) || CUID_LIKE.test(token);
+  const found: string[] = [];
+  const keep = (token: string) => {
+    if (known.has(token) && !found.includes(token)) found.push(token);
+  };
+
+  const cleaned = content
+    // [id] / [id, id] / [chunk: id] in prose (not markdown links "[text](url)").
+    .replace(/[ \t]*\[([^\[\]\n]{1,400})\](?!\()/g, (match, inner: string) => {
+      const tokens = inner.split(/[,;\s]+/).map((t) => t.replace(/^(?:chunk|id)[:=]\s*/i, "").trim()).filter(Boolean);
+      if (tokens.length === 0 || !tokens.every(isCitation)) return match;
+      tokens.forEach(keep);
+      return "";
+    })
+    // \quad \text{id} / \text{id} inside LaTeX.
+    .replace(/(?:\s*\\quad)?\s*\\text\{\s*([A-Za-z0-9_-]{8,64})\s*\}/g, (match, token: string) => {
+      if (!isCitation(token)) return match;
+      keep(token);
+      return "";
+    });
+  return { content: cleaned.replace(/[ \t]+([.,;:!?])/g, "$1"), ids: found };
+}
+
+const CUID_LIKE = /^c[a-z0-9]{20,32}$/;
+
 // --- Guide sections ------------------------------------------------------------
 
 export function validateGuideSection(

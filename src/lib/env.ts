@@ -38,6 +38,16 @@ const envSchema = z.object({
   ANTHROPIC_MODEL: z.string().default("claude-sonnet-4-5"),
   LOCAL_AI_BASE_URL: z.string().default("http://localhost:11434"),
   LOCAL_AI_MODEL: z.string().default("llama3.1"),
+  // Reasoning models (Gemma 4, Qwen 3, DeepSeek-R1…) "think" by default, which
+  // multiplies latency for structured generation; off unless asked for.
+  LOCAL_AI_THINK: boolish,
+  LOCAL_AI_TIMEOUT_MS: z.coerce.number().int().positive().default(300_000),
+  // Output cap per call (Ollama num_predict). Grammar-constrained local models
+  // occasionally run away (one Gemma 4 section call hit 14k+ tokens); a cap turns
+  // that into a fast, repairable failure instead of a timeout.
+  LOCAL_AI_MAX_TOKENS: z.coerce.number().int().positive().default(4096),
+  // Context window override; unset = let Ollama size it for the available memory.
+  LOCAL_AI_NUM_CTX: z.coerce.number().int().positive().optional(),
 
   EMBEDDINGS_PROVIDER: z.enum(["mock", "openai"]).default("mock"),
   EMBEDDINGS_MODEL: z.string().default("text-embedding-3-small"),

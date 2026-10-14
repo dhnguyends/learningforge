@@ -6,8 +6,31 @@ export interface RawCompletion {
   usage: { inputTokens: number; outputTokens: number };
 }
 
+/**
+ * Models often write LaTeX inside JSON strings with a single backslash, and
+ * `\f` / `\b` are valid JSON escapes (form feed / backspace) — so "\frac" and
+ * "\beta" silently decode to a control character followed by "rac" / "eta".
+ * Neither control character ever belongs in study content, so restore the
+ * backslash. (`\t`, `\n`, `\r` are ambiguous with real whitespace and are
+ * left alone.)
+ */
+export function restoreLatexEscapes<T>(value: T): T {
+  if (typeof value === "string") {
+    return value.replace(/\u000c/g, "\\f").replace(/\u0008/g, "\\b") as T;
+  }
+  if (Array.isArray(value)) return value.map((v) => restoreLatexEscapes(v)) as T;
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, restoreLatexEscapes(v)])) as T;
+  }
+  return value;
+}
+
 /** Extract a JSON object from a model response that may include fences or prose. */
 export function extractJson(text: string): unknown {
+  return restoreLatexEscapes(parseJsonLoose(text));
+}
+
+function parseJsonLoose(text: string): unknown {
   const trimmed = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "");
   try {
     return JSON.parse(trimmed);

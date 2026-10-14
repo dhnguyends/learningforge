@@ -24,14 +24,20 @@ type JsonSchema = Record<string, unknown>;
  * generation schemas (objects, strings, numbers, booleans, enums, arrays,
  * unions, records, optional/nullable). Avoids pulling a heavier dependency
  * into the provider adapters.
+ *
+ * Size constraints (string min/max length, array min/max items, number
+ * ranges, integers) are carried over: the schema is the only place a model
+ * learns them, and Ollama/llama.cpp enforce them while decoding. Without them
+ * a local model happily emits 30 outline sections against a max of 24 and the
+ * Zod validation after the fact fails the whole job.
  */
 export function zodToJsonSchema(schema: ZodTypeAny): JsonSchema {
   return convert(schema) ?? { type: "string" };
 }
 
 function convert(schema: ZodTypeAny): JsonSchema | null {
-  if (schema instanceof ZodString) return { type: "string" };
-  if (schema instanceof ZodNumber) return { type: "number" };
+  if (schema instanceof ZodString) return { type: "string", ...stringBounds(schema) };
+  if (schema instanceof ZodNumber) return numberSchema(schema);
   if (schema instanceof ZodBoolean) return { type: "boolean" };
   if (schema instanceof ZodNull) return { type: "null" };
   if (schema instanceof ZodLiteral) {
@@ -46,7 +52,7 @@ function convert(schema: ZodTypeAny): JsonSchema | null {
     return allStrings ? { type: "string", enum: values } : { enum: values };
   }
   if (schema instanceof ZodArray) {
-    return { type: "array", items: zodToJsonSchema(schema.element) };
+    return { type: "array", items: zodToJsonSchema(schema.element), ...arrayBounds(schema) };
   }
   if (schema instanceof ZodObject) {
     const shape = schema.shape as Record<string, ZodTypeAny>;
@@ -78,6 +84,41 @@ function convert(schema: ZodTypeAny): JsonSchema | null {
   if (schema instanceof ZodDefault) return convert(schema.removeDefault());
   if (schema instanceof ZodAny) return {};
   return null;
+}
+
+type Check = { kind: string; value?: number; inclusive?: boolean };
+
+function stringBounds(schema: ZodString): JsonSchema {
+  const out: JsonSchema = {};
+  for (const check of (schema._def.checks ?? []) as Check[]) {
+    if (check.kind === "min") out.minLength = check.value;
+    if (check.kind === "max") out.maxLength = check.value;
+    if (check.kind === "length") out.minLength = out.maxLength = check.value;
+  }
+  return out;
+}
+
+function numberSchema(schema: ZodNumber): JsonSchema {
+  const out: JsonSchema = { type: "number" };
+  for (const check of (schema._def.checks ?? []) as Check[]) {
+    if (check.kind === "int") out.type = "integer";
+    if (check.kind === "min") out[check.inclusive === false ? "exclusiveMinimum" : "minimum"] = check.value;
+    if (check.kind === "max") out[check.inclusive === false ? "exclusiveMaximum" : "maximum"] = check.value;
+  }
+  return out;
+}
+
+function arrayBounds(schema: ZodArray<ZodTypeAny>): JsonSchema {
+  const def = schema._def as {
+    minLength: { value: number } | null;
+    maxLength: { value: number } | null;
+    exactLength: { value: number } | null;
+  };
+  const out: JsonSchema = {};
+  if (def.exactLength) out.minItems = out.maxItems = def.exactLength.value;
+  if (def.minLength) out.minItems = def.minLength.value;
+  if (def.maxLength) out.maxItems = def.maxLength.value;
+  return out;
 }
 
 function isNullableWithDefault(schema: ZodTypeAny): boolean {

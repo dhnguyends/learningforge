@@ -399,7 +399,7 @@ All variables are validated in `src/lib/env.ts`; `.env.example` documents them. 
 | Core | `APP_URL`, `DATABASE_URL`, `NEXTAUTH_URL`, `NEXTAUTH_SECRET` |
 | Queue | `QUEUE_DRIVER` (`inline`\|`redis`), `REDIS_URL` |
 | Storage | `STORAGE_DRIVER` (`local`\|`s3`), `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `SIGNED_URL_TTL` |
-| LLM | `AI_PROVIDER` (`mock`\|`openai`\|`anthropic`\|`local`), `AI_MODEL`, `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `LOCAL_AI_BASE_URL`, `LOCAL_AI_MODEL` |
+| LLM | `AI_PROVIDER` (`mock`\|`openai`\|`anthropic`\|`local`), `AI_MODEL`, `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `LOCAL_AI_BASE_URL`, `LOCAL_AI_MODEL` (e.g. `gemma4:latest`), `LOCAL_AI_THINK` (default `false`; reasoning models are ~10x slower with it on), `LOCAL_AI_TIMEOUT_MS` (default 300000), `LOCAL_AI_MAX_TOKENS` (default 4096; guards against runaway generations), `LOCAL_AI_NUM_CTX` (optional) |
 | Embeddings | `EMBEDDINGS_PROVIDER` (`mock`\|`openai`), `EMBEDDINGS_MODEL` (`EMBEDDINGS_DIMENSIONS` is currently unused; the dimension is fixed at 1536) |
 | Speech | `TRANSCRIPTION_PROVIDER` (`mock`\|`whisper`\|`deepgram`), `WHISPER_BASE_URL`, `WHISPER_API_KEY`, `WHISPER_MODEL`, `DEEPGRAM_API_KEY` |
 | TTS | `TTS_PROVIDER` (`mock`\|`openai`), `TTS_MODEL`, `TTS_VOICE` |

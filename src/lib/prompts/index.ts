@@ -7,7 +7,7 @@
  * trail can attribute output to a specific prompt version.
  */
 
-export const PROMPT_VERSION = "2026-10-v1";
+export const PROMPT_VERSION = "2026-10-v2";
 
 /** Rules shared by every artifact + tutor prompt. */
 export const CITATION_RULES = `
@@ -18,6 +18,8 @@ CITATION RULES (non-negotiable):
 4. Preserve equations in LaTeX, keep symbols, units, and code blocks exactly as the source states them. Do not round or "simplify" numeric constants.
 5. Never invent timestamps, page numbers, quotes, or results. Excerpts must be copied from the chunks (shortened with "..." if needed).
 6. If you are unsure whether the source supports a claim, set confidence low (below 0.6) and add a warning asking the learner to verify.
+7. Never write chunk ids inside prose or markdown text — put them only in the anchor/citation fields; the app renders citations from those fields.
+8. Inside JSON strings, escape every LaTeX backslash (write "\\\\frac", "\\\\beta", "\\\\text").
 `;
 
 export const LEARNER_CONTEXT = (ctx: {

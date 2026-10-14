@@ -8,7 +8,7 @@ import {
   guideSectionSchema,
   type GuideOutline,
 } from "@/lib/pipelines/schemas";
-import { validateGuideSection, filterValidChunkIds } from "@/lib/pipelines/validation";
+import { validateGuideSection, filterValidChunkIds, extractInlineChunkIds } from "@/lib/pipelines/validation";
 import { GUIDE_OUTLINE_SYSTEM, GUIDE_OUTLINE_USER, GUIDE_SECTION_SYSTEM, GUIDE_SECTION_USER, PROMPT_VERSION } from "@/lib/prompts";
 import type { JobContext } from "@/lib/queue/types";
 import { audit } from "@/lib/audit";
@@ -108,8 +108,15 @@ export async function generateGuideJob(ctx: JobContext<GuideJobPayload>): Promis
         mock: () => mockSection(sectionSpec.title, sectionChunks),
       });
 
+      // Ids cited inline in the prose become structured anchors instead of raw text.
+      const inline = extractInlineChunkIds(sectionRes.data.content, sectionChunks.map((c) => c.id));
+      const section = {
+        ...sectionRes.data,
+        content: inline.content,
+        anchorChunkIds: [...new Set([...sectionRes.data.anchorChunkIds, ...inline.ids])],
+      };
       const valid = filterValidChunkIds(sectionSpec.chunkIds, new Set(sectionChunks.map((c) => c.id)));
-      const { warnings, anchors } = validateGuideSection(sectionRes.data, sectionChunks.map((c) => c.id));
+      const { warnings, anchors } = validateGuideSection(section, sectionChunks.map((c) => c.id));
       const anchorIds = valid.length > 0 ? await createAnchorsForChunks(sectionChunks.filter((c) => valid.includes(c.id))) : [];
 
       const created = await prisma.studyGuideSection.create({
@@ -119,7 +126,7 @@ export async function generateGuideJob(ctx: JobContext<GuideJobPayload>): Promis
           ordinal: keptSections.length + i,
           kind: sectionSpec.kind.toUpperCase() as SectionKind,
           title: sectionSpec.title,
-          content: sectionRes.data.content,
+          content: section.content,
           claimType: sectionRes.data.claimType === "source_grounded" ? "SOURCE_GROUNDED" : sectionRes.data.claimType === "inference" ? "INFERENCE" : "EXTERNAL",
           confidence: sectionRes.data.confidence,
           warnings,
