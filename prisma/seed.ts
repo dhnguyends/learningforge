@@ -21,6 +21,11 @@ const daysAgo = (d: number, h = 0) => new Date(Date.now() - d * DAY + h * 3_600_
 const inDays = (d: number) => new Date(Date.now() + d * DAY);
 
 async function main() {
+  // The demo account's password is published in the README — never create it
+  // on a public deployment by accident.
+  if (process.env.NODE_ENV === "production" && process.env.ALLOW_DEMO_SEED !== "true") {
+    throw new Error("Refusing to seed demo data with NODE_ENV=production (set ALLOW_DEMO_SEED=true to override).");
+  }
   console.log("Seeding LectureForge demo data…");
 
   // Idempotent: wipe the demo account (cascades to everything it owns).

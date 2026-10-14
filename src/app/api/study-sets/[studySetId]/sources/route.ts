@@ -4,7 +4,7 @@ import { apiHandler, ok, parseJsonBody, requireSession, badRequest } from "@/lib
 import { assertStudySetAccess } from "@/lib/access";
 import { getStorage, sourceAssetKey } from "@/lib/storage";
 import { validateUploadIntent, isRecordingType, estimateProcessingSec } from "@/lib/uploads";
-import { parseYouTubeId, fetchYouTubeMeta } from "@/lib/media/ffmpeg";
+import { parseYouTubeId, canonicalYouTubeUrl, fetchYouTubeMeta } from "@/lib/media/ffmpeg";
 import { enqueue } from "@/lib/queue";
 
 type Ctx = { params: { studySetId: string } };
@@ -94,7 +94,7 @@ export const POST = apiHandler<Ctx>(async (req, { params }) => {
       type: "YOUTUBE",
       title: input.title ?? meta?.title ?? `YouTube video ${videoId}`,
       status: "PROCESSING",
-      externalUrl: input.url,
+      externalUrl: canonicalYouTubeUrl(videoId), // never store the raw user URL
       consentConfirmedAt: new Date(),
       metadata: { videoId, author: meta?.author, thumbnail: meta?.thumbnail, estimatedProcessingSec: estimateProcessingSec("YOUTUBE") },
     },

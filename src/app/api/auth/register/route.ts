@@ -1,16 +1,20 @@
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { apiHandler, ok, parseJsonBody, badRequest } from "@/lib/api";
+import { apiHandler, ok, parseJsonBody, badRequest, rateLimited } from "@/lib/api";
+import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { hashPassword, ensureUserWorkspace } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 
 const registerSchema = z.object({
   name: z.string().min(1).max(80),
   email: z.string().email(),
-  password: z.string().min(10, "Password must be at least 10 characters"),
+  password: z.string().min(10, "Password must be at least 10 characters").max(256),
 });
 
 export const POST = apiHandler(async (req) => {
+  // Account creation is cheap to abuse (bcrypt cost 12, a workspace row each).
+  const limit = rateLimit(`register:ip:${clientIp(req.headers)}`, 5);
+  if (!limit.allowed) throw rateLimited(limit.retryAfterSec);
   const body = await parseJsonBody(req, registerSchema);
   const email = body.email.toLowerCase();
 

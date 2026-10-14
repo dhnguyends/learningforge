@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { apiHandler, ok, parseJsonBody } from "@/lib/api";
+import { apiHandler, ok, parseJsonBody, rateLimited } from "@/lib/api";
+import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { audit } from "@/lib/audit";
 import { getEnv } from "@/lib/env";
 
@@ -11,6 +12,8 @@ const schema = z.object({ email: z.string().email().max(320) });
  * without one, the request is only audited so operators can handle it manually.
  */
 export const POST = apiHandler(async (req) => {
+  const limit = rateLimit(`reset:ip:${clientIp(req.headers)}`, 5);
+  if (!limit.allowed) throw rateLimited(limit.retryAfterSec);
   const body = await parseJsonBody(req, schema);
   const emailConfigured = Boolean(getEnv().SMTP_URL);
   await audit({

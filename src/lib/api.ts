@@ -7,11 +7,13 @@ import type { Session } from "next-auth";
 export class ApiError extends Error {
   status: number;
   code: string;
+  retryAfterSec?: number;
 
-  constructor(status: number, message: string, code = "error") {
+  constructor(status: number, message: string, code = "error", retryAfterSec?: number) {
     super(message);
     this.status = status;
     this.code = code;
+    this.retryAfterSec = retryAfterSec;
   }
 }
 
@@ -20,7 +22,7 @@ export const forbidden = () => new ApiError(403, "You do not have access to this
 export const notFound = (what = "Resource") => new ApiError(404, `${what} not found`, "not_found");
 export const badRequest = (msg: string) => new ApiError(400, msg, "bad_request");
 export const rateLimited = (retryAfterSec: number) =>
-  new ApiError(429, `Rate limit exceeded. Retry in ${retryAfterSec}s.`, "rate_limited");
+  new ApiError(429, `Rate limit exceeded. Retry in ${retryAfterSec}s.`, "rate_limited", retryAfterSec);
 
 type Handler<Ctx> = (req: NextRequest, ctx: Ctx) => Promise<NextResponse | Response>;
 
@@ -32,7 +34,7 @@ export function apiHandler<Ctx = unknown>(fn: Handler<Ctx>): Handler<Ctx> {
     } catch (err) {
       if (err instanceof ApiError) {
         const res = NextResponse.json({ error: err.message, code: err.code }, { status: err.status });
-        if (err.status === 429) res.headers.set("Retry-After", "60");
+        if (err.status === 429) res.headers.set("Retry-After", String(err.retryAfterSec ?? 60));
         return res;
       }
       if (err instanceof ZodError) {

@@ -6,6 +6,9 @@ import { writeFileSync, rmSync } from "node:fs";
 import { getStorage } from "@/lib/storage";
 import type { Env } from "@/lib/env";
 import { getEnv } from "@/lib/env";
+import { parseYouTubeId, canonicalYouTubeUrl } from "@/lib/media/youtube";
+
+export { parseYouTubeId, canonicalYouTubeUrl } from "@/lib/media/youtube";
 
 if (ffmpegStatic) ffmpeg.setFfmpegPath(ffmpegStatic);
 if (ffprobeStatic?.path) ffmpeg.setFfprobePath(ffprobeStatic.path);
@@ -83,14 +86,25 @@ export async function extractAudio(
   }
 }
 
+/** yt-dlp may run at most this long before it is killed. */
+const YT_DLP_TIMEOUT_MS = 30 * 60 * 1000;
+
 /**
  * Download the best-audio stream of a YouTube video using yt-dlp when it is
  * available on PATH. Fails with an actionable error otherwise.
+ *
+ * Only a canonical https://www.youtube.com/watch?v=<id> URL rebuilt from the
+ * validated id ever reaches yt-dlp (never the stored/user-supplied string),
+ * with playlists disabled, a size ceiling, a wall-clock timeout, and `--`
+ * so the URL can never be read as an option.
  */
 export async function fetchYouTubeAudio(
   videoUrl: string,
   outputKey: string,
 ): Promise<{ key: string; durationSec: number; title: string }> {
+  const videoId = parseYouTubeId(videoUrl);
+  if (!videoId) throw new Error("Not a valid YouTube video URL — only youtube.com / youtu.be links can be imported.");
+  const canonicalUrl = canonicalYouTubeUrl(videoId);
   const hasYtDlp = await new Promise<boolean>((resolve) => {
     const proc = spawn("yt-dlp", ["--version"]);
     proc.on("error", () => resolve(false));
@@ -104,11 +118,26 @@ export async function fetchYouTubeAudio(
 
   const tmpOut = tmpPath(`yt-${Date.now()}.mp3`);
   await new Promise<void>((resolve, reject) => {
-    const proc = spawn("yt-dlp", ["-f", "bestaudio", "-x", "--audio-format", "mp3", "-o", tmpOut, videoUrl]);
+    const proc = spawn("yt-dlp", [
+      "--no-playlist",
+      "--max-filesize", "500M",
+      "-f", "bestaudio",
+      "-x", "--audio-format", "mp3",
+      "-o", tmpOut,
+      "--", canonicalUrl,
+    ]);
+    const timer = setTimeout(() => proc.kill("SIGKILL"), YT_DLP_TIMEOUT_MS);
     let stderr = "";
-    proc.stderr.on("data", (d) => (stderr += d.toString()));
-    proc.on("error", reject);
-    proc.on("close", (code) => (code === 0 ? resolve() : reject(new Error(`yt-dlp failed: ${stderr.slice(-400)}`))));
+    proc.stderr.on("data", (d) => (stderr = (stderr + d.toString()).slice(-4000)));
+    proc.on("error", (err) => {
+      clearTimeout(timer);
+      reject(err);
+    });
+    proc.on("close", (code, signal) => {
+      clearTimeout(timer);
+      if (code === 0) resolve();
+      else reject(new Error(signal ? `yt-dlp timed out after ${YT_DLP_TIMEOUT_MS / 60000} min` : `yt-dlp failed: ${stderr.slice(-400)}`));
+    });
   });
 
   const fs = await import("node:fs/promises");
@@ -127,8 +156,10 @@ export async function fetchYouTubeAudio(
 
 /** YouTube oEmbed metadata without an API key. */
 export async function fetchYouTubeMeta(videoUrl: string): Promise<{ title: string; author: string; thumbnail: string }> {
+  const videoId = parseYouTubeId(videoUrl);
+  if (!videoId) throw new Error("Not a valid YouTube video URL");
   const res = await fetch(
-    `https://www.youtube.com/oembed?url=${encodeURIComponent(videoUrl)}&format=json`,
+    `https://www.youtube.com/oembed?url=${encodeURIComponent(canonicalYouTubeUrl(videoId))}&format=json`,
     { signal: AbortSignal.timeout(10_000) },
   );
   if (!res.ok) throw new Error("Could not load YouTube metadata — is the video public?");
@@ -136,12 +167,6 @@ export async function fetchYouTubeMeta(videoUrl: string): Promise<{ title: strin
   return { title: json.title, author: json.author_name, thumbnail: json.thumbnail_url };
 }
 
-export function parseYouTubeId(url: string): string | null {
-  const m = url.match(
-    /(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/,
-  );
-  return m?.[1] ?? null;
-}
 
 function tmpPath(name: string): string {
   return `${osTmp()}/lf-${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${sanitize(name)}`;

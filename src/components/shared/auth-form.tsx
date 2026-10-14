@@ -48,7 +48,7 @@ export function SignInForm() {
     try {
       const res = await signIn("credentials", { redirect: false, email, password });
       if (res?.error) {
-        toast.error("Invalid email or password");
+        toast.error(res.error.startsWith("Too many") ? res.error : "Invalid email or password");
       } else {
         toast.success("Welcome back");
         router.push("/dashboard");
@@ -91,8 +91,8 @@ export function SignUpForm() {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (password.length < 8) {
-      toast.error("Password must be at least 8 characters");
+    if (password.length < 10) {
+      toast.error("Password must be at least 10 characters");
       return;
     }
     setPending(true);

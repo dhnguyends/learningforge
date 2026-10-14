@@ -72,6 +72,8 @@ const envSchema = z.object({
 
 export type Env = z.infer<typeof envSchema>;
 
+const WEAK_SECRETS = new Set(["change-me-development-secret", "lectureforge-development-secret"]);
+
 let cached: Env | null = null;
 
 export function getEnv(): Env {
@@ -88,6 +90,11 @@ export function getEnv(): Env {
   // Fail loudly in production for secrets that matter; stay frictionless in dev.
   if (env.NODE_ENV === "production") {
     if (!env.NEXTAUTH_SECRET) throw new Error("NEXTAUTH_SECRET is required in production");
+    // Sessions and local upload tickets are signed with this secret; the
+    // checked-in example values would let anyone forge both.
+    if (env.NEXTAUTH_SECRET.length < 32 || WEAK_SECRETS.has(env.NEXTAUTH_SECRET)) {
+      throw new Error("NEXTAUTH_SECRET is too weak for production; generate one with: openssl rand -base64 32");
+    }
     if (env.STORAGE_DRIVER === "s3" && (!env.S3_ACCESS_KEY_ID || !env.S3_SECRET_ACCESS_KEY)) {
       throw new Error("S3 credentials are required when STORAGE_DRIVER=s3");
     }

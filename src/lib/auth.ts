@@ -4,6 +4,12 @@ import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
 import { getEnv } from "@/lib/env";
+import { clientIp, rateLimit, resetRateLimit } from "@/lib/rate-limit";
+
+/** Sign-in throttling: per account (primary) and per client IP (secondary). */
+export const SIGN_IN_WINDOW_MS = 15 * 60 * 1000;
+export const SIGN_IN_MAX_PER_ACCOUNT = 10;
+export const SIGN_IN_MAX_PER_IP = 50;
 
 export const authOptions: AuthOptions = {
   adapter: PrismaAdapter(prisma),
@@ -16,12 +22,25 @@ export const authOptions: AuthOptions = {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(credentials) {
+      async authorize(credentials, req) {
         if (!credentials?.email || !credentials.password) return null;
-        const user = await prisma.user.findUnique({ where: { email: credentials.email.toLowerCase() } });
+        if (credentials.password.length > 1024) return null; // bcrypt reads 72 bytes; refuse huge bodies cheaply
+        const email = credentials.email.toLowerCase();
+
+        // Every attempt counts; a success clears the account bucket. Throwing
+        // surfaces the message to the client as `error` (signIn redirect:false).
+        const perAccount = rateLimit(`signin:account:${email}`, SIGN_IN_MAX_PER_ACCOUNT, SIGN_IN_WINDOW_MS);
+        const perIp = rateLimit(`signin:ip:${clientIp(req?.headers)}`, SIGN_IN_MAX_PER_IP, SIGN_IN_WINDOW_MS);
+        if (!perAccount.allowed || !perIp.allowed) {
+          const wait = Math.ceil(Math.max(perAccount.retryAfterSec, perIp.retryAfterSec) / 60);
+          throw new Error(`Too many sign-in attempts. Try again in ${wait} minute${wait === 1 ? "" : "s"}.`);
+        }
+
+        const user = await prisma.user.findUnique({ where: { email } });
         if (!user?.passwordHash) return null;
         const valid = await bcrypt.compare(credentials.password, user.passwordHash);
         if (!valid) return null;
+        resetRateLimit(`signin:account:${email}`);
         return { id: user.id, email: user.email, name: user.name, image: user.image };
       },
     }),

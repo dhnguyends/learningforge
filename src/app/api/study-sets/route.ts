@@ -5,7 +5,7 @@ import { ensureUserWorkspace } from "@/lib/auth";
 import { assertStudySetAccess, listUserWorkspaceIds } from "@/lib/access";
 import { getStorage, sourceAssetKey } from "@/lib/storage";
 import { validateUploadIntent, isRecordingType, estimateProcessingSec } from "@/lib/uploads";
-import { parseYouTubeId, fetchYouTubeMeta } from "@/lib/media/ffmpeg";
+import { parseYouTubeId, canonicalYouTubeUrl, fetchYouTubeMeta } from "@/lib/media/ffmpeg";
 import { enqueue } from "@/lib/queue";
 import { ensureRecovered } from "@/lib/queue/recovery";
 import { jsonSafe } from "@/lib/db";
@@ -187,7 +187,7 @@ export const POST = apiHandler(async (req) => {
           type: "YOUTUBE",
           title: input.title ?? meta?.title ?? `YouTube video ${videoId}`,
           status: "PROCESSING",
-          externalUrl: input.url,
+          externalUrl: canonicalYouTubeUrl(videoId), // never store the raw user URL
           consentConfirmedAt: new Date(),
           metadata: { videoId, author: meta?.author, thumbnail: meta?.thumbnail, estimatedProcessingSec: estimateProcessingSec("YOUTUBE") },
         },
