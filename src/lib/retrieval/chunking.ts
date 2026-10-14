@@ -81,12 +81,18 @@ export function chunkTranscript(segments: TranscriptSegmentInput[]): ChunkDraft[
 
 /**
  * Chunk parsed document pages. Page boundaries are always preserved (citations
- * point at pages), long pages split at paragraph boundaries.
+ * point at pages), long pages split at paragraph boundaries. A paragraph over
+ * MAX_TOKENS (PDF pages often arrive as one) is first split into ~TARGET_TOKENS
+ * pieces at sentence boundaries, falling back to word boundaries.
  */
 export function chunkDocument(doc: ParsedDocument): ChunkDraft[] {
   const chunks: ChunkDraft[] = [];
   for (const page of doc.pages) {
-    const paragraphs = page.text.split(/\n{2,}|(?<=\.)\s{2,}/).map((p) => p.trim()).filter(Boolean);
+    const paragraphs = page.text
+      .split(/\n{2,}|(?<=\.)\s{2,}/)
+      .map((p) => p.trim())
+      .filter(Boolean)
+      .flatMap((p) => (estimateTokens(p) > MAX_TOKENS ? splitOversized(p) : [p]));
     if (paragraphs.length === 0) continue;
     let buffer: string[] = [];
     let tokens = 0;
@@ -103,6 +109,45 @@ export function chunkDocument(doc: ParsedDocument): ChunkDraft[] {
     if (buffer.length) pushPageChunk(chunks, page, buffer.join("\n\n"), doc.kind);
   }
   return renumber(chunks);
+}
+
+/**
+ * Split an oversized paragraph into pieces of ~TARGET_TOKENS (never more than
+ * MAX_TOKENS). Sentences are grouped until the target is reached; a sentence
+ * that alone exceeds MAX_TOKENS is cut into word windows. Word counts (not
+ * per-unit estimates) are summed so the size matches estimateTokens exactly.
+ */
+function splitOversized(paragraph: string): string[] {
+  const wordsPerWindow = Math.floor(TARGET_TOKENS / 1.35);
+  const units = paragraph
+    .split(/(?<=[.!?]["')\]]*)\s+/)
+    .filter(Boolean)
+    .flatMap((sentence) => {
+      if (estimateTokens(sentence) <= MAX_TOKENS) return [sentence];
+      const words = sentence.split(/\s+/).filter(Boolean);
+      const windows: string[] = [];
+      for (let i = 0; i < words.length; i += wordsPerWindow) windows.push(words.slice(i, i + wordsPerWindow).join(" "));
+      return windows;
+    });
+
+  const pieces: string[] = [];
+  let buffer: string[] = [];
+  let words = 0;
+  const tokensFor = (n: number) => Math.ceil(n * 1.35);
+  const flush = () => {
+    if (buffer.length) pieces.push(buffer.join(" "));
+    buffer = [];
+    words = 0;
+  };
+  for (const unit of units) {
+    const w = unit.split(/\s+/).filter(Boolean).length;
+    if (tokensFor(words + w) > MAX_TOKENS) flush();
+    buffer.push(unit);
+    words += w;
+    if (tokensFor(words) >= TARGET_TOKENS) flush();
+  }
+  flush();
+  return pieces;
 }
 
 function pushPageChunk(chunks: ChunkDraft[], page: { page: number; heading?: string }, content: string, kind: ChunkKind) {

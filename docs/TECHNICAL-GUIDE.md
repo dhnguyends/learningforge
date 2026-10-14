@@ -428,7 +428,7 @@ All variables are validated in `src/lib/env.ts`; `.env.example` documents them. 
 
 | Layer | Location | What it guards | Count (2026-10-14) |
 |---|---|---|---|
-| Unit | `tests/unit` | Chunking, validation, FSRS/SM-2, citations, rate limit, phase mapping, recovery planning | 82 |
+| Unit | `tests/unit` | Chunking, validation, FSRS/SM-2, citations, rate limit, phase mapping, recovery planning | 87 |
 | API (integration) | `tests/api` | Route handlers against a real Postgres, with a mocked session | 16 |
 | Security | `tests/api/security` | Storage tenant isolation: upload tickets, file-read authorization, key layout, derived-audio location | 31 |
 | E2E | `tests/e2e` | Sign-in, dashboard, flashcard review, guide citations, quiz grading, pipeline status | 10 |
@@ -460,6 +460,35 @@ Conventions:
 | On embedding change | Changing the model or dimension requires **re-embedding all chunks** (re-run ingest) and, if the dimension changes, altering the column and index |
 | Before invites / sharing | Resolve REVIEW-REPORT N16 (per-user FSRS state, cascade semantics) |
 | Data hygiene | Prune stale `citation_anchors` and orphaned rows; review `audit_logs` growth |
+
+### 8.5 Re-chunking existing sources
+
+Chunks are written once, at ingest. A change to `chunking.ts` (for example the October 2026 fix that splits single-paragraph PDF pages to stay under the 480-token cap) only affects sources ingested afterwards. Existing sources keep their old chunks until they are re-ingested.
+
+Find document sources with oversized chunks:
+
+```sql
+select s.id, s.title, max(c."tokenCount") as max_tokens, count(*) as chunks
+from extracted_chunks c join sources s on s.id = c."sourceId"
+where s.type not in ('VIDEO', 'AUDIO', 'YOUTUBE')
+group by s.id, s.title having max(c."tokenCount") > 480;
+```
+
+Re-ingest a source by enqueuing a fresh ingest job, the same two calls `POST /api/uploads/complete` makes at the end:
+
+```ts
+const job = await prisma.generationJob.create({
+  data: { studySetId: source.studySetId, sourceId: source.id, type: "INGEST_SOURCE", payload: { sourceId: source.id } },
+});
+await enqueue("ingest.source", { sourceId: source.id, generationJobId: job.id });
+```
+
+- **Don't call `POST /api/uploads/complete` again for this.** It isn't idempotent: every call re-reads the upload, resets the source to `UPLOADED` and creates another `INGEST_SOURCE` job.
+- `ingestSource` re-parses the `ORIGINAL` asset. `indexChunks()` deletes the source's chunks and re-embeds the new ones, so a re-run replaces chunks rather than duplicating them.
+- **Citations:** `CitationAnchor.chunkId` is `onDelete: SetNull`. Anchors on existing guides, cards and quizzes keep their `page` and excerpt but lose the chunk link. Regenerate those artifacts if chunk-level links matter.
+- **Document sources only.** Re-ingesting audio or video re-runs transcription, which costs money with a real provider and creates another `AUDIO` asset. Transcript chunking was already capped.
+- With `QUEUE_DRIVER=inline` the job runs in the process that enqueues it. With `redis` the worker picks it up. While it runs, the source shows `PROCESSING`.
+- Re-embedding with a real `EMBEDDINGS_PROVIDER` costs money. Ask before reprocessing a whole database.
 
 ---
 

@@ -122,3 +122,57 @@ describe("chunkDocument", () => {
     for (const c of chunkDocument(doc)) expect(c.kind).toBe("SLIDE");
   });
 });
+
+describe("chunkDocument oversized paragraphs", () => {
+  const norm = (s: string) => s.replace(/\s+/g, " ").trim();
+  const pdf = (pages: ParsedDocument["pages"]): ParsedDocument => ({ kind: "DOCUMENT", pages, pageCount: pages.length, metadata: {} });
+  const sentence = (i: number) => `Sentence ${i} explains how charge carriers drift across the junction under bias.`;
+
+  /** One page, one paragraph, ~1,500 words — how pdfjs-dist delivers PDF pages. */
+  const pdfPage = Array.from({ length: 125 }, (_, i) => sentence(i)).join(" ");
+  const pdfDoc = pdf([{ page: 7, heading: "Diodes", text: pdfPage }]);
+
+  it("keeps every chunk under the 480-token cap on the same page", () => {
+    expect(pdfPage.split(/\s+/).length).toBe(1500);
+    const chunks = chunkDocument(pdfDoc);
+    expect(chunks.length).toBeGreaterThan(1);
+    for (const c of chunks) {
+      expect(c.tokenCount).toBeLessThanOrEqual(480);
+      expect(estimateTokens(c.content)).toBe(c.tokenCount);
+      expect(c.page).toBe(7);
+      expect(c.heading).toBe("Diodes");
+    }
+    expect(chunks.map((c) => c.ordinal)).toEqual(chunks.map((_, i) => i));
+  });
+
+  it("loses no text and splits at sentence boundaries", () => {
+    const chunks = chunkDocument(pdfDoc);
+    expect(norm(chunks.map((c) => c.content).join(" "))).toBe(norm(pdfPage));
+    for (const c of chunks) expect(c.content).toMatch(/\.$/);
+  });
+
+  it("aims for the ~320-token target rather than the cap", () => {
+    const chunks = chunkDocument(pdfDoc);
+    for (const c of chunks.slice(0, -1)) expect(c.tokenCount).toBeGreaterThanOrEqual(320);
+  });
+
+  it("falls back to word boundaries for a sentence longer than the cap", () => {
+    const runOn = Array.from({ length: 900 }, (_, i) => `word${i}`).join(" ");
+    const chunks = chunkDocument(pdf([{ page: 1, text: runOn }]));
+    expect(chunks.length).toBeGreaterThan(1);
+    for (const c of chunks) expect(c.tokenCount).toBeLessThanOrEqual(480);
+    expect(norm(chunks.map((c) => c.content).join(" "))).toBe(norm(runOn));
+  });
+
+  it("never merges text across pages", () => {
+    const chunks = chunkDocument(
+      pdf([
+        { page: 1, text: pdfPage },
+        { page: 2, text: "A short closing page." },
+      ]),
+    );
+    const page2 = chunks.filter((c) => c.page === 2);
+    expect(page2.map((c) => c.content)).toEqual(["A short closing page."]);
+    for (const c of chunks.filter((c) => c.page === 1)) expect(c.content).not.toContain("closing page");
+  });
+});
