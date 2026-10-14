@@ -18,6 +18,9 @@ const envSchema = z.object({
 
   NEXTAUTH_URL: z.string().optional(),
   NEXTAUTH_SECRET: z.string().optional(),
+  // Site-wide access key (src/lib/access-gate.ts); unset = no gate. Read directly
+  // from process.env by the middleware; declared here for validation and docs.
+  LECTURE_ACCESS_KEY: z.string().optional(),
 
   QUEUE_DRIVER: z.enum(["inline", "redis"]).default("inline"),
   REDIS_URL: z.string().optional(),
@@ -96,6 +99,9 @@ export function getEnv(): Env {
     if (!env.NEXTAUTH_SECRET) throw new Error("NEXTAUTH_SECRET is required in production");
     // Sessions and local upload tickets are signed with this secret; the
     // checked-in example values would let anyone forge both.
+    if (env.LECTURE_ACCESS_KEY !== undefined && env.LECTURE_ACCESS_KEY.trim().length > 0 && env.LECTURE_ACCESS_KEY.trim().length < 12) {
+      throw new Error("LECTURE_ACCESS_KEY must be at least 12 characters in production");
+    }
     if (env.NEXTAUTH_SECRET.length < 32 || WEAK_SECRETS.has(env.NEXTAUTH_SECRET)) {
       throw new Error("NEXTAUTH_SECRET is too weak for production; generate one with: openssl rand -base64 32");
     }

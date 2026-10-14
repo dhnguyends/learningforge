@@ -710,3 +710,44 @@ export function useUploadSourceWorkflow(studySetId: string) {
 
   return { run, pending: addFile.isPending || complete.isPending, error: addFile.error ?? complete.error };
 }
+
+/* ----------------------------- admin: accounts ----------------------------- */
+
+export interface AdminUserRow {
+  id: string;
+  name: string | null;
+  email: string;
+  role: "USER" | "ADMIN";
+  createdAt: string;
+  updatedAt: string;
+  _count: { studySets: number };
+}
+
+const adminUsersKey = ["admin", "users"] as const;
+
+export function useAdminUsers() {
+  return useQuery({ queryKey: adminUsersKey, queryFn: () => api<{ users: AdminUserRow[] }>("/api/admin/users") });
+}
+
+export function useCreateUser() {
+  return useLfMutation(
+    (vars: { name: string; email: string; password: string; role: "USER" | "ADMIN" }) =>
+      api<{ user: AdminUserRow }>("/api/admin/users", { method: "POST", body: JSON.stringify(vars) }),
+    () => [adminUsersKey],
+  );
+}
+
+export function useUpdateUser() {
+  return useLfMutation(
+    ({ id, ...vars }: { id: string; name?: string; email?: string; password?: string; role?: "USER" | "ADMIN" }) =>
+      api<{ user: AdminUserRow }>(`/api/admin/users/${id}`, { method: "PATCH", body: JSON.stringify(vars) }),
+    () => [adminUsersKey],
+  );
+}
+
+export function useDeleteUser() {
+  return useLfMutation(
+    (id: string) => api<{ deleted: boolean }>(`/api/admin/users/${id}`, { method: "DELETE" }),
+    () => [adminUsersKey],
+  );
+}

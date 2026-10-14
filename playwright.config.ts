@@ -24,7 +24,10 @@ export default defineConfig({
   reporter: [["list"]],
   // A dev server compiles each route on first visit (seconds on Windows).
   expect: { timeout: 10_000 },
+  // Unlocks the LECTURE_ACCESS_KEY gate once; tests start with that cookie.
+  globalSetup: "./tests/e2e/global-setup.ts",
   use: {
+    storageState: "test-results/.auth/access.json",
     baseURL,
     trace: "on-first-retry",
     navigationTimeout: 30_000,

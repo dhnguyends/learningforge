@@ -3,6 +3,7 @@ import { ZodError, type ZodTypeAny, type output } from "zod";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import type { Session } from "next-auth";
+import { prisma } from "@/lib/db";
 import { getEnv, type Env } from "@/lib/env";
 
 export class ApiError extends Error {
@@ -54,6 +55,18 @@ export function apiHandler<Ctx = unknown>(fn: Handler<Ctx>): Handler<Ctx> {
 export async function requireSession(): Promise<Session> {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) throw unauthorized();
+  // Sessions are stateless JWTs: without this check an account deleted by an
+  // administrator could keep using the API until its token expired.
+  const user = await prisma.user.findUnique({ where: { id: session.user.id }, select: { role: true } });
+  if (!user) throw unauthorized();
+  session.user.role = user.role;
+  return session;
+}
+
+/** Requires a signed-in ADMIN, checked against the database (not the JWT). */
+export async function requireAdmin(): Promise<Session> {
+  const session = await requireSession();
+  if (session.user.role !== "ADMIN") throw forbidden();
   return session;
 }
 

@@ -84,6 +84,16 @@ cards, an 8-question quiz, exercises, and tutor history.
 - [DEPLOYMENT.md](DEPLOYMENT.md) — deploying to Vercel + Neon + Upstash + S3
   with a separate worker process
 
+## Access & accounts (invite-only)
+
+- **Access key** — set `LECTURE_ACCESS_KEY` in `.env` and every page and API
+  requires it: visitors enter it once at `/access` (30-day signed cookie;
+  changing the key locks everyone out). Leave it empty to disable the gate.
+- **No self-registration** — accounts are created by administrators at
+  **`/admin`** (create, edit name/email/password/role, delete).
+- **First administrator** — `ADMIN_PASSWORD='…' npx tsx scripts/create-admin.ts you@example.com "Your Name"`
+  (or, for an existing account, `npx tsx scripts/create-admin.ts you@example.com` to promote it).
+
 ## Privacy & integrity guarantees
 
 - Users confirm they have the rights to upload/process a recording before any

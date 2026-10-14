@@ -82,60 +82,6 @@ export function SignInForm() {
   );
 }
 
-export function SignUpForm() {
-  const router = useRouter();
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [pending, setPending] = useState(false);
-
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (password.length < 10) {
-      toast.error("Password must be at least 10 characters");
-      return;
-    }
-    setPending(true);
-    try {
-      await api("/api/auth/register", { method: "POST", body: JSON.stringify({ name, email, password }) });
-      const res = await signIn("credentials", { redirect: false, email, password });
-      if (res?.error) {
-        toast.success("Account created — please sign in");
-        router.push("/auth/sign-in");
-      } else {
-        toast.success("Account created. Welcome to LearningForge.");
-        router.push("/dashboard");
-        router.refresh();
-      }
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not create account");
-    } finally {
-      setPending(false);
-    }
-  }
-
-  return (
-    <form onSubmit={onSubmit} className="space-y-4">
-      <div className="space-y-1.5">
-        <Label htmlFor="name">Name</Label>
-        <Input id="name" autoComplete="name" required value={name} onChange={(e) => setName(e.target.value)} placeholder="Ada Lovelace" />
-      </div>
-      <div className="space-y-1.5">
-        <Label htmlFor="email">Email</Label>
-        <Input id="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@university.edu" />
-      </div>
-      <div className="space-y-1.5">
-        <Label htmlFor="password">Password</Label>
-        <Input id="password" type="password" autoComplete="new-password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="At least 8 characters" />
-      </div>
-      <Button type="submit" className="w-full" disabled={pending}>
-        {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
-        Create account
-      </Button>
-    </form>
-  );
-}
-
 export function ResetRequestForm() {
   const [email, setEmail] = useState("");
   const [pending, setPending] = useState(false);

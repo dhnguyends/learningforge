@@ -199,10 +199,17 @@ enum SessionKind {
 // Identity & workspaces
 // ---------------------------------------------------------------------------
 
+enum UserRole {
+  USER
+  ADMIN
+}
+
 model User {
   id            String    @id @default(cuid())
   name          String?
   email         String    @unique
+  /// ADMIN can manage accounts at /admin (self-registration is disabled).
+  role          UserRole  @default(USER)
   emailVerified DateTime?
   image         String?
   passwordHash  String?

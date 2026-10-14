@@ -75,6 +75,12 @@ NEXTAUTH_SECRET="$(openssl rand -base64 48 | tr -d '\n')"
 PG_PASSWORD="$(openssl rand -hex 24)"
 EOF
 fi
+# Site access key: keep the one in secrets.env; add one (from $LECTURE_ACCESS_KEY or
+# random) if this pod predates the access gate.
+if ! grep -q '^LECTURE_ACCESS_KEY=' "$SECRETS"; then
+  umask 077
+  echo "LECTURE_ACCESS_KEY=\"${LECTURE_ACCESS_KEY:-$(openssl rand -base64 18 | tr -d '\n/+=')}\"" >> "$SECRETS"
+fi
 # shellcheck disable=SC1090
 . "$SECRETS"
 
@@ -110,6 +116,8 @@ NODE_ENV=production
 APP_URL="${PUBLIC_URL}"
 NEXTAUTH_URL="${PUBLIC_URL}"
 NEXTAUTH_SECRET="${NEXTAUTH_SECRET}"
+# Invite-only gate: visitors enter this once at /access (read it from $DATA_DIR/secrets.env).
+LECTURE_ACCESS_KEY="${LECTURE_ACCESS_KEY}"
 DATABASE_URL="postgresql://lectureforge:${PG_PASSWORD}@127.0.0.1:5432/lectureforge?schema=public"
 
 # Single box: jobs run in the web process, files on local disk ($DATA_DIR/storage).

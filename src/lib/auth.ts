@@ -41,17 +41,22 @@ export const authOptions: AuthOptions = {
         const valid = await bcrypt.compare(credentials.password, user.passwordHash);
         if (!valid) return null;
         resetRateLimit(`signin:account:${email}`);
-        return { id: user.id, email: user.email, name: user.name, image: user.image };
+        return { id: user.id, email: user.email, name: user.name, image: user.image, role: user.role };
       },
     }),
   ],
   callbacks: {
     async jwt({ token, user }) {
-      if (user) token.sub = user.id;
+      if (user) {
+        token.sub = user.id;
+        token.role = user.role ?? "USER";
+      }
       return token;
     },
     async session({ session, token }) {
       if (session.user && token.sub) session.user.id = token.sub;
+      // UI hint only (menu, page guard) — admin APIs re-check the role in the database.
+      if (session.user) session.user.role = token.role ?? "USER";
       return session;
     },
   },

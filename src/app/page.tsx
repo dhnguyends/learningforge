@@ -125,7 +125,7 @@ export default function LandingPage() {
               </p>
               <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
                 <Button asChild size="lg" className="w-full sm:w-auto">
-                  <Link href="/auth/sign-up">
+                  <Link href="/auth/sign-in">
                     Create a study set <ArrowRight className="ml-1.5 h-4 w-4" aria-hidden="true" />
                   </Link>
                 </Button>
@@ -259,7 +259,7 @@ export default function LandingPage() {
               Upload one lecture and have a study guide, a deck, and a quiz before your coffee cools.
             </p>
             <Button asChild size="lg" className="mt-8">
-              <Link href="/auth/sign-up">
+              <Link href="/auth/sign-in">
                 Create a study set <ArrowRight className="ml-1.5 h-4 w-4" aria-hidden="true" />
               </Link>
             </Button>

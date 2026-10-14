@@ -1,24 +1,6 @@
-import Link from "next/link";
-import type { Metadata } from "next";
-import { AuthShell, SignUpForm } from "@/components/shared/auth-form";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = { title: "Create account — LearningForge" };
-
+/** Self-registration is disabled — accounts are created by an administrator. */
 export default function SignUpPage() {
-  return (
-    <AuthShell
-      title="Create your account"
-      subtitle="Turn your own course material into study resources you can trust."
-      footer={
-        <>
-          Already have an account?{" "}
-          <Link href="/auth/sign-in" className="font-medium text-primary hover:underline">
-            Sign in
-          </Link>
-        </>
-      }
-    >
-      <SignUpForm />
-    </AuthShell>
-  );
+  redirect("/auth/sign-in");
 }

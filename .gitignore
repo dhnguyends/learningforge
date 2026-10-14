@@ -34,3 +34,6 @@ tsconfig.tsbuildinfo
 
 # packet.ai trial backups (contain secrets)
 backups/
+
+# local backups (may contain secrets, e.g. .env.bak)
+*.bak

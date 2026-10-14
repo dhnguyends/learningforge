@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
-import { LogOut, Plus, Settings } from "lucide-react";
+import { LogOut, Plus, Settings, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -56,6 +56,11 @@ export function AppShell({ children, breadcrumb }: { children: React.ReactNode; 
                 <DropdownMenuItem onClick={() => router.push("/settings")} className="gap-2">
                   <Settings className="h-4 w-4" aria-hidden="true" /> Settings
                 </DropdownMenuItem>
+                {session?.user?.role === "ADMIN" && (
+                  <DropdownMenuItem onClick={() => router.push("/admin")} className="gap-2">
+                    <ShieldCheck className="h-4 w-4" aria-hidden="true" /> Administration
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem onClick={() => void signOut({ callbackUrl: "/" })} className="gap-2">
                   <LogOut className="h-4 w-4" aria-hidden="true" /> Sign out
                 </DropdownMenuItem>

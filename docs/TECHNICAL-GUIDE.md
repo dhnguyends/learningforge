@@ -125,7 +125,7 @@ flowchart TB
 | **UI kit** | Tailwind CSS 3, shadcn/ui (Radix UI primitives), lucide-react icons, next-themes, sonner toasts | `tailwind.config.ts`, `src/components/ui` | shadcn components are copied into the repo (owned code, not a dependency). |
 | **Client data layer** | TanStack React Query 5 | `src/hooks/use-api.ts`, `src/components/providers.tsx` | One hook per endpoint. Polls every 2 s while jobs are active. |
 | **Rich content rendering** | react-markdown, remark-gfm, remark-math, rehype-katex, KaTeX | `src/components/shared/markdown.tsx` | Equations and code preserved. Raw HTML is not enabled. |
-| **Authentication** | NextAuth (Auth.js) v4: credentials provider, JWT sessions, bcryptjs (cost 12), Prisma adapter | `src/lib/auth.ts`, `src/middleware.ts` | Every user gets a personal workspace on first use. |
+| **Authentication** | NextAuth (Auth.js) v4: credentials provider, JWT sessions, bcryptjs (cost 12), Prisma adapter | `src/lib/auth.ts`, `src/middleware.ts` | Invite-only: an access-key gate (`LECTURE_ACCESS_KEY`), no self-registration, accounts managed by `ADMIN` users at `/admin` (`src/app/api/admin/users`); roles re-checked in the DB on every admin call. |
 | **Validation** | Zod 3 | everywhere | Zod schemas are the API wire contract **and** the LLM structured-output contract. |
 | **Database** | PostgreSQL 16 + **pgvector** (`vector(1536)`, HNSW cosine index) | `prisma/schema.prisma`, `scripts/db-setup.mjs` | Accessed via Prisma 5. Vector reads and writes use raw SQL. |
 | **ORM** | Prisma 5 (`@prisma/client`) | `src/lib/db.ts` | Singleton client. `jsonSafe()` serializes BigInt. |
@@ -396,7 +396,7 @@ All variables are validated in `src/lib/env.ts`; `.env.example` documents them. 
 
 | Group | Variables |
 |---|---|
-| Core | `APP_URL`, `DATABASE_URL`, `NEXTAUTH_URL`, `NEXTAUTH_SECRET` |
+| Core | `APP_URL`, `DATABASE_URL`, `NEXTAUTH_URL`, `NEXTAUTH_SECRET`, `LECTURE_ACCESS_KEY` (site-wide access gate, `src/lib/access-gate.ts` + `src/middleware.ts`; unset = off) |
 | Queue | `QUEUE_DRIVER` (`inline`\|`redis`), `REDIS_URL` |
 | Storage | `STORAGE_DRIVER` (`local`\|`s3`), `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `SIGNED_URL_TTL` |
 | LLM | `AI_PROVIDER` (`mock`\|`openai`\|`anthropic`\|`local`), `AI_MODEL`, `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `LOCAL_AI_BASE_URL`, `LOCAL_AI_MODEL` (e.g. `gemma4:latest`), `LOCAL_AI_THINK` (default `false`; reasoning models are ~10x slower with it on), `LOCAL_AI_TIMEOUT_MS` (default 300000), `LOCAL_AI_MAX_TOKENS` (default 4096; guards against runaway generations), `LOCAL_AI_NUM_CTX` (optional) |

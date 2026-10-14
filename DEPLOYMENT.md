@@ -135,6 +135,15 @@ ssh-keygen -t ed25519 -f ~/.ssh/packet_lectureforge
 PACKET_HOST=<ip> PACKET_PORT=<ssh port> PUBLIC_URL=http://<ip>:<external_port> bash deploy/packet/deploy.sh
 ```
 
+Access and accounts on the pod:
+
+- `setup.sh` generates a `LECTURE_ACCESS_KEY` once into `$DATA_DIR/secrets.env`
+  (or uses the one you pass: `LECTURE_ACCESS_KEY=… bash deploy/packet/deploy.sh`).
+  Read it with `ssh … 'grep LECTURE_ACCESS_KEY ~/lectureforge-data/secrets.env'`.
+- Create the first administrator on the pod:
+  `ssh … 'cd ~/lectureforge && ADMIN_PASSWORD=… npx tsx scripts/create-admin.ts you@example.com "Your Name"'`,
+  then manage everyone else at `/admin`.
+
 Know before you use it:
 
 - **Pods launched without persistent storage lose everything when stopped.** Run
