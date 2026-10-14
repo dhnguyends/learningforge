@@ -433,6 +433,8 @@ model ExtractedChunk {
   speaker    String?
   tokenCount Int
   embedding  Unsupported("vector(1536)")?
+  /// Vector space the embedding belongs to (e.g. "ollama:embeddinggemma"); NULL = legacy mock-hash.
+  embeddingModel String?
   createdAt  DateTime  @default(now())
 
   source Source           @relation(fields: [sourceId], references: [id], onDelete: Cascade)

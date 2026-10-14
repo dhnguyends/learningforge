@@ -49,7 +49,11 @@ const envSchema = z.object({
   // Context window override; unset = let Ollama size it for the available memory.
   LOCAL_AI_NUM_CTX: z.coerce.number().int().positive().optional(),
 
-  EMBEDDINGS_PROVIDER: z.enum(["mock", "openai"]).default("mock"),
+  // ollama = local Ollama /api/embed (e.g. embeddinggemma, multilingual, 768-d padded to 1536).
+  EMBEDDINGS_PROVIDER: z.enum(["mock", "openai", "ollama"]).default("mock"),
+  OLLAMA_EMBEDDINGS_MODEL: z.string().default("embeddinggemma"),
+  // Cosine-similarity floor for retrieval; unset = the provider's calibrated default.
+  RETRIEVAL_MIN_SCORE: z.coerce.number().min(0).max(1).optional(),
   EMBEDDINGS_MODEL: z.string().default("text-embedding-3-small"),
   EMBEDDINGS_DIMENSIONS: z.coerce.number().int().positive().default(1536),
 

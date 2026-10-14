@@ -19,6 +19,7 @@ set -euo pipefail
 APP_DIR="${APP_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 DATA_DIR="${DATA_DIR:-/home/ubuntu/lectureforge-data}"
 OLLAMA_MODEL="${OLLAMA_MODEL:-gemma4:latest}"
+OLLAMA_EMBEDDINGS_MODEL="${OLLAMA_EMBEDDINGS_MODEL:-embeddinggemma}"
 PUBLIC_URL="${PUBLIC_URL:-http://localhost:3000}"
 PG_VERSION=16
 
@@ -96,8 +97,9 @@ $SUDO -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='lecturefor
 $SUDO -u postgres psql -q -d lectureforge -c "CREATE EXTENSION IF NOT EXISTS vector;"
 
 # --- Model ----------------------------------------------------------------------------------
-log "Pulling $OLLAMA_MODEL (first time: several GB)"
+log "Pulling $OLLAMA_MODEL (first time: several GB) and $OLLAMA_EMBEDDINGS_MODEL"
 ollama pull "$OLLAMA_MODEL"
+ollama pull "$OLLAMA_EMBEDDINGS_MODEL"
 
 # --- App env ----------------------------------------------------------------------------------
 log "Writing $APP_DIR/.env.production.local"
@@ -121,8 +123,11 @@ LOCAL_AI_THINK=false
 LOCAL_AI_TIMEOUT_MS=300000
 LOCAL_AI_MAX_TOKENS=4096
 
+# Semantic, multilingual embeddings for RAG (vectors stored in pgvector).
+EMBEDDINGS_PROVIDER=ollama
+OLLAMA_EMBEDDINGS_MODEL=${OLLAMA_EMBEDDINGS_MODEL}
+
 # Not configured yet: these stay on the offline stand-ins.
-EMBEDDINGS_PROVIDER=mock
 TRANSCRIPTION_PROVIDER=mock
 TTS_PROVIDER=mock
 GENERATION_RATE_LIMIT_PER_HOUR=30
@@ -142,6 +147,8 @@ log "Installing dependencies and building"
 cd "$APP_DIR"
 npm ci --no-audit --no-fund
 npm run db:setup
+# Bring every chunk's vector onto the configured embeddings model (no-op when current).
+npx tsx scripts/reembed.ts
 NODE_ENV=production npm run build
 
 log "Setup complete. Start the app with: bash deploy/packet/start.sh app"

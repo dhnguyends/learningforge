@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { getEmbeddings, toVectorLiteral } from "@/lib/ai/embeddings";
+import { getEmbeddings, retrievalMinScore, toVectorLiteral } from "@/lib/ai/embeddings";
 import type { ChunkDraft } from "@/lib/retrieval/chunking";
 
 export interface IndexedChunk {
@@ -29,7 +29,8 @@ export async function indexChunks(
   if (drafts.length === 0) return [];
 
   await onStage?.("vectorizing", 80);
-  const vectors = await getEmbeddings().embed(drafts.map((d) => d.content));
+  const embeddings = getEmbeddings();
+  const vectors = await embeddings.embed(drafts.map((d) => d.content), { kind: "document" });
   // createManyAndReturn does not guarantee row order — match vectors to rows
   // via the per-source unique ordinal instead of index.
   const vectorByOrdinal = new Map(drafts.map((d, i) => [d.ordinal, vectors[i]]));
@@ -48,6 +49,7 @@ export async function indexChunks(
       endMs: d.endMs,
       speaker: d.speaker,
       tokenCount: d.tokenCount,
+      embeddingModel: embeddings.name,
     })),
   });
   for (const row of created) {
@@ -91,10 +93,17 @@ export interface RetrievedChunk {
 export async function searchChunks(
   studySetId: string,
   query: string,
-  { k = 8, sourceIds, minScore = 0.05 }: { k?: number; sourceIds?: string[]; minScore?: number } = {},
+  { k = 8, sourceIds, minScore = retrievalMinScore() }: { k?: number; sourceIds?: string[]; minScore?: number } = {},
 ): Promise<RetrievedChunk[]> {
-  const [vector] = await getEmbeddings().embed([query]);
+  const embeddings = getEmbeddings();
+  const [vector] = await embeddings.embed([query], { kind: "query" });
   const literal = toVectorLiteral(vector);
+  // Only compare vectors from the same model: cosine scores across vector
+  // spaces are meaningless (legacy rows without a tag are mock-hash).
+  const modelFilter =
+    embeddings.name === "mock-hash"
+      ? Prisma.sql`AND (c."embeddingModel" = ${embeddings.name} OR c."embeddingModel" IS NULL)`
+      : Prisma.sql`AND c."embeddingModel" = ${embeddings.name}`;
 
   const sourceFilter = sourceIds?.length
     ? Prisma.sql`AND s."id" IN (${Prisma.join(sourceIds)})`
@@ -110,6 +119,7 @@ export async function searchChunks(
     WHERE s."studySetId" = ${studySetId}
       AND s."status" = 'READY'
       AND c."embedding" IS NOT NULL
+      ${modelFilter}
       ${sourceFilter}
     ORDER BY c."embedding" <=> ${literal}::vector
     LIMIT ${k}
@@ -231,6 +241,19 @@ export async function emptyRetrievalError(studySetId: string): Promise<Error> {
   });
   if (indexedChunks === 0) {
     return new Error("No indexed sources yet — add sources and wait for processing to finish.");
+  }
+  const model = getEmbeddings().name;
+  const current = await prisma.extractedChunk.count({
+    where: {
+      source: { studySetId, status: "READY" },
+      ...(model === "mock-hash" ? { OR: [{ embeddingModel: model }, { embeddingModel: null }] } : { embeddingModel: model }),
+    },
+  });
+  if (current === 0) {
+    return new Error(
+      `This study set's ${indexedChunks} chunk(s) were embedded with a different embeddings model than the configured "${model}" — ` +
+        "run `npx tsx scripts/reembed.ts` (or re-add the sources) to rebuild the vector index.",
+    );
   }
   return new Error(
     `Retrieval matched none of the ${indexedChunks} indexed chunk(s) for the requested topic — ` +

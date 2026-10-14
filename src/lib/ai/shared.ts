@@ -16,7 +16,16 @@ export interface RawCompletion {
  */
 export function restoreLatexEscapes<T>(value: T): T {
   if (typeof value === "string") {
-    return value.replace(/\u000c/g, "\\f").replace(/\u0008/g, "\\b") as T;
+    return value
+      .replace(/\u000c/g, "\\f")
+      .replace(/\u0008/g, "\\b")
+      // \t, \r, \n are ambiguous with real whitespace (tab-indented code!), so
+      // only restore them before known LaTeX command names: "\tilde" decoded
+      // as TAB + "ilde", "\rho" as CR + "ho", "\nabla" as LF + "abla".
+      .replace(/\t(?=(?:ilde|heta|ext|extbf|extit|extrm|imes|au|frac|op|riangle|o|ag|anh|an)(?![A-Za-z]))/g, "\\t")
+      .replace(/\r(?=(?:ho|ight|ightarrow|angle|ceil|floor|m|vert|Vert|Rightarrow)(?![A-Za-z]))/g, "\\r")
+      // Newlines are real far more often — only restore known LaTeX commands.
+      .replace(/\n(?=(?:abla|eq|eg|ewline|onumber|otin|ot|u|i|exists|parallel|mid|leftarrow|Leftarrow|rightarrow)(?![A-Za-z]))/g, "\\n") as T;
   }
   if (Array.isArray(value)) return value.map((v) => restoreLatexEscapes(v)) as T;
   if (value && typeof value === "object") {
