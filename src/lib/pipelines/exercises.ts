@@ -3,7 +3,7 @@ import { getGenerator } from "@/lib/ai";
 import { searchChunks, retrieveForWholeSet, formatRetrievedContext, emptyRetrievalError, type RetrievedChunk } from "@/lib/retrieval";
 import { createAnchorsForChunks } from "@/lib/pipelines/anchors";
 import { exercisesSchema, type ExerciseDraft } from "@/lib/pipelines/schemas";
-import { validateExercise, resolveChunkRefs } from "@/lib/pipelines/validation";
+import { validateExercise, resolveChunkRefs, stripCitationLeaks } from "@/lib/pipelines/validation";
 import { EXERCISES_SYSTEM, EXERCISES_USER, PROMPT_VERSION } from "@/lib/prompts";
 import type { JobContext } from "@/lib/queue/types";
 import { audit } from "@/lib/audit";
@@ -65,7 +65,15 @@ export async function generateExercisesJob(ctx: JobContext<ExercisesJobPayload>)
     // relabelled as additional practice (it used to be dropped, and a model
     // that never fills chunkIds made every generation fail).
     const unverified = generated.grounded && anchored.length === 0;
-    const draft = unverified ? { ...generated, grounded: false } : generated;
+    const clean = (text: string) => stripCitationLeaks(text, chunkIds);
+    const draft = {
+      ...generated,
+      grounded: unverified ? false : generated.grounded,
+      prompt: clean(generated.prompt),
+      solution: clean(generated.solution),
+      hints: generated.hints.map(clean),
+      ...(generated.expectedOutput ? { expectedOutput: clean(generated.expectedOutput) } : {}),
+    };
     if (config.groundedOnly && !draft.grounded) {
       dropped++;
       continue;

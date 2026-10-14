@@ -3,7 +3,7 @@ import { getGenerator } from "@/lib/ai";
 import { searchChunks, retrieveForWholeSet, formatRetrievedContext, emptyRetrievalError, type RetrievedChunk } from "@/lib/retrieval";
 import { createAnchorsForChunks } from "@/lib/pipelines/anchors";
 import { quizSchema, type QuizQuestionDraft } from "@/lib/pipelines/schemas";
-import { validateQuizQuestion, resolveChunkRef, normalizeQuizQuestion } from "@/lib/pipelines/validation";
+import { validateQuizQuestion, resolveChunkRef, normalizeQuizQuestion, stripCitationLeaks } from "@/lib/pipelines/validation";
 import { QUIZ_SYSTEM, QUIZ_USER, PROMPT_VERSION } from "@/lib/prompts";
 import type { JobContext } from "@/lib/queue/types";
 import { audit } from "@/lib/audit";
@@ -54,7 +54,14 @@ export async function generateQuizJob(ctx: JobContext<QuizJobPayload>): Promise<
   // Only answerable, gradable questions are stored (see normalizeQuizQuestion).
   const drafts: Array<(typeof cited)[number]> = [];
   const dropped: string[] = [];
-  for (const q of cited) {
+  const clean = (text: string) => stripCitationLeaks(text, chunkIds);
+  for (const raw of cited) {
+    const q = {
+      ...raw,
+      stem: clean(raw.stem),
+      explanation: clean(raw.explanation),
+      options: raw.options.map((o) => ({ ...o, text: clean(o.text) })),
+    };
     const n = normalizeQuizQuestion(q);
     if ("dropped" in n) dropped.push(n.dropped);
     else drafts.push({ ...n.question, warnings: n.note ? [...n.question.warnings, n.note] : n.question.warnings });

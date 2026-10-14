@@ -1,4 +1,5 @@
 import type { FlashcardDraft, QuizQuestionDraft, ExerciseDraft, GuideSectionContent } from "@/lib/pipelines/schemas";
+import { CLOZE_BLANK, clozeAnswer } from "@/lib/cloze";
 
 /**
  * Stage 7 of the generation pipeline: the validation pass.
@@ -66,7 +67,21 @@ export function extractInlineChunkIds(content: string, validIds: Iterable<string
     if (known.has(token) && !found.includes(token)) found.push(token);
   };
 
+  const keepFrom = (inner: string | undefined) => {
+    for (const m of (inner ?? "").matchAll(/\bid\s*=\s*([A-Za-z0-9_-]{8,64})/g)) keep(m[1]);
+  };
+
   const cleaned = content
+    // Copied context headers: "[CHUNK 3] (id=cmv…, source=\"…\", page 2)" — label and metadata.
+    .replace(/[ \t]*\[CHUNK\s*#?\d{1,3}\]\s*(?:\(([^()\n]{0,400})\))?/gi, (_match, inner?: string) => {
+      keepFrom(inner);
+      return "";
+    })
+    // A bare metadata parenthetical "(id=cmv…, source=…)".
+    .replace(/[ \t]*\((?=[^()\n]*\bid\s*=\s*[A-Za-z0-9_-]{8,64})([^()\n]{0,400})\)/g, (_match, inner: string) => {
+      keepFrom(inner);
+      return "";
+    })
     // [id] / [id, id] / [chunk: id] in prose (not markdown links "[text](url)").
     .replace(/[ \t]*\[([^\[\]\n]{1,400})\](?!\()/g, (match, inner: string) => {
       const tokens = inner.split(/[,;\s]+/).map((t) => t.replace(/^(?:chunk|id)[:=]\s*/i, "").trim()).filter(Boolean);
@@ -84,6 +99,59 @@ export function extractInlineChunkIds(content: string, validIds: Iterable<string
 }
 
 const CUID_LIKE = /^c[a-z0-9]{20,32}$/;
+
+/** Text with leaked chunk labels / ids removed (ids discarded). */
+export function stripCitationLeaks(text: string, validIds: Iterable<string>): string {
+  return extractInlineChunkIds(text, validIds).content.trim();
+}
+
+// --- Flashcards (shape) ------------------------------------------------------------
+
+/** A blank whose "answer" is just a placeholder ("...", "…", "___", "?"). */
+function isPlaceholderAnswer(answer: string): boolean {
+  return /^[\s.…_?\-–—]*$/.test(answer);
+}
+
+/**
+ * Make a generated flashcard clean and usable before it is stored.
+ * - Leaked context headers / chunk ids ("[CHUNK 1] (id=cmv…, source=…)") are
+ *   removed from front and back; the ids they name become supporting anchors.
+ * - Cloze cards need real blanks: Gemma 4 wrote "{{...}}" (the answer elided),
+ *   which would reveal nothing. A cloze card with no blanks, or with any
+ *   placeholder blank, becomes a basic card with "____" gaps (its back still
+ *   carries the answer).
+ * Pure; unit-tested.
+ */
+export function normalizeFlashcard(
+  draft: FlashcardDraft,
+  chunkIds: readonly string[],
+): { card: FlashcardDraft; note?: string } {
+  const front = extractInlineChunkIds(draft.front, chunkIds);
+  const back = extractInlineChunkIds(draft.back, chunkIds);
+  const supporting = [
+    ...new Set([...draft.supportingChunkIds, ...front.ids, ...back.ids].filter((id) => id !== draft.chunkId)),
+  ];
+  let card: FlashcardDraft = {
+    ...draft,
+    front: front.content.trim(),
+    back: back.content.trim(),
+    supportingChunkIds: supporting,
+  };
+
+  const blanks = [...card.front.matchAll(CLOZE_BLANK)].map((m) => clozeAnswer(m[1]));
+  if (card.type === "cloze") {
+    if (blanks.length === 0) {
+      return { card: { ...card, type: "basic" }, note: "Converted to a basic card: the cloze card had no blanks." };
+    }
+    if (blanks.some(isPlaceholderAnswer)) {
+      card = { ...card, type: "basic", front: card.front.replace(CLOZE_BLANK, "____") };
+      return { card, note: "Converted to a basic card: the cloze blanks did not contain their answers." };
+    }
+  } else if (blanks.length > 0 && blanks.some(isPlaceholderAnswer)) {
+    card = { ...card, front: card.front.replace(CLOZE_BLANK, (m, inner: string) => (isPlaceholderAnswer(clozeAnswer(inner)) ? "____" : m)) };
+  }
+  return { card };
+}
 
 // --- Guide sections ------------------------------------------------------------
 

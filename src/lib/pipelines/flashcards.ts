@@ -3,7 +3,7 @@ import { getGenerator, isMockAI } from "@/lib/ai";
 import { searchChunks, retrieveForWholeSet, formatRetrievedContext, emptyRetrievalError, type RetrievedChunk } from "@/lib/retrieval";
 import { createAnchorsForChunks } from "@/lib/pipelines/anchors";
 import { flashcardsSchema, type FlashcardDraft } from "@/lib/pipelines/schemas";
-import { dedupeFlashcards, resolveChunkRef, resolveChunkRefs } from "@/lib/pipelines/validation";
+import { dedupeFlashcards, normalizeFlashcard, resolveChunkRef, resolveChunkRefs } from "@/lib/pipelines/validation";
 import { FLASHCARDS_SYSTEM, FLASHCARDS_USER, PROMPT_VERSION } from "@/lib/prompts";
 import type { JobContext } from "@/lib/queue/types";
 import { audit } from "@/lib/audit";
@@ -49,14 +49,18 @@ export async function generateFlashcardsJob(ctx: JobContext<FlashcardsJobPayload
   });
 
   await ctx.updateStage("validating", 80);
-  const validChunkIds = new Set(chunks.map((c) => c.id));
+  const chunkIds = chunks.map((c) => c.id);
+  const validChunkIds = new Set(chunkIds);
+  const notes = new Map<FlashcardDraft, string>();
   const drafts = result.data.cards
-    .map((c) => ({ ...c, chunkId: resolveChunkRef(c.chunkId, chunks.map((x) => x.id)) ?? "" }))
+    .map((c) => ({ ...c, chunkId: resolveChunkRef(c.chunkId, chunkIds) ?? "" }))
     .filter((c) => validChunkIds.has(c.chunkId))
-    .map((c) => ({
-      ...c,
-      supportingChunkIds: resolveChunkRefs(c.supportingChunkIds, chunks.map((x) => x.id)),
-    }));
+    .map((c) => {
+      const { card, note } = normalizeFlashcard({ ...c, supportingChunkIds: resolveChunkRefs(c.supportingChunkIds, chunkIds) }, chunkIds);
+      if (note) notes.set(card, note);
+      return card;
+    })
+    .filter((c) => c.front.length >= 3 && c.back.length >= 1);
   const { kept, duplicates } = dedupeFlashcards(drafts);
   if (kept.length === 0) throw new Error("Generation produced no valid, source-cited cards.");
 
@@ -69,8 +73,11 @@ export async function generateFlashcardsJob(ctx: JobContext<FlashcardsJobPayload
   if (generatedIds.length) await prisma.flashcard.deleteMany({ where: { id: { in: generatedIds } } });
 
   const chunkById = new Map(chunks.map((c) => [c.id, c] as const));
-  const warnings = duplicates > 0 ? [`Removed ${duplicates} near-duplicate card(s).`] : [];
   for (const draft of kept) {
+    // Per-card warnings describe THIS card; deck-level facts (duplicates
+    // removed) go on the deck — they used to be stamped on every card.
+    const note = notes.get(draft);
+    const warnings = note ? [note] : [];
     const chunk = chunkById.get(draft.chunkId)!;
     const support = draft.supportingChunkIds.map((id) => chunkById.get(id)!).filter(Boolean);
     const anchorIds = await createAnchorsForChunks([chunk, ...support]);
@@ -87,6 +94,19 @@ export async function generateFlashcardsJob(ctx: JobContext<FlashcardsJobPayload
     });
   }
 
+  await prisma.flashcardDeck.update({
+    where: { id: deckId },
+    data: {
+      generatedFrom: {
+        ...((deck.generatedFrom as Record<string, unknown> | null) ?? {}),
+        generatedAt: new Date().toISOString(),
+        cards: kept.length,
+        duplicatesRemoved: duplicates,
+        provider: result.provider,
+        promptVersion: PROMPT_VERSION,
+      },
+    },
+  });
   await audit({
     action: "ai.generation",
     entityType: "flashcard_deck",
