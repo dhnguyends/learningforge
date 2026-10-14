@@ -134,6 +134,14 @@ E2E notes learned the hard way (Windows dev box):
 
 ## Troubleshooting
 
+- **`Unknown argument <field>` from `prisma.….create()` after a schema change** —
+  the running server holds a stale Prisma client. On Windows a running Node
+  process locks the query-engine file, so `prisma generate` run *while the dev
+  server is up* only half-updates the client (look for
+  `node_modules/.prisma/client/query_engine-*.tmp*`). Stop the dev server,
+  run `npx prisma generate`, start it again. `npm run dev` now regenerates the
+  client automatically (`predev`), so restarting through it is enough.
+
 - **`P1014`/missing tables on `db push`** — wrong Postgres server; see
   [Postgres on port 5433](#postgres-on-port-5433).
 - **Redis container won't start ("port already allocated")** — something
