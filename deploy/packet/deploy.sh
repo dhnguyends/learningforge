@@ -2,8 +2,8 @@
 # Ship the committed code to a packet.ai pod and (re)build + restart it.
 # Run from a clean checkout on your machine (Git Bash on Windows works):
 #
-#   PACKET_HOST=50.35.188.68 PACKET_PORT=30618 \
-#   PUBLIC_URL=http://50.35.188.68:31234 \
+#   PACKET_HOST=203.0.113.10 PACKET_PORT=30618 \
+#   PUBLIC_URL=http://203.0.113.10:31234 \
 #   bash deploy/packet/deploy.sh [git-ref]
 #
 # Only committed files are shipped (git archive) — .env and local data never

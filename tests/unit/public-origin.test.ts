@@ -11,8 +11,8 @@ const req = (url: string, headers: Record<string, string> = {}) => new Request(u
 
 describe("publicOrigin", () => {
   it("uses APP_URL in production, ignoring req.url's bind address", () => {
-    const r = req("http://localhost:3000/api/study-sets", { host: "50.35.188.68:20002" });
-    expect(publicOrigin(r, { NODE_ENV: "production", APP_URL: "http://50.35.188.68:20002/" })).toBe("http://50.35.188.68:20002");
+    const r = req("http://localhost:3000/api/study-sets", { host: "203.0.113.10:20002" });
+    expect(publicOrigin(r, { NODE_ENV: "production", APP_URL: "http://203.0.113.10:20002/" })).toBe("http://203.0.113.10:20002");
   });
 
   it("does not let a forged Host header redirect production uploads", () => {

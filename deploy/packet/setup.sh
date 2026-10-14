@@ -12,7 +12,7 @@
 #   DATA_DIR     where data/logs/secrets live (default /home/ubuntu/lectureforge-data;
 #                point it at a persistent volume, e.g. /mnt/shared/lectureforge)
 #   APP_DIR      unpacked app (default: this repo's root)
-#   PUBLIC_URL   e.g. http://50.35.188.68:31234 (sets NEXTAUTH_URL / APP_URL)
+#   PUBLIC_URL   e.g. http://203.0.113.10:31234 (sets NEXTAUTH_URL / APP_URL)
 #   OLLAMA_MODEL default gemma4:latest
 set -euo pipefail
 
