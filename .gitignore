@@ -37,3 +37,5 @@ backups/
 
 # local backups (may contain secrets, e.g. .env.bak)
 *.bak
+# pod TLS root CA downloaded for local trust (public cert, machine-specific)
+pod-root-ca.crt

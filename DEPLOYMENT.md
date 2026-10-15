@@ -132,7 +132,7 @@ packet.ai GPU pod. Scripts live in `deploy/packet/`:
 # one-time: create a dedicated key and add its .pub to the pod's ~/.ssh/authorized_keys
 ssh-keygen -t ed25519 -f ~/.ssh/packet_lectureforge
 # expose pod port 3000 (pod page → Exposed services → HTTP) to get http://<ip>:<external_port>
-PACKET_HOST=<ip> PACKET_PORT=<ssh port> PUBLIC_URL=http://<ip>:<external_port> bash deploy/packet/deploy.sh
+PACKET_HOST=<ip> PACKET_PORT=<ssh port> PUBLIC_URL=https://<ip>:<external_port> bash deploy/packet/deploy.sh
 ```
 
 Access and accounts on the pod:
@@ -149,8 +149,18 @@ Know before you use it:
 - **Pods launched without persistent storage lose everything when stopped.** Run
   `backup.sh backup` before stopping; `backup.sh restore <folder>` after redeploying.
   Launch with persistent storage enabled for anything long-lived.
-- **Plain HTTP only** — packet.ai exposes `http(s)://<ip>:<port>` NodePorts with no
-  custom domain; passwords cross the network unencrypted. Treat it as a private trial.
+- **HTTPS with a private CA** — with an `https://` `PUBLIC_URL`, Caddy terminates
+  TLS on the exposed pod port (plain `http://` is redirected) and the app only
+  listens on `127.0.0.1:3001`. A bare IP on a NodePort cannot get a publicly
+  trusted certificate (ACME needs ports 80/443), so Caddy's internal CA issues
+  the IP certificate (12 h leaf, auto-renewed). Browsers warn until the root
+  is trusted: download it with
+  `scp -P <ssh port> ubuntu@<ip>:/home/ubuntu/lectureforge-data/tls-root.crt pod-root-ca.crt`
+  and import it on each device (Windows, current user, no admin rights:
+  `certutil -user -addstore Root pod-root-ca.crt`). The root is regenerated if
+  the pod's disk is wiped — re-import it then. For certificates every browser
+  trusts, point a domain at the pod and switch the Caddyfile to an ACME DNS-01
+  issuer; then add HSTS (deliberately off with a private CA).
 - Billing is per second from the wallet (RTX PRO 6000 from $0.66/h ≈ $480/month if
   left on). Stop the pod when idle.
 - Embeddings and transcription stay on the offline mock providers unless configured:
