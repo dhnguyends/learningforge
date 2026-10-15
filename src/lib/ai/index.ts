@@ -5,11 +5,12 @@ import { OpenAIGenerator } from "@/lib/ai/openai";
 import { AnthropicGenerator } from "@/lib/ai/anthropic";
 import { LocalGenerator } from "@/lib/ai/local";
 import { GeminiGenerator } from "@/lib/ai/gemini";
+import { ZaiGenerator } from "@/lib/ai/zai";
 import { getActiveAi, type ResolvedAi } from "@/lib/ai/settings";
 
 const cache = new Map<string, StructuredGenerator>();
 
-/** Generator for one provider/model pair (cached; adapters are stateless). */
+/** Generator for one provider/model pair (cached, so per-model state such as a Gemini failover persists). */
 export function generatorFor(ai: Pick<ResolvedAi, "provider" | "model">): StructuredGenerator {
   const key = `${ai.provider}:${ai.model}`;
   const hit = cache.get(key);
@@ -28,6 +29,9 @@ export function generatorFor(ai: Pick<ResolvedAi, "provider" | "model">): Struct
       break;
     case "gemini":
       generator = new GeminiGenerator(env, ai.model);
+      break;
+    case "zai":
+      generator = new ZaiGenerator(env, ai.model);
       break;
     default:
       generator = new MockGenerator();

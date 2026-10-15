@@ -1,7 +1,7 @@
 import { apiHandler, ok, parseJsonBody, requireAdmin, badRequest } from "@/lib/api";
 import { audit } from "@/lib/audit";
 import { getEnv } from "@/lib/env";
-import { aiChoiceSchema, aiSettingsView, geminiConfigured, getStoredAiChoice, saveAiChoice } from "@/lib/ai/settings";
+import { aiChoiceSchema, aiSettingsView, geminiConfigured, getStoredAiChoice, saveAiChoice, zaiConfigured } from "@/lib/ai/settings";
 
 /** The generation model used by every pipeline, chosen by an administrator. */
 
@@ -17,6 +17,9 @@ export const PUT = apiHandler(async (req) => {
   if (env.AI_PROVIDER === "mock") throw badRequest("AI_PROVIDER=mock (offline mode) cannot be changed from the admin page");
   if (choice.provider === "gemini" && !geminiConfigured(env)) {
     throw badRequest("Set GEMINI_API_KEY in the server environment before selecting Gemini");
+  }
+  if (choice.provider === "zai" && !zaiConfigured(env)) {
+    throw badRequest("Set ZAI_API_KEY in the server environment before selecting GLM (Z.ai)");
   }
   const previous = await getStoredAiChoice();
   await saveAiChoice(choice, admin.user.id);

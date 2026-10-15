@@ -754,7 +754,7 @@ export function useDeleteUser() {
 
 /* ---------------------------- admin: AI model ---------------------------- */
 
-export type AiChoiceInput = { provider: "local" } | { provider: "gemini"; model: string };
+export type AiChoiceInput = { provider: "local" } | { provider: "gemini"; model: string } | { provider: "zai" };
 export type AdminAiSettings = import("@/lib/ai/settings").AiSettingsView;
 export interface AiTestResult {
   ok: boolean;

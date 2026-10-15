@@ -23,6 +23,8 @@ const GEMINI_MODEL_IDS = GEMINI_MODELS.map((m) => m.id) as [GeminiModelId, ...Ge
 export const aiChoiceSchema = z.discriminatedUnion("provider", [
   z.object({ provider: z.literal("local") }),
   z.object({ provider: z.literal("gemini"), model: z.enum(GEMINI_MODEL_IDS) }),
+  // GLM served by Z.ai; the model is GLM_AI_MODEL.
+  z.object({ provider: z.literal("zai") }),
 ]);
 export type AiChoice = z.infer<typeof aiChoiceSchema>;
 
@@ -44,9 +46,18 @@ export function geminiConfigured(env: Env = getEnv()): boolean {
   return Boolean(env.GEMINI_API_KEY?.trim());
 }
 
+export function zaiConfigured(env: Env = getEnv()): boolean {
+  return Boolean(env.ZAI_API_KEY?.trim());
+}
+
+/** Z.ai model codes are lower-case; GLM_AI_MODEL may be written "GLM-5.3-Flash". */
+export function zaiModel(env: Env = getEnv()): string {
+  return env.GLM_AI_MODEL.trim().toLowerCase();
+}
+
 function envDefault(env: Env): ResolvedAi {
-  // Gemini is the default; without a key it would fail every job, so run locally instead.
-  if (env.AI_PROVIDER === "gemini" && !geminiConfigured(env)) {
+  // A cloud default without its key would fail every job, so run locally instead.
+  if ((env.AI_PROVIDER === "gemini" && !geminiConfigured(env)) || (env.AI_PROVIDER === "zai" && !zaiConfigured(env))) {
     return { provider: "local", model: env.LOCAL_AI_MODEL, source: "fallback" };
   }
   const model =
@@ -54,7 +65,9 @@ function envDefault(env: Env): ResolvedAi {
       ? env.LOCAL_AI_MODEL
       : env.AI_PROVIDER === "gemini"
         ? env.GEMINI_MODEL
-        : env.AI_PROVIDER === "anthropic"
+        : env.AI_PROVIDER === "zai"
+          ? zaiModel(env)
+          : env.AI_PROVIDER === "anthropic"
           ? env.ANTHROPIC_MODEL
           : env.AI_PROVIDER === "openai"
             ? env.AI_MODEL
@@ -86,13 +99,18 @@ export function invalidateAiChoice(): void {
 
 /**
  * Applies the stored choice on top of the environment. Mock mode (tests,
- * offline demos) is never overridden, and a Gemini choice without an API key
- * falls back to the environment default instead of failing every job.
+ * offline demos) is never overridden, and a cloud choice without its key
+ * (GEMINI_API_KEY, ZAI_API_KEY) falls back to the environment default instead of
+ * failing every job.
  */
 export function resolveAi(choice: AiChoice | null, env: Env = getEnv()): ResolvedAi {
   const fallback = envDefault(env);
   if (env.AI_PROVIDER === "mock" || !choice) return fallback;
   if (choice.provider === "local") return { provider: "local", model: env.LOCAL_AI_MODEL, source: "admin" };
+  if (choice.provider === "zai") {
+    if (!zaiConfigured(env)) return { ...fallback, source: "fallback" };
+    return { provider: "zai", model: zaiModel(env), source: "admin" };
+  }
   if (!geminiConfigured(env)) return { ...fallback, source: "fallback" };
   return { provider: "gemini", model: choice.model, source: "admin" };
 }
@@ -115,14 +133,27 @@ export async function aiSettingsView() {
     localModel: env.LOCAL_AI_MODEL,
     geminiConfigured: geminiConfigured(env),
     geminiModels: GEMINI_MODELS,
+    zai: {
+      configured: zaiConfigured(env),
+      model: zaiModel(env),
+      label: aiLabel({ provider: "zai", model: zaiModel(env) }),
+    },
   };
 }
 export type AiSettingsView = Awaited<ReturnType<typeof aiSettingsView>>;
 
-/** Human label for the top bar ("Gemini 3.8 Flash", "Gemma 4 · local"). */
+/** Human label for the top bar ("Gemini 3.8 Flash", "GLM-5.3", "Gemma 4 · local"). */
 export function aiLabel(ai: Pick<ResolvedAi, "provider" | "model">): string {
   if (ai.provider === "gemini") return GEMINI_MODELS.find((m) => m.id === ai.model)?.label ?? ai.model;
   if (ai.provider === "local") return /gemma-?4/i.test(ai.model) ? "Gemma 4 · local" : `${ai.model} · local`;
+  if (ai.provider === "zai") return glmLabel(ai.model);
   if (ai.provider === "mock") return "Offline demo";
   return ai.model;
+}
+
+/** "glm-5.3-flash" → "GLM-5.3-Flash". */
+export function glmLabel(model: string): string {
+  return model
+    .replace(/^glm/i, "GLM")
+    .replace(/-([a-z])/g, (_m, c: string) => `-${c.toUpperCase()}`);
 }

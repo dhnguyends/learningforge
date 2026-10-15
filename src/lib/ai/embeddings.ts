@@ -118,7 +118,12 @@ class OllamaEmbeddings implements EmbeddingProvider {
           signal: AbortSignal.timeout(120_000),
         });
       } catch (err) {
-        throw new Error(`Embeddings model ${this.model} unreachable at ${this.baseUrl}: ${err instanceof Error ? err.message : err}`);
+        // Search embeddings always run locally (even when Gemini generates the
+        // content), so Ollama must be running for imports, generation and the tutor.
+        throw new Error(
+          `Embeddings model ${this.model} unreachable at ${this.baseUrl} (${err instanceof Error ? err.message : err}) — ` +
+            "start Ollama (it computes the search embeddings, also when Gemini is selected) and try again.",
+        );
       }
       if (!res.ok) throw new Error(`Embeddings error ${res.status}: ${(await res.text()).slice(0, 300)}`);
       const json = (await res.json()) as { embeddings: number[][] };

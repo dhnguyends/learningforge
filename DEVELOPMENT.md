@@ -67,8 +67,8 @@ server.
 | `DATABASE_URL` | — | Points at 5433 locally (see above) |
 | `QUEUE_DRIVER` | `inline` \| `redis` | `inline` runs jobs in the web process — dev/test only |
 | `STORAGE_DRIVER` | `local` \| `s3` | `local` writes `./.data/storage` |
-| `AI_PROVIDER` | `mock` \| `openai` \| `anthropic` \| `local` | `local` = Ollama-style `/api/chat` |
-| `EMBEDDINGS_PROVIDER` | `mock` \| `openai` | Mock = deterministic hashed 1536-d vectors |
+| `AI_PROVIDER` | `mock` \| `openai` \| `anthropic` \| `local` \| `gemini` \| `zai` | `local` = Ollama-style `/api/chat`; administrators can switch at `/admin` |
+| `EMBEDDINGS_PROVIDER` | `mock` \| `openai` \| `ollama` | Mock = deterministic hashed 1536-d vectors; `ollama` = EmbeddingGemma |
 | `TRANSCRIPTION_PROVIDER` | `mock` \| `whisper` \| `deepgram` | Word timings kept for citations |
 | `TTS_PROVIDER` | `mock` \| `openai` | Audio recap voice |
 | `NEXTAUTH_SECRET` | — | `openssl rand -base64 32`; dev fallback exists but don't ship it |

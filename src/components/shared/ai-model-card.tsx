@@ -15,15 +15,26 @@ import {
   type AiTestResult,
 } from "@/hooks/use-api";
 
-type Option = { value: string; choice: AiChoiceInput; label: string; note: string; cloud: boolean; disabled: boolean };
+type Option = {
+  value: string;
+  choice: AiChoiceInput;
+  label: string;
+  note: string;
+  /** Cloud provider name for the privacy warning; null = runs locally. */
+  cloud: string | null;
+  disabled: boolean;
+  /** Shown instead of the note when the provider's key is missing. */
+  missingKey?: string;
+};
 
-const optionValue = (c: AiChoiceInput) => (c.provider === "gemini" ? `gemini:${c.model}` : "local");
+const optionValue = (c: AiChoiceInput) => (c.provider === "gemini" ? `gemini:${c.model}` : c.provider);
 
 /**
  * Administrator choice of the generation model (study guides, flashcards,
- * quizzes, exercises, tutor). Embeddings are not affected. Choosing Gemini
- * sends prompts — including source excerpts — to Google, so the card says so
- * whenever a cloud model is selected or active.
+ * quizzes, exercises, tutor). Embeddings are not affected. Choosing a cloud
+ * model (Gemini, GLM on Z.ai) sends prompts — including source
+ * excerpts — to that provider, so the card says so whenever one is selected
+ * or active.
  */
 export function AiModelCard() {
   const { data, isLoading, error } = useAdminAiSettings();
@@ -42,14 +53,18 @@ export function AiModelCard() {
   }
 
   const activeValue =
-    data.active.provider === "gemini" ? `gemini:${data.active.model}` : data.active.provider === "local" ? "local" : null;
+    data.active.provider === "gemini"
+      ? `gemini:${data.active.model}`
+      : data.active.provider === "local" || data.active.provider === "zai"
+        ? data.active.provider
+        : null;
   const options: Option[] = [
     {
       value: "local",
       choice: { provider: "local" },
       label: `Gemma 4 — local (${data.localModel})`,
       note: "Runs on this computer through Ollama. Private, works offline, no cost; slower on long outputs.",
-      cloud: false,
+      cloud: null,
       disabled: data.mockMode,
     },
     ...data.geminiModels.map((m) => ({
@@ -57,14 +72,25 @@ export function AiModelCard() {
       choice: { provider: "gemini" as const, model: m.id },
       label: `${m.label} — Google cloud`,
       note: m.note,
-      cloud: true,
+      cloud: "Google",
       disabled: data.mockMode || !data.geminiConfigured,
+      missingKey: data.geminiConfigured ? undefined : "Set GEMINI_API_KEY in the server .env to enable.",
     })),
+    {
+      value: "zai",
+      choice: { provider: "zai" },
+      label: `${data.zai.label} — Z.ai cloud`,
+      note: `GLM served directly by Z.ai, its developer (${data.zai.model}).`,
+      cloud: "Z.ai",
+      disabled: data.mockMode || !data.zai.configured,
+      missingKey: data.zai.configured ? undefined : "Set ZAI_API_KEY in the server .env to enable.",
+    },
   ];
   const current = selected ?? activeValue ?? (data.stored ? optionValue(data.stored) : "local");
   const chosen = options.find((o) => o.value === current) ?? options[0];
   const dirty = chosen.value !== activeValue;
-  const cloudInUse = data.active.provider === "gemini" || chosen.cloud;
+  const activeOption = options.find((o) => o.value === activeValue);
+  const cloudProvider = chosen.cloud ?? activeOption?.cloud ?? null;
 
   async function onTest() {
     setResult(null);
@@ -107,7 +133,7 @@ export function AiModelCard() {
         )}
         {data.active.source === "fallback" && (
           <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
-            Gemini needs GEMINI_API_KEY in the server .env; until it is set, the local model is used.
+            The selected cloud model has no key in the server .env (GEMINI_API_KEY or ZAI_API_KEY); until it is set, the local model is used.
           </p>
         )}
 
@@ -141,19 +167,19 @@ export function AiModelCard() {
                   {o.value === activeValue && <Badge className="text-[10px]">In use</Badge>}
                 </span>
                 <span className="mt-0.5 block text-xs text-muted-foreground">
-                  {o.cloud && !data.geminiConfigured ? "Set GEMINI_API_KEY in the server .env to enable." : o.note}
+                  {o.missingKey ?? o.note}
                 </span>
               </span>
             </label>
           ))}
         </fieldset>
 
-        {cloudInUse && (
+        {cloudProvider && (
           <p className="flex gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden="true" />
             <span>
-              With Gemini, prompts — including excerpts of your uploaded sources — are sent to Google. On a free-tier API key,
-              Google may use them to improve its products; use a paid project for private material.
+              With a cloud model, prompts — including excerpts of your uploaded sources — are sent to {cloudProvider}. On
+              free tiers they may be used to improve the provider&apos;s products; use a paid plan for private material.
             </span>
           </p>
         )}

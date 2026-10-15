@@ -15,6 +15,8 @@ import { getActiveAi, invalidateAiChoice } from "@/lib/ai/settings";
 vi.hoisted(() => {
   process.env.AI_PROVIDER = "local";
   process.env.GEMINI_API_KEY = "test-gemini-key-not-real";
+  process.env.ZAI_API_KEY = "zai-test-key-not-real";
+  process.env.GLM_AI_MODEL = "GLM-5.3-Flash";
 });
 
 const URL_ = "http://localhost/api/admin/ai";
@@ -74,6 +76,19 @@ describe("admin AI model", () => {
 
     expect((await PUT(req("PUT", { provider: "local" }), {} as never)).status).toBe(200);
     expect(await getActiveAi()).toMatchObject({ provider: "local", source: "admin" });
+  });
+
+  it("switches to GLM on Z.ai without exposing the key", async () => {
+    signInAs(admin.id);
+    const res = await PUT(req("PUT", { provider: "zai" }), {} as never);
+    expect(res.status).toBe(200);
+    const text = await res.text();
+    expect(text).not.toContain("zai-test-key-not-real");
+    expect(JSON.parse(text)).toMatchObject({
+      active: { provider: "zai", model: "glm-5.3-flash", source: "admin" },
+      zai: { configured: true, label: "GLM-5.3-Flash" },
+    });
+    expect((await PUT(req("PUT", { provider: "local" }), {} as never)).status).toBe(200);
   });
 
   it("only accepts allow-listed models", async () => {

@@ -19,6 +19,8 @@ const env = (over: Partial<Env> = {}): Env =>
     GEMINI_THINKING_LEVEL: "low",
     GEMINI_TIMEOUT_MS: 10_000,
     GEMINI_MAX_TOKENS: 16_384,
+    GEMINI_ATTEMPT_TIMEOUT_MS: 10_000,
+    GEMINI_FALLBACK_MODEL: "",
     ...over,
   }) as Env;
 
@@ -75,6 +77,52 @@ describe("GeminiGenerator", () => {
     });
     expect(body.generationConfig.responseJsonSchema.properties.kind).toEqual({ type: "string", enum: ["quiz"] });
     expect(body.systemInstruction.parts[0].text).toMatch(/^sys\n\nReturn ONLY/);
+  });
+
+  it("fails over to the fallback model when the primary stays overloaded, and stays there", async () => {
+    const overloaded = () => new Response('{"error":{"message":"This model is currently experiencing high demand."}}', { status: 503 });
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) =>
+      String(url).includes("gemini-3.8-flash") ? overloaded() : answer('{"title":"Ohm","kind":"quiz","note":null}'),
+    );
+    const g = new GeminiGenerator(env({ GEMINI_FALLBACK_MODEL: "gemini-3.5-flash-lite" }), "gemini-3.8-flash");
+    g.retryDelayMs = 0;
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    const first = await g.generate(opts);
+    expect(first.model).toBe("gemini-3.5-flash-lite"); // the model that actually answered
+    const urls = fetchMock.mock.calls.map(([u]) => String(u));
+    expect(urls.filter((u) => u.includes("gemini-3.8-flash"))).toHaveLength(3); // 1 try + 2 retries
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/falling back to gemini-3\.5-flash-lite/));
+
+    // During the outage window the next call goes straight to the fallback.
+    fetchMock.mockClear();
+    await g.generate(opts);
+    expect(fetchMock.mock.calls.map(([u]) => String(u))).toEqual([expect.stringContaining("gemini-3.5-flash-lite")]);
+  });
+
+  it("retries an attempt that hangs instead of waiting out the whole budget", async () => {
+    let calls = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
+      calls++;
+      if (calls === 1) {
+        // Hang until the per-attempt timeout aborts the request.
+        return new Promise<Response>((_, reject) =>
+          (init?.signal as AbortSignal).addEventListener("abort", () => reject((init?.signal as AbortSignal).reason)),
+        );
+      }
+      return answer('{"title":"Ohm","kind":"quiz","note":null}');
+    });
+    const g = new GeminiGenerator(env({ GEMINI_ATTEMPT_TIMEOUT_MS: 50 }));
+    g.retryDelayMs = 0;
+    await expect(g.generate(opts)).resolves.toMatchObject({ model: "gemini-3.8-flash" });
+    expect(calls).toBe(2);
+  });
+
+  it("reports an outage clearly when there is no fallback model", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response("{}", { status: 503 }));
+    const g = new GeminiGenerator(env());
+    g.retryDelayMs = 0;
+    await expect(g.generate(opts)).rejects.toThrow(/Gemini gemini-3\.8-flash is unavailable: answered 503/);
   });
 
   it("retries overload (503) answers, then succeeds", async () => {

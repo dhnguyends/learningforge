@@ -2,7 +2,7 @@ import { z } from "zod";
 import { apiHandler, ok, parseJsonBody, requireAdmin, badRequest } from "@/lib/api";
 import { getEnv } from "@/lib/env";
 import { generatorFor } from "@/lib/ai";
-import { aiChoiceSchema, geminiConfigured } from "@/lib/ai/settings";
+import { aiChoiceSchema, geminiConfigured, zaiConfigured, zaiModel } from "@/lib/ai/settings";
 
 /**
  * "Test connection": one tiny structured call to the candidate model, so an
@@ -17,7 +17,9 @@ export const POST = apiHandler(async (req) => {
   const choice = await parseJsonBody(req, aiChoiceSchema);
   const env = getEnv();
   if (choice.provider === "gemini" && !geminiConfigured(env)) throw badRequest("GEMINI_API_KEY is not set");
-  const model = choice.provider === "gemini" ? choice.model : env.LOCAL_AI_MODEL;
+  if (choice.provider === "zai" && !zaiConfigured(env)) throw badRequest("ZAI_API_KEY is not set");
+  const model =
+    choice.provider === "gemini" ? choice.model : choice.provider === "zai" ? zaiModel(env) : env.LOCAL_AI_MODEL;
   const started = Date.now();
   try {
     const result = await generatorFor({ provider: choice.provider, model }).generate({

@@ -75,6 +75,11 @@ export function toGeminiSchema(schema: unknown): unknown {
  * - Thought parts (if any are returned) are ignored; only answer text is parsed.
  * - A response cut off at the output cap gets a "be more concise" repair
  *   round, like the local adapter.
+ * - Availability: Flash models answer 503 "high demand" — or simply hang — at
+ *   peak times. Each attempt has its own timeout, overload answers are retried
+ *   with backoff, and if the model stays unavailable the call fails over to
+ *   GEMINI_FALLBACK_MODEL (then keeps using it for a few minutes, so a
+ *   15-section guide does not wait out the outage on every section).
  */
 export class GeminiGenerator implements StructuredGenerator {
   readonly provider = "gemini";
@@ -83,10 +88,16 @@ export class GeminiGenerator implements StructuredGenerator {
   private baseUrl: string;
   private thinkingLevel: string;
   private timeoutMs: number;
+  private attemptTimeoutMs: number;
   private maxTokens: number;
+  private fallbackModel: string | null;
   private maxRetries = 2;
+  /** Until when the primary model is skipped after a failover. */
+  private degradedUntil = 0;
   /** First backoff delay; tests set it to 0. */
   retryDelayMs = 2_000;
+  /** How long to stay on the fallback model after a failover. */
+  degradedForMs = 5 * 60_000;
 
   constructor(env: Env, model?: string) {
     this.model = model ?? env.GEMINI_MODEL;
@@ -94,7 +105,10 @@ export class GeminiGenerator implements StructuredGenerator {
     this.baseUrl = env.GEMINI_BASE_URL.replace(/\/$/, "");
     this.thinkingLevel = env.GEMINI_THINKING_LEVEL.toUpperCase();
     this.timeoutMs = env.GEMINI_TIMEOUT_MS;
+    this.attemptTimeoutMs = Math.min(env.GEMINI_ATTEMPT_TIMEOUT_MS, env.GEMINI_TIMEOUT_MS);
     this.maxTokens = env.GEMINI_MAX_TOKENS;
+    const fallback = env.GEMINI_FALLBACK_MODEL.trim();
+    this.fallbackModel = fallback && fallback !== this.model ? fallback : null;
   }
 
   async generate<S extends ZodTypeAny>(opts: GenerateOptions<S>): Promise<GenerationResult<S>> {
@@ -110,11 +124,19 @@ export class GeminiGenerator implements StructuredGenerator {
       responseJsonSchema: toGeminiSchema(zodToJsonSchema(opts.schema)),
       thinkingConfig: { thinkingLevel: this.thinkingLevel },
     };
+    const body = () =>
+      JSON.stringify({
+        systemInstruction: { parts: [{ text: `${opts.system}\n\n${JSON_CONTRACT_INSTRUCTION}` }] },
+        contents,
+        generationConfig,
+      });
 
     let lastText = "";
     let truncated = false;
+    let answeredBy = this.model;
     const call = async (): Promise<RawCompletion> => {
-      const res = await this.post(opts.system, contents, generationConfig);
+      const { res, model } = await this.send(body());
+      answeredBy = model;
       if (!res.ok) {
         throw new AIProviderError(`Gemini error ${res.status}: ${geminiErrorMessage(await res.text())}`);
       }
@@ -156,43 +178,64 @@ export class GeminiGenerator implements StructuredGenerator {
       return call();
     });
 
-    return { data, provider: this.provider, model: this.model, usage };
+    // Report the model that actually answered (the fallback during an outage).
+    return { data, provider: this.provider, model: answeredBy, usage };
+  }
+
+  /** Primary model, or the fallback while the primary is unavailable. */
+  private async send(body: string): Promise<{ res: Response; model: string }> {
+    const useFallback = this.fallbackModel && Date.now() < this.degradedUntil;
+    if (!useFallback) {
+      try {
+        return { res: await this.post(this.model, body), model: this.model };
+      } catch (err) {
+        if (!(err instanceof GeminiUnavailableError) || !this.fallbackModel) throw err;
+        console.warn(`[gemini] ${err.message}; falling back to ${this.fallbackModel}`);
+        this.degradedUntil = Date.now() + this.degradedForMs;
+      }
+    }
+    const fallback = this.fallbackModel as string;
+    return { res: await this.post(fallback, body), model: fallback };
   }
 
   /**
-   * One generateContent request. Overload (503) and rate-limit (429) answers
-   * are retried with backoff — Flash models do return "high demand" 503s at
-   * peak times — within the overall timeout.
+   * generateContent on one model. Overload/rate-limit answers (429, 500, 503)
+   * and attempts that hang past GEMINI_ATTEMPT_TIMEOUT_MS are retried with
+   * backoff within GEMINI_TIMEOUT_MS; if the model is still unavailable this
+   * throws GeminiUnavailableError. Other answers are returned to the caller.
    */
-  private async post(system: string, contents: GeminiContent[], generationConfig: object): Promise<Response> {
+  private async post(model: string, body: string): Promise<Response> {
     const deadline = Date.now() + this.timeoutMs;
-    for (let attempt = 0; ; attempt++) {
-      let res: Response;
+    let problem = "";
+    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
+      const remaining = deadline - Date.now();
+      if (remaining < 1_000) break;
       try {
-        res = await fetch(`${this.baseUrl}/models/${encodeURIComponent(this.model)}:generateContent`, {
+        const res = await fetch(`${this.baseUrl}/models/${encodeURIComponent(model)}:generateContent`, {
           method: "POST",
           headers: { "Content-Type": "application/json", "x-goog-api-key": this.apiKey },
-          body: JSON.stringify({
-            systemInstruction: { parts: [{ text: `${system}\n\n${JSON_CONTRACT_INSTRUCTION}` }] },
-            contents,
-            generationConfig,
-          }),
-          signal: AbortSignal.timeout(Math.max(1_000, deadline - Date.now())),
+          body,
+          signal: AbortSignal.timeout(Math.min(this.attemptTimeoutMs, remaining)),
         });
+        if (!RETRYABLE.has(res.status)) return res;
+        problem = `answered ${res.status} (${geminiErrorMessage(await res.text()).slice(0, 120)})`;
       } catch (err) {
-        const reason =
-          err instanceof Error && err.name === "TimeoutError"
-            ? `timed out after ${Math.round(this.timeoutMs / 1000)}s`
-            : "is unreachable — check the internet connection";
-        throw new AIProviderError(`Gemini ${this.model} ${reason}`, err);
+        if (!(err instanceof Error && err.name === "TimeoutError")) {
+          throw new AIProviderError(`Gemini ${model} is unreachable — check the internet connection`, err);
+        }
+        problem = `did not answer within ${Math.round(Math.min(this.attemptTimeoutMs, remaining) / 1000)}s`;
       }
       const wait = this.retryDelayMs * 3 ** attempt;
-      if (!RETRYABLE.has(res.status) || attempt >= this.maxRetries || Date.now() + wait >= deadline) return res;
-      await res.body?.cancel();
-      await new Promise((resolve) => setTimeout(resolve, wait));
+      if (attempt < this.maxRetries && Date.now() + wait < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, wait));
+      }
     }
+    throw new GeminiUnavailableError(`Gemini ${model} is unavailable: ${problem || "timed out"}`);
   }
 }
+
+/** The model stayed overloaded or unresponsive through every retry. */
+class GeminiUnavailableError extends AIProviderError {}
 
 /** Status codes worth retrying: rate limit and "model experiencing high demand". */
 const RETRYABLE = new Set([429, 500, 503]);

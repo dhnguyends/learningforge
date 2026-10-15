@@ -35,7 +35,7 @@ const envSchema = z.object({
 
   // Default provider. Administrators can switch between "local" and "gemini" at
   // runtime from /admin (stored in app_settings; see src/lib/ai/settings.ts).
-  AI_PROVIDER: z.enum(["mock", "openai", "anthropic", "local", "gemini"]).default("mock"),
+  AI_PROVIDER: z.enum(["mock", "openai", "anthropic", "local", "gemini", "zai"]).default("mock"),
   AI_MODEL: z.string().default("gpt-4o-mini"),
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_BASE_URL: z.string().optional(),
@@ -61,8 +61,24 @@ const envSchema = z.object({
   GEMINI_BASE_URL: z.string().default("https://generativelanguage.googleapis.com/v1beta"),
   // gemini-3.8-flash rejects "minimal"; thinking tokens are billed as output.
   GEMINI_THINKING_LEVEL: z.enum(["low", "medium", "high"]).default("low"),
+  // Per model and call (all retries); each attempt also has its own timeout,
+  // since an overloaded model can hang instead of answering 503.
   GEMINI_TIMEOUT_MS: z.coerce.number().int().positive().default(180_000),
+  GEMINI_ATTEMPT_TIMEOUT_MS: z.coerce.number().int().positive().default(90_000),
+  // Used when GEMINI_MODEL stays unavailable (503 "high demand", hangs); "" disables.
+  GEMINI_FALLBACK_MODEL: z.string().default("gemini-3.5-flash-lite"),
   GEMINI_MAX_TOKENS: z.coerce.number().int().positive().default(16_384),
+
+  // GLM served directly by Z.ai. The key never leaves the server. Pay-as-you-go
+  // keys use /api/paas/v4; GLM Coding Plan keys only work on /api/coding/paas/v4.
+  ZAI_API_KEY: z.string().optional(),
+  GLM_AI_MODEL: z.string().default("glm-5.3-flash"),
+  ZAI_BASE_URL: z.string().default("https://api.z.ai/api/paas/v4"),
+  // GLM-5.3 always thinks and defaults to "max" — very slow for structured output.
+  ZAI_REASONING_EFFORT: z.enum(["low", "high", "max"]).default("low"),
+  ZAI_TIMEOUT_MS: z.coerce.number().int().positive().default(300_000),
+  ZAI_ATTEMPT_TIMEOUT_MS: z.coerce.number().int().positive().default(150_000),
+  ZAI_MAX_TOKENS: z.coerce.number().int().positive().default(16_384),
 
   // ollama = local Ollama /api/embed (e.g. embeddinggemma, multilingual, 768-d padded to 1536).
   EMBEDDINGS_PROVIDER: z.enum(["mock", "openai", "ollama"]).default("mock"),

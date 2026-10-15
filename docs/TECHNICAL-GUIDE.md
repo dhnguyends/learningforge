@@ -297,18 +297,23 @@ sequenceDiagram
 
 UI phases (`pipeline-phases.ts`): **Uploading → Extracting text → Chunking → Vectorizing → Indexing**.
 
-**Choosing the model at runtime.** Administrators pick the generation model on `/admin` → *AI model*: local Gemma 4 (Ollama) or an allow-listed Gemini model (`gemini-3.8-flash`, `gemini-3.5-flash-lite`).
+**Choosing the model at runtime.** Administrators pick the generation model on `/admin` → *AI model*: local Gemma 4 (Ollama), an allow-listed Gemini model (`gemini-3.8-flash`, `gemini-3.5-flash-lite`), or GLM served by Z.ai (`GLM_AI_MODEL`).
 
 - The choice is stored in `app_settings` (key `ai`) and audited (`admin.ai_model`). It applies to the next generation without a restart: in-process cache invalidation, plus a 30 s TTL for a separate worker.
 - `AI_PROVIDER=mock` is never overridden, so tests stay deterministic.
 - A Gemini choice without `GEMINI_API_KEY` falls back to the environment default.
 - *Test connection* sends a content-free prompt.
-- Embeddings are **not** switched: changing them requires `scripts/reembed.ts`.
+- Embeddings are **not** switched: changing them requires `scripts/reembed.ts`. With `EMBEDDINGS_PROVIDER=ollama`, Ollama must be running even when Gemini generates: imports, whole-set retrieval and the tutor all embed locally.
 - `GeminiGenerator` (`src/lib/ai/gemini.ts`) calls `models.generateContent` with `responseJsonSchema`:
   - `toGeminiSchema()` maps keywords outside Gemini's JSON-Schema subset (`const`, `nullable`, string lengths);
   - thinking parts are ignored;
-  - 429 and 503 ("high demand") answers are retried with backoff;
+  - 429 and 503 ("high demand") answers, and attempts that hang past `GEMINI_ATTEMPT_TIMEOUT_MS`, are retried with backoff. If the model stays unavailable, the call fails over to `GEMINI_FALLBACK_MODEL` (default `gemini-3.5-flash-lite`) and keeps using it for 5 minutes. The model that actually answered is recorded;
   - the key travels only in the `x-goog-api-key` header.
+- `ZaiGenerator` (`src/lib/ai/zai.ts`) calls Z.ai's `/chat/completions`:
+  - it sends `reasoning_effort` (GLM-5.3 always thinks, at `max` by default);
+  - it uses `response_format: json_object` with the JSON Schema stated in the prompt (Z.ai has no schema mode);
+  - `<think>` blocks are stripped;
+  - rate-limit and overload answers and hung attempts are retried, except an empty balance (429 code 1113), which fails at once with a hint about `ZAI_BASE_URL`.
 - Model choice and costs: `docs/GEMINI-ASSESSMENT.md`.
 
 ### 5.3 Generation (guide, flashcards, quiz, exercises, recap)
@@ -417,7 +422,7 @@ All variables are validated in `src/lib/env.ts`; `.env.example` documents them. 
 | Core | `APP_URL`, `DATABASE_URL`, `NEXTAUTH_URL`, `NEXTAUTH_SECRET`, `LECTURE_ACCESS_KEY` (site-wide access gate, `src/lib/access-gate.ts` + `src/middleware.ts`; unset = off) |
 | Queue | `QUEUE_DRIVER` (`inline`\|`redis`), `REDIS_URL` |
 | Storage | `STORAGE_DRIVER` (`local`\|`s3`), `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `SIGNED_URL_TTL` |
-| LLM | `AI_PROVIDER` (`mock`\|`openai`\|`anthropic`\|`local`\|`gemini`), `AI_MODEL`, `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `LOCAL_AI_BASE_URL`, `LOCAL_AI_MODEL` (e.g. `gemma4:latest`), `LOCAL_AI_THINK` (default `false`; reasoning models are ~10x slower with it on), `LOCAL_AI_TIMEOUT_MS` (default 300000), `LOCAL_AI_MAX_TOKENS` (default 4096; guards against runaway generations), `LOCAL_AI_NUM_CTX` (optional); `GEMINI_API_KEY`, `GEMINI_MODEL` (default `gemini-3.8-flash`), `GEMINI_THINKING_LEVEL` (`low`\|`medium`\|`high`), `GEMINI_TIMEOUT_MS`, `GEMINI_MAX_TOKENS` |
+| LLM | `AI_PROVIDER` (`mock`\|`openai`\|`anthropic`\|`local`\|`gemini`\|`zai`), `AI_MODEL`, `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `LOCAL_AI_BASE_URL`, `LOCAL_AI_MODEL` (e.g. `gemma4:latest`), `LOCAL_AI_THINK` (default `false`; reasoning models are ~10x slower with it on), `LOCAL_AI_TIMEOUT_MS` (default 300000), `LOCAL_AI_MAX_TOKENS` (default 4096; guards against runaway generations), `LOCAL_AI_NUM_CTX` (optional); `GEMINI_API_KEY`, `GEMINI_MODEL` (default `gemini-3.8-flash`), `GEMINI_THINKING_LEVEL` (`low`\|`medium`\|`high`), `GEMINI_TIMEOUT_MS`, `GEMINI_ATTEMPT_TIMEOUT_MS`, `GEMINI_FALLBACK_MODEL`, `GEMINI_MAX_TOKENS`; `ZAI_API_KEY`, `GLM_AI_MODEL` (default `glm-5.3-flash`), `ZAI_BASE_URL` (pay-as-you-go `/api/paas/v4`, or `/api/coding/paas/v4` for GLM Coding Plan keys), `ZAI_REASONING_EFFORT` (`low`\|`high`\|`max`, default `low`), `ZAI_TIMEOUT_MS`, `ZAI_ATTEMPT_TIMEOUT_MS`, `ZAI_MAX_TOKENS` |
 | Embeddings | `EMBEDDINGS_PROVIDER` (`mock`\|`openai`), `EMBEDDINGS_MODEL` (`EMBEDDINGS_DIMENSIONS` is currently unused; the dimension is fixed at 1536) |
 | Speech | `TRANSCRIPTION_PROVIDER` (`mock`\|`whisper`\|`deepgram`), `WHISPER_BASE_URL`, `WHISPER_API_KEY`, `WHISPER_MODEL`, `DEEPGRAM_API_KEY` |
 | TTS | `TTS_PROVIDER` (`mock`\|`openai`), `TTS_MODEL`, `TTS_VOICE` |
