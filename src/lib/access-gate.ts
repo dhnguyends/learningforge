@@ -14,7 +14,7 @@
 
 export const ACCESS_COOKIE = "lf_access";
 export const ACCESS_TTL_SEC = 30 * 24 * 3600;
-const DEV_SECRET = "lectureforge-development-secret"; // same fallback as src/lib/env.ts
+export const DEV_SECRET = "lectureforge-development-secret"; // same fallback as src/lib/env.ts
 
 export function accessKey(): string | null {
   const key = process.env.LECTURE_ACCESS_KEY?.trim();

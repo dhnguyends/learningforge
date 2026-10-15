@@ -1,21 +1,13 @@
-import { NextResponse, type NextFetchEvent, type NextRequest } from "next/server";
-import { withAuth, type NextRequestWithAuth } from "next-auth/middleware";
-import { ACCESS_COOKIE, accessKey, browserOrigin, isGateExempt, verifyAccessToken } from "@/lib/access-gate";
+import { NextResponse, type NextRequest } from "next/server";
+import { getToken } from "next-auth/jwt";
+import { ACCESS_COOKIE, DEV_SECRET, accessKey, browserOrigin, isGateExempt, verifyAccessToken } from "@/lib/access-gate";
 
 /** App pages that need a signed-in user (/create was missing before). */
 const SIGNED_IN_PAGES = ["/dashboard", "/study-sets", "/settings", "/create", "/admin"];
 
-const requireSignIn = withAuth({
-  pages: { signIn: "/auth/sign-in" },
-  callbacks: {
-    // /admin additionally needs the ADMIN role (the admin APIs re-check it in the DB).
-    authorized: ({ token, req }) =>
-      Boolean(token) && (!req.nextUrl.pathname.startsWith("/admin") || token?.role === "ADMIN"),
-  },
-});
-
-export default async function middleware(req: NextRequest, event: NextFetchEvent) {
+export default async function middleware(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
+  const here = encodeURIComponent(pathname + search);
 
   // 1. Access gate: nothing (pages or APIs) without the LECTURE_ACCESS_KEY cookie.
   const key = accessKey();
@@ -26,16 +18,22 @@ export default async function middleware(req: NextRequest, event: NextFetchEvent
         return NextResponse.json({ error: "Access key required", code: "access_required" }, { status: 401 });
       }
       // Absolute URL on the browser's origin (not the app's internal one behind a proxy).
-      return NextResponse.redirect(`${browserOrigin(req)}/access?next=${encodeURIComponent(pathname + search)}`);
+      return NextResponse.redirect(`${browserOrigin(req)}/access?next=${here}`);
     }
   }
 
-  // 2. Sign-in (and admin role) for app pages.
+  // 2. Sign-in (and the ADMIN role for /admin) for app pages. Checked here
+  //    rather than with next-auth's withAuth, whose redirect is built from
+  //    req.nextUrl — the app's internal address behind the TLS proxy.
   if (SIGNED_IN_PAGES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
-    return (requireSignIn as unknown as (r: NextRequestWithAuth, e: NextFetchEvent) => Promise<Response>)(
-      req as NextRequestWithAuth,
-      event,
-    );
+    const token = await getToken({
+      req,
+      secret: process.env.NEXTAUTH_SECRET || DEV_SECRET,
+      // https NEXTAUTH_URL => next-auth issues the __Secure- prefixed session cookie.
+      secureCookie: (process.env.NEXTAUTH_URL ?? "").startsWith("https://"),
+    });
+    const allowed = Boolean(token) && (!pathname.startsWith("/admin") || token?.role === "ADMIN");
+    if (!allowed) return NextResponse.redirect(`${browserOrigin(req)}/auth/sign-in?callbackUrl=${here}`);
   }
   return NextResponse.next();
 }
