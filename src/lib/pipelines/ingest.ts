@@ -73,6 +73,8 @@ async function ingestAudioVideo(
     const fetched = await fetchYouTubeAudio(source.externalUrl, key);
     audioBuffer = await getStorage().read(key);
     durationSec = fetched.durationSec || durationSec;
+    // A re-import overwrites audio.mp3; keep a single AUDIO row for it.
+    await prisma.sourceAsset.deleteMany({ where: { sourceId: source.id, kind: "AUDIO" } });
     audioAsset = await prisma.sourceAsset.create({
       data: {
         sourceId: source.id,
@@ -106,6 +108,7 @@ async function ingestAudioVideo(
       const extracted = await extractAudio(originalBuffer, original.filename, key);
       durationSec = extracted.durationSec || durationSec;
       audioBuffer = await getStorage().read(key);
+      await prisma.sourceAsset.deleteMany({ where: { sourceId: source.id, kind: "AUDIO" } });
       audioAsset = await prisma.sourceAsset.create({
         data: {
           sourceId: source.id,

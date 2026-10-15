@@ -27,6 +27,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Skeleton } from "@/components/ui/misc";
 import { JobProgressRow } from "@/components/shared/job-status";
 import { useStudySets, useDeleteStudySet, useCreateStudySet } from "@/hooks/use-api";
+import { useConfirm } from "@/components/shared/confirm-dialog";
 
 const LEVELS: { value: string; label: string }[] = [
   { value: "INTRODUCTORY", label: "Introductory" },
@@ -38,6 +39,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const { data: sets, isLoading } = useStudySets();
   const deleteSet = useDeleteStudySet();
+  const confirm = useConfirm();
   const createSet = useCreateStudySet();
   const [quickOpen, setQuickOpen] = useState(false);
   const [title, setTitle] = useState("");
@@ -69,7 +71,13 @@ export default function DashboardPage() {
   }
 
   async function onDelete(id: string, setTitle: string) {
-    if (!window.confirm(`Permanently delete "${setTitle}" and all its sources and generated material? This cannot be undone.`)) return;
+    const ok = await confirm({
+      title: "Delete this study set?",
+      description: `"${setTitle}" and all its sources and generated material are deleted permanently. This cannot be undone.`,
+      confirmLabel: "Delete permanently",
+      destructive: true,
+    });
+    if (!ok) return;
     try {
       await deleteSet.mutateAsync(id);
       toast.success("Study set deleted");

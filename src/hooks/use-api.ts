@@ -496,6 +496,15 @@ export function useDeleteSource(studySetId: string) {
   );
 }
 
+/** Re-run a source's whole import (e.g. after a failure) from what is already stored. */
+export function useReprocessSource(studySetId: string) {
+  return useLfMutation(
+    (sourceId: string) =>
+      api<{ jobId: string }>(`/api/study-sets/${studySetId}/sources/${sourceId}/reprocess`, { method: "POST" }),
+    (sourceId) => [qk.studySet(studySetId), qk.studySets, qk.jobs(studySetId), qk.source(studySetId, sourceId)],
+  );
+}
+
 export function usePatchSource(studySetId: string) {
   return useLfMutation(
     (vars: { sourceId: string; title?: string; description?: string | null }) =>

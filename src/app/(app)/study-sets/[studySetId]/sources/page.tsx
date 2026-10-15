@@ -3,14 +3,16 @@
 import { Suspense, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
-import { ChevronLeft, ExternalLink, Plus, Trash2 } from "lucide-react";
+import { ChevronLeft, ExternalLink, Loader2, Plus, RotateCw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { MediaPlayer, SegmentList, useMediaSync } from "@/components/study/source-viewer";
 import { PipelineStatusBar } from "@/components/shared/pipeline-status";
-import { useSource, useStudySet, useDeleteSource } from "@/hooks/use-api";
+import { useSource, useStudySet, useDeleteSource, useReprocessSource } from "@/hooks/use-api";
+import { SourceRowActions, IMPORTING_STATUSES, deleteSourcePrompt, reprocessSourcePrompt } from "@/components/study/source-actions";
+import { useConfirm } from "@/components/shared/confirm-dialog";
 import { ingestJobFor } from "@/lib/pipeline-phases";
 import { cn, formatDuration } from "@/lib/utils";
 
@@ -31,6 +33,8 @@ function SourcesPageInner() {
 
   const { data: set, isLoading } = useStudySet(studySetId);
   const deleteSource = useDeleteSource(studySetId);
+  const reprocessSource = useReprocessSource(studySetId);
+  const confirm = useConfirm();
 
   if (selected) {
     return (
@@ -41,7 +45,7 @@ function SourcesPageInner() {
         page={pageParam}
         onBack={() => window.history.pushState(null, "", `/study-sets/${studySetId}/sources`)}
         onDelete={async (id, title) => {
-          if (!window.confirm(`Permanently delete "${title}"? All derived citations, cards, and questions from it are removed too.`)) return;
+          if (!(await confirm(deleteSourcePrompt(title)))) return;
           try {
             await deleteSource.mutateAsync(id);
             toast.success("Source deleted");
@@ -51,6 +55,16 @@ function SourcesPageInner() {
             toast.error(err instanceof Error ? err.message : "Delete failed");
           }
         }}
+        onReprocess={async (id, title) => {
+          if (!(await confirm(reprocessSourcePrompt(title)))) return;
+          try {
+            await reprocessSource.mutateAsync(id);
+            toast.success(`Importing "${title}" again`);
+          } catch (err) {
+            toast.error(err instanceof Error ? err.message : "Could not start the import");
+          }
+        }}
+        reprocessing={reprocessSource.isPending}
       />
     );
   }
@@ -91,11 +105,11 @@ function SourcesPageInner() {
           {sources.map((s) => {
             const processing = s.status !== "READY";
             return (
-              <li key={s.id}>
+              <li key={s.id} className="flex items-start gap-2">
                 <Link
                   href={`/study-sets/${studySetId}/sources?source=${s.id}`}
                   className={cn(
-                    "flex gap-3 rounded-lg border border-border px-4 py-3 transition-colors hover:border-primary/40",
+                    "flex min-w-0 flex-1 gap-3 rounded-lg border border-border px-4 py-3 transition-colors hover:border-primary/40",
                     processing && "flex-col",
                   )}
                 >
@@ -113,6 +127,9 @@ function SourcesPageInner() {
                   </div>
                   {processing && <PipelineStatusBar status={s.status} job={ingestJobFor(set?.jobs, s.id)} />}
                 </Link>
+                <div className="pt-2">
+                  <SourceRowActions studySetId={studySetId} source={s} />
+                </div>
               </li>
             );
           })}
@@ -129,6 +146,8 @@ function SourceDetailPage({
   page,
   onBack,
   onDelete,
+  onReprocess,
+  reprocessing,
 }: {
   studySetId: string;
   sourceId: string;
@@ -136,6 +155,8 @@ function SourceDetailPage({
   page: number;
   onBack: () => void;
   onDelete: (id: string, title: string) => void;
+  onReprocess: (id: string, title: string) => void;
+  reprocessing: boolean;
 }) {
   const { data, isLoading } = useSource(studySetId, sourceId);
   const mediaRef = useRef<HTMLVideoElement | HTMLAudioElement | null>(null);
@@ -157,14 +178,27 @@ function SourceDetailPage({
         <Button variant="ghost" size="sm" onClick={onBack} className="gap-1.5">
           <ChevronLeft className="h-4 w-4" aria-hidden="true" /> All sources
         </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="gap-1.5 text-destructive hover:text-destructive"
-          onClick={() => onDelete(s.id, s.title)}
-        >
-          <Trash2 className="h-3.5 w-3.5" aria-hidden="true" /> Delete permanently
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => onReprocess(s.id, s.title)}
+            disabled={reprocessing || IMPORTING_STATUSES.includes(s.status)}
+            title={IMPORTING_STATUSES.includes(s.status) ? "Already importing" : undefined}
+          >
+            {reprocessing ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : <RotateCw className="h-3.5 w-3.5" aria-hidden="true" />}
+            Import again
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-1.5 text-destructive hover:text-destructive"
+            onClick={() => onDelete(s.id, s.title)}
+          >
+            <Trash2 className="h-3.5 w-3.5" aria-hidden="true" /> Delete permanently
+          </Button>
+        </div>
       </div>
 
       <div>
