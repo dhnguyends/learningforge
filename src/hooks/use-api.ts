@@ -751,3 +751,35 @@ export function useDeleteUser() {
     () => [adminUsersKey],
   );
 }
+
+/* ---------------------------- admin: AI model ---------------------------- */
+
+export type AiChoiceInput = { provider: "local" } | { provider: "gemini"; model: string };
+export type AdminAiSettings = import("@/lib/ai/settings").AiSettingsView;
+export interface AiTestResult {
+  ok: boolean;
+  provider: string;
+  model: string;
+  latencyMs: number;
+  error?: string;
+}
+
+const adminAiKey = ["admin", "ai"] as const;
+
+export function useAdminAiSettings() {
+  return useQuery({ queryKey: adminAiKey, queryFn: () => api<AdminAiSettings>("/api/admin/ai") });
+}
+
+export function useSaveAiChoice() {
+  return useLfMutation(
+    (choice: AiChoiceInput) => api<AdminAiSettings>("/api/admin/ai", { method: "PUT", body: JSON.stringify(choice) }),
+    () => [adminAiKey],
+  );
+}
+
+export function useTestAiChoice() {
+  return useLfMutation(
+    (choice: AiChoiceInput) => api<AiTestResult>("/api/admin/ai/test", { method: "POST", body: JSON.stringify(choice) }),
+    () => [],
+  );
+}

@@ -131,7 +131,7 @@ flowchart TB
 | **ORM** | Prisma 5 (`@prisma/client`) | `src/lib/db.ts` | Singleton client. `jsonSafe()` serializes BigInt. |
 | **Job queue** | BullMQ 5 on Redis 7 (ioredis), or the **inline** driver | `src/lib/queue/*`, `src/workers/index.ts` | `GenerationJob` rows are the durable status record the UI polls. |
 | **Object storage** | Local filesystem driver, or AWS SDK v3 S3 client (S3, Cloudflare R2, MinIO) | `src/lib/storage/*` | Keys follow the tenant layout. Local uploads use signed tickets (§6.4). |
-| **LLM (AI model)** | `openai` SDK (GPT-4o-mini default), `@anthropic-ai/sdk` (Claude, default `claude-sonnet-4-5`), Ollama-compatible `/api/chat`, deterministic **mock** | `src/lib/ai/*`, `AI_PROVIDER`, `AI_MODEL`, `ANTHROPIC_MODEL` | Every call returns JSON validated against a Zod schema, with one repair round. |
+| **LLM (AI model)** | `openai` SDK (GPT-4o-mini default), `@anthropic-ai/sdk` (Claude, default `claude-sonnet-4-5`), Ollama-compatible `/api/chat`, Google Gemini REST (`gemini-3.8-flash` default), deterministic **mock** | `src/lib/ai/*`, `AI_PROVIDER`, `AI_MODEL`, `ANTHROPIC_MODEL` | Every call returns JSON validated against a Zod schema, with one repair round. |
 | **Embeddings** | OpenAI `text-embedding-3-small` (1536-d) or mock hashed bag-of-words | `src/lib/ai/embeddings.ts` | The dimension is fixed at 1536 (the DB column). |
 | **Speech-to-text** | Whisper-compatible `/v1/audio/transcriptions`, Deepgram, mock | `src/lib/transcription/*` | Segments keep start/end ms and speaker for citations. |
 | **Text-to-speech** | OpenAI TTS (`tts-1`) or mock | `src/lib/pipelines/recap.ts` | Audio recap of the study guide. |
@@ -218,17 +218,20 @@ Pipelines call the factory and never see the vendor:
 
 ```ts
 // src/lib/ai/index.ts (simplified)
-export function getGenerator(): StructuredGenerator {
-  switch (getEnv().AI_PROVIDER) {
+export async function getGenerator(): Promise<StructuredGenerator> {
+  // admin choice (app_settings "ai") over the AI_PROVIDER default
+  const { provider, model } = await getActiveAi();
+  switch (provider) {
     case "openai":    return new OpenAIGenerator(env);
     case "anthropic": return new AnthropicGenerator(env);
     case "local":     return new LocalGenerator(env);
+    case "gemini":    return new GeminiGenerator(env, model);
     default:          return new MockGenerator();
   }
 }
 
 // any pipeline
-const result = await getGenerator().generate({
+const result = await (await getGenerator()).generate({
   system: QUIZ_SYSTEM, user: QUIZ_USER(ctx),
   schema: quizSchema,                  // Zod: wire contract + validation
   mock: () => mockQuiz(...),           // deterministic offline output
@@ -237,7 +240,7 @@ const result = await getGenerator().generate({
 
 | Concern | Interface | Factory | Env switch |
 |---|---|---|---|
-| LLM | `StructuredGenerator` | `getGenerator()` | `AI_PROVIDER` |
+| LLM | `StructuredGenerator` | `getGenerator()` | `AI_PROVIDER`, overridable at `/admin` (local Gemma ↔ Gemini) |
 | Embeddings | `EmbeddingProvider` | `getEmbeddings()` | `EMBEDDINGS_PROVIDER` |
 | Speech-to-text | `TranscriptionProvider` | `getTranscriber()` | `TRANSCRIPTION_PROVIDER` |
 | Storage | `StorageDriver` | `getStorage()` | `STORAGE_DRIVER` |
@@ -294,11 +297,25 @@ sequenceDiagram
 
 UI phases (`pipeline-phases.ts`): **Uploading → Extracting text → Chunking → Vectorizing → Indexing**.
 
+**Choosing the model at runtime.** Administrators pick the generation model on `/admin` → *AI model*: local Gemma 4 (Ollama) or an allow-listed Gemini model (`gemini-3.8-flash`, `gemini-3.5-flash-lite`).
+
+- The choice is stored in `app_settings` (key `ai`) and audited (`admin.ai_model`). It applies to the next generation without a restart: in-process cache invalidation, plus a 30 s TTL for a separate worker.
+- `AI_PROVIDER=mock` is never overridden, so tests stay deterministic.
+- A Gemini choice without `GEMINI_API_KEY` falls back to the environment default.
+- *Test connection* sends a content-free prompt.
+- Embeddings are **not** switched: changing them requires `scripts/reembed.ts`.
+- `GeminiGenerator` (`src/lib/ai/gemini.ts`) calls `models.generateContent` with `responseJsonSchema`:
+  - `toGeminiSchema()` maps keywords outside Gemini's JSON-Schema subset (`const`, `nullable`, string lengths);
+  - thinking parts are ignored;
+  - 429 and 503 ("high demand") answers are retried with backoff;
+  - the key travels only in the `x-goog-api-key` header.
+- Model choice and costs: `docs/GEMINI-ASSESSMENT.md`.
+
 ### 5.3 Generation (guide, flashcards, quiz, exercises, recap)
 
 1. The route creates the artifact row (`Quiz`, `ExerciseSet`, …) and calls `startGeneration()`. That function applies the rate limit, creates a `GenerationJob`, and enqueues it.
 2. The processor retrieves context: `searchChunks(studySetId, topic, {k})` (cosine similarity, READY sources only).
-3. It calls `getGenerator().generate({schema})`. The output is Zod-validated, with one repair round.
+3. It calls `(await getGenerator()).generate({schema})`. The output is Zod-validated, with one repair round.
 4. Trust boundary: chunk ids the model cites must be in the retrieved set (`filterValidChunkIds`).
 5. `validation.ts` produces visible `warnings`.
 6. The processor persists rows plus `CitationAnchor` links.
@@ -399,7 +416,7 @@ All variables are validated in `src/lib/env.ts`; `.env.example` documents them. 
 | Core | `APP_URL`, `DATABASE_URL`, `NEXTAUTH_URL`, `NEXTAUTH_SECRET`, `LECTURE_ACCESS_KEY` (site-wide access gate, `src/lib/access-gate.ts` + `src/middleware.ts`; unset = off) |
 | Queue | `QUEUE_DRIVER` (`inline`\|`redis`), `REDIS_URL` |
 | Storage | `STORAGE_DRIVER` (`local`\|`s3`), `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `SIGNED_URL_TTL` |
-| LLM | `AI_PROVIDER` (`mock`\|`openai`\|`anthropic`\|`local`), `AI_MODEL`, `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `LOCAL_AI_BASE_URL`, `LOCAL_AI_MODEL` (e.g. `gemma4:latest`), `LOCAL_AI_THINK` (default `false`; reasoning models are ~10x slower with it on), `LOCAL_AI_TIMEOUT_MS` (default 300000), `LOCAL_AI_MAX_TOKENS` (default 4096; guards against runaway generations), `LOCAL_AI_NUM_CTX` (optional) |
+| LLM | `AI_PROVIDER` (`mock`\|`openai`\|`anthropic`\|`local`\|`gemini`), `AI_MODEL`, `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `LOCAL_AI_BASE_URL`, `LOCAL_AI_MODEL` (e.g. `gemma4:latest`), `LOCAL_AI_THINK` (default `false`; reasoning models are ~10x slower with it on), `LOCAL_AI_TIMEOUT_MS` (default 300000), `LOCAL_AI_MAX_TOKENS` (default 4096; guards against runaway generations), `LOCAL_AI_NUM_CTX` (optional); `GEMINI_API_KEY`, `GEMINI_MODEL` (default `gemini-3.8-flash`), `GEMINI_THINKING_LEVEL` (`low`\|`medium`\|`high`), `GEMINI_TIMEOUT_MS`, `GEMINI_MAX_TOKENS` |
 | Embeddings | `EMBEDDINGS_PROVIDER` (`mock`\|`openai`), `EMBEDDINGS_MODEL` (`EMBEDDINGS_DIMENSIONS` is currently unused; the dimension is fixed at 1536) |
 | Speech | `TRANSCRIPTION_PROVIDER` (`mock`\|`whisper`\|`deepgram`), `WHISPER_BASE_URL`, `WHISPER_API_KEY`, `WHISPER_MODEL`, `DEEPGRAM_API_KEY` |
 | TTS | `TTS_PROVIDER` (`mock`\|`openai`), `TTS_MODEL`, `TTS_VOICE` |
@@ -500,7 +517,7 @@ The architecture has deliberate **seams**: provider interfaces, the job registry
 
 1. Create `src/lib/ai/<vendor>.ts` implementing `StructuredGenerator`. Reuse `zodToJsonSchema()` for tool/JSON mode and `parseWithRepair()` for validation. Make sure the repair call includes the original prompt and the previous output.
 2. Add the enum value to `AI_PROVIDER` in `src/lib/env.ts`, plus any keys or model variables, and document them in `.env.example`.
-3. Add a `case` in `getGenerator()` (`src/lib/ai/index.ts`).
+3. Add a `case` in `generatorFor()` (`src/lib/ai/index.ts`). To make it selectable at `/admin`, extend `aiChoiceSchema` in `src/lib/ai/settings.ts` and the options in `src/components/shared/ai-model-card.tsx`.
 4. Pipelines need no changes. Verify by generating a guide, quiz and tutor reply on the seeded set.
 
 > OpenAI-compatible endpoints (Azure OpenAI, vLLM, Together, Groq…) usually need **no code**: set `AI_PROVIDER=openai` and `OPENAI_BASE_URL`.

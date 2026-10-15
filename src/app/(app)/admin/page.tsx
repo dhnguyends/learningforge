@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useAdminUsers, useCreateUser, useDeleteUser, useUpdateUser, type AdminUserRow } from "@/hooks/use-api";
+import { AiModelCard } from "@/components/shared/ai-model-card";
 
 type Role = "USER" | "ADMIN";
 type EditorState = { mode: "create" } | { mode: "edit"; user: AdminUserRow } | null;
@@ -109,6 +110,8 @@ export default function AdminPage() {
           </CardContent>
         </Card>
       )}
+
+      <AiModelCard />
 
       <UserEditor state={editor} onClose={() => setEditor(null)} />
       <DeleteDialog user={deleting} onClose={() => setDeleting(null)} />

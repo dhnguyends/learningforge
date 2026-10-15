@@ -4,26 +4,45 @@ import { MockGenerator } from "@/lib/ai/mock";
 import { OpenAIGenerator } from "@/lib/ai/openai";
 import { AnthropicGenerator } from "@/lib/ai/anthropic";
 import { LocalGenerator } from "@/lib/ai/local";
+import { GeminiGenerator } from "@/lib/ai/gemini";
+import { getActiveAi, type ResolvedAi } from "@/lib/ai/settings";
 
-let cached: StructuredGenerator | null = null;
+const cache = new Map<string, StructuredGenerator>();
 
-export function getGenerator(): StructuredGenerator {
-  if (cached) return cached;
+/** Generator for one provider/model pair (cached; adapters are stateless). */
+export function generatorFor(ai: Pick<ResolvedAi, "provider" | "model">): StructuredGenerator {
+  const key = `${ai.provider}:${ai.model}`;
+  const hit = cache.get(key);
+  if (hit) return hit;
   const env = getEnv();
-  switch (env.AI_PROVIDER) {
+  let generator: StructuredGenerator;
+  switch (ai.provider) {
     case "openai":
-      cached = new OpenAIGenerator(env);
+      generator = new OpenAIGenerator(env);
       break;
     case "anthropic":
-      cached = new AnthropicGenerator(env);
+      generator = new AnthropicGenerator(env);
       break;
     case "local":
-      cached = new LocalGenerator(env);
+      generator = new LocalGenerator(env);
+      break;
+    case "gemini":
+      generator = new GeminiGenerator(env, ai.model);
       break;
     default:
-      cached = new MockGenerator();
+      generator = new MockGenerator();
   }
-  return cached;
+  cache.set(key, generator);
+  return generator;
+}
+
+/**
+ * The generator for the model currently selected by an administrator
+ * (/admin → AI model), or the AI_PROVIDER default. Resolved per call so a
+ * change applies to the next generation without a restart.
+ */
+export async function getGenerator(): Promise<StructuredGenerator> {
+  return generatorFor(await getActiveAi());
 }
 
 export function isMockAI(): boolean {

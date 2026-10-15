@@ -832,6 +832,17 @@ model ArtifactEdit {
 }
 
 /// Audit trail for AI generations and privacy-sensitive actions.
+/// Instance-wide settings edited by administrators (e.g. key "ai" = the
+/// generation model chosen at /admin). Secrets never go here: API keys stay in .env.
+model AppSetting {
+  key         String   @id
+  value       Json
+  updatedById String?
+  updatedAt   DateTime @updatedAt
+
+  @@map("app_settings")
+}
+
 model AuditLog {
   id         String   @id @default(cuid())
   userId     String?

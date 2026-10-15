@@ -33,7 +33,9 @@ const envSchema = z.object({
   S3_SECRET_ACCESS_KEY: z.string().optional(),
   SIGNED_URL_TTL: z.coerce.number().int().positive().default(3600),
 
-  AI_PROVIDER: z.enum(["mock", "openai", "anthropic", "local"]).default("mock"),
+  // Default provider. Administrators can switch between "local" and "gemini" at
+  // runtime from /admin (stored in app_settings; see src/lib/ai/settings.ts).
+  AI_PROVIDER: z.enum(["mock", "openai", "anthropic", "local", "gemini"]).default("mock"),
   AI_MODEL: z.string().default("gpt-4o-mini"),
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_BASE_URL: z.string().optional(),
@@ -51,6 +53,16 @@ const envSchema = z.object({
   LOCAL_AI_MAX_TOKENS: z.coerce.number().int().positive().default(4096),
   // Context window override; unset = let Ollama size it for the available memory.
   LOCAL_AI_NUM_CTX: z.coerce.number().int().positive().optional(),
+
+  // Google Gemini API (cloud). The key stays server-side: never stored in the
+  // database or returned by any API.
+  GEMINI_API_KEY: z.string().optional(),
+  GEMINI_MODEL: z.string().default("gemini-3.8-flash"),
+  GEMINI_BASE_URL: z.string().default("https://generativelanguage.googleapis.com/v1beta"),
+  // gemini-3.8-flash rejects "minimal"; thinking tokens are billed as output.
+  GEMINI_THINKING_LEVEL: z.enum(["low", "medium", "high"]).default("low"),
+  GEMINI_TIMEOUT_MS: z.coerce.number().int().positive().default(180_000),
+  GEMINI_MAX_TOKENS: z.coerce.number().int().positive().default(16_384),
 
   // ollama = local Ollama /api/embed (e.g. embeddinggemma, multilingual, 768-d padded to 1536).
   EMBEDDINGS_PROVIDER: z.enum(["mock", "openai", "ollama"]).default("mock"),

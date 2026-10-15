@@ -21,7 +21,7 @@ export async function generateAudioRecapJob(ctx: JobContext<{ studySetId: string
     .slice(0, 24_000);
 
   await ctx.updateStage("writing-script", 30);
-  const result = await getGenerator().generate({
+  const result = await (await getGenerator()).generate({
     system: AUDIO_RECAP_SYSTEM,
     user: `STUDY SET: "${guide.studySet.title}"\nGUIDE (source-grounded sections only):\n\n${sourceText}`,
     schema: recapSchema,

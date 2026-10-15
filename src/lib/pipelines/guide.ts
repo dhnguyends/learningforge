@@ -57,7 +57,7 @@ export async function generateGuideJob(ctx: JobContext<GuideJobPayload>): Promis
     if (overviewChunks.length === 0) throw await emptyRetrievalError(studySetId);
 
     await ctx.updateStage("generating-outline", 25);
-    const generator = getGenerator();
+    const generator = await getGenerator();
     const outlineRes = await generator.generate({
       system: GUIDE_OUTLINE_SYSTEM,
       user: GUIDE_OUTLINE_USER({

@@ -31,7 +31,7 @@ export async function generateQuizJob(ctx: JobContext<QuizJobPayload>): Promise<
   if (chunks.length === 0) throw await emptyRetrievalError(quiz.studySet.id);
 
   await ctx.updateStage("generating-questions", 45);
-  const result = await getGenerator().generate({
+  const result = await (await getGenerator()).generate({
     system: QUIZ_SYSTEM,
     user: QUIZ_USER({
       studySetTitle: quiz.studySet.title,

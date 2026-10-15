@@ -30,7 +30,7 @@ export async function gradeExerciseAttempt(opts: {
 }): Promise<ExerciseFeedback> {
   const chunks = await searchChunks(opts.studySetId, opts.exercise.title, { k: 5 });
   return (
-    await getGenerator().generate({
+    await (await getGenerator()).generate({
       system: `You are LearningForge's exercise grader. Grade the learner's submission against the exercise requirements. Be specific about what is right, what is wrong, and the single most valuable next step. Do not reveal the full solution unless the submission is essentially complete; point at what to fix instead. Verify any arithmetic the learner shows.`,
       user: `EXERCISE: ${opts.exercise.title}\nREQUIREMENTS: ${opts.exercise.prompt}\n${
         opts.exercise.expectedOutput ? `EXPECTED OUTPUT: ${opts.exercise.expectedOutput}\n` : ""

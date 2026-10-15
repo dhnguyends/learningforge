@@ -37,7 +37,7 @@ export async function generateExercisesJob(ctx: JobContext<ExercisesJobPayload>)
   if (chunks.length === 0) throw await emptyRetrievalError(exerciseSet.studySet.id);
 
   await ctx.updateStage("generating-exercises", 45);
-  const result = await getGenerator().generate({
+  const result = await (await getGenerator()).generate({
     system: EXERCISES_SYSTEM,
     user: EXERCISES_USER({
       studySetTitle: exerciseSet.studySet.title,

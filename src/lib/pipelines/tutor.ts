@@ -50,7 +50,7 @@ export async function answerTutorMessage(opts: {
 
   const hintsUsed = opts.mode === "hint" ? conversation.hintsUsed + 1 : conversation.hintsUsed;
 
-  const result = await getGenerator().generate({
+  const result = await (await getGenerator()).generate({
     system: TUTOR_SYSTEM,
     user: TUTOR_USER({
       studySetTitle: conversation.studySet.title,

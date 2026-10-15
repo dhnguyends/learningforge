@@ -35,7 +35,7 @@ export async function generateFlashcardsJob(ctx: JobContext<FlashcardsJobPayload
 
   await ctx.updateStage("generating-cards", 45);
   const count = ctx.payload.count ?? 14;
-  const result = await getGenerator().generate({
+  const result = await (await getGenerator()).generate({
     system: FLASHCARDS_SYSTEM,
     user: FLASHCARDS_USER({
       studySetTitle: deck.studySet.title,
