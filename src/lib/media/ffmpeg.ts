@@ -86,6 +86,16 @@ export async function extractAudio(
   }
 }
 
+/**
+ * YouTube changes its delivery often (SABR streaming, signed formats answering
+ * 403) and only a current yt-dlp keeps up — the usual fix is an update.
+ */
+export function ytDlpHint(stderr: string): string {
+  return /HTTP Error 403|SABR|older than \d+ days|Requested format is not available|Sign in to confirm/i.test(stderr)
+    ? ' — update yt-dlp on the server (python -m pip install -U "yt-dlp[default]") and retry the import.'
+    : "";
+}
+
 /** yt-dlp may run at most this long before it is killed. */
 const YT_DLP_TIMEOUT_MS = 30 * 60 * 1000;
 
@@ -121,6 +131,11 @@ export async function fetchYouTubeAudio(
     const proc = spawn("yt-dlp", [
       "--no-playlist",
       "--max-filesize", "500M",
+      // YouTube now requires solving JS challenges; yt-dlp only looks for Deno
+      // by default, so point it at the Node.js running this server.
+      "--js-runtimes", `node:${process.execPath}`,
+      // Convert with the bundled ffmpeg instead of whatever is on PATH.
+      ...(ffmpegStatic ? ["--ffmpeg-location", ffmpegStatic] : []),
       "-f", "bestaudio",
       "-x", "--audio-format", "mp3",
       "-o", tmpOut,
@@ -136,7 +151,8 @@ export async function fetchYouTubeAudio(
     proc.on("close", (code, signal) => {
       clearTimeout(timer);
       if (code === 0) resolve();
-      else reject(new Error(signal ? `yt-dlp timed out after ${YT_DLP_TIMEOUT_MS / 60000} min` : `yt-dlp failed: ${stderr.slice(-400)}`));
+      else if (signal) reject(new Error(`yt-dlp timed out after ${YT_DLP_TIMEOUT_MS / 60000} min`));
+      else reject(new Error(`yt-dlp failed: ${stderr.slice(-400)}${ytDlpHint(stderr)}`));
     });
   });
 
