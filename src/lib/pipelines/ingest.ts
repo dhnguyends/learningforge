@@ -172,7 +172,9 @@ async function ingestAudioVideo(
   await prisma.source.update({
     where: { id: source.id },
     data: {
-      durationSec: durationSec ?? (typeof transcript.metadata.durationSec === "number" ? transcript.metadata.durationSec : null),
+      // 0 means "unknown" here (audio uploads are not probed): fall back to the
+      // duration the transcriber measured.
+      durationSec: durationSec || (typeof transcript.metadata.durationSec === "number" ? transcript.metadata.durationSec : null),
       metadata: {
         ...(source.metadata as object),
         transcriptProvider: transcript.provider,

@@ -92,6 +92,10 @@ const envSchema = z.object({
   WHISPER_BASE_URL: z.string().default("https://api.openai.com/v1"),
   WHISPER_API_KEY: z.string().optional(),
   WHISPER_MODEL: z.string().default("whisper-1"),
+  // One transcription request (the whole lecture). A local GPU server such as
+  // Speaches runs ~5x real time on a GTX 1080 Ti, so a 90-minute lecture needs
+  // ~20 minutes — far beyond the OpenAI SDK's 10-minute default.
+  WHISPER_TIMEOUT_MS: z.coerce.number().int().positive().default(3_600_000),
   DEEPGRAM_API_KEY: z.string().optional(),
 
   TTS_PROVIDER: z.enum(["mock", "openai"]).default("mock"),

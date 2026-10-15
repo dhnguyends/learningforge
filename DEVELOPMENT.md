@@ -69,13 +69,47 @@ server.
 | `STORAGE_DRIVER` | `local` \| `s3` | `local` writes `./.data/storage` |
 | `AI_PROVIDER` | `mock` \| `openai` \| `anthropic` \| `local` \| `gemini` \| `zai` | `local` = Ollama-style `/api/chat`; administrators can switch at `/admin` |
 | `EMBEDDINGS_PROVIDER` | `mock` \| `openai` \| `ollama` | Mock = deterministic hashed 1536-d vectors; `ollama` = EmbeddingGemma |
-| `TRANSCRIPTION_PROVIDER` | `mock` \| `whisper` \| `deepgram` | Word timings kept for citations |
+| `TRANSCRIPTION_PROVIDER` | `mock` \| `whisper` \| `deepgram` | Segment start/end timestamps kept for citations; see *Local speech-to-text* below |
 | `TTS_PROVIDER` | `mock` \| `openai` | Audio recap voice |
 | `NEXTAUTH_SECRET` | — | `openssl rand -base64 32`; dev fallback exists but don't ship it |
 
 Everything defaults to mock/local/inline, so the app boots with **zero
 external services** and is fully deterministic — the seeded dataset, unit,
 API, and e2e tests all rely on this.
+
+## Local speech-to-text (Whisper large-v3-turbo)
+
+Audio and video sources are transcribed offline by a local
+[Speaches](https://speaches.ai) server (faster-whisper) that exposes the
+OpenAI-compatible `/v1/audio/transcriptions` endpoint, so no code change is
+needed. Start it once, with GPU support (CPU works too, slower):
+
+```bash
+docker run --detach --name speaches --publish 8000:8000 --gpus=all \
+  --env WHISPER__COMPUTE_TYPE=int8 --env STT_MODEL_TTL=-1 \
+  --volume hf-hub-cache:/home/ubuntu/.cache/huggingface/hub \
+  ghcr.io/speaches-ai/speaches:0.8.3-cuda
+curl -X POST http://localhost:8000/v1/models/deepdml/faster-whisper-large-v3-turbo-ct2
+```
+
+Then in `.env`:
+
+```
+TRANSCRIPTION_PROVIDER="whisper"
+WHISPER_BASE_URL="http://localhost:8000/v1"
+WHISPER_MODEL="deepdml/faster-whisper-large-v3-turbo-ct2"
+WHISPER_TIMEOUT_MS="3600000"
+```
+
+- `int8` is the right compute type for older GPUs such as the GTX 1080 Ti
+  (Pascal has no fast float16). Measured there: about 5x real time, so a
+  90-minute lecture takes about 20 minutes; `WHISPER_TIMEOUT_MS` must cover it,
+  because the whole lecture is one request and it is never retried.
+- The model returns `verbose_json` segments with start/end timestamps; they
+  become the transcript segments and the citation anchors (seek-to-time).
+- Whisper has no speaker diarization; a warning is stored when it is requested.
+- Existing sources keep their old transcript until you use **Import again** on
+  them (Sources page), then regenerate the study material.
 
 ## Database workflow
 

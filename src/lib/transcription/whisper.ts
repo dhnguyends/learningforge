@@ -20,7 +20,9 @@ interface WhisperVerboseResponse {
 
 /**
  * Any Whisper-compatible /audio/transcriptions endpoint (OpenAI, faster-whisper
- * servers, Groq). Plain Whisper has no diarization: segments are single-speaker
+ * servers such as Speaches running large-v3-turbo locally, Groq). Segments
+ * carry start/end timestamps (verbose_json), which become the transcript's
+ * citation anchors. Plain Whisper has no diarization: segments are single-speaker
  * and a metadata warning is recorded when diarization was requested.
  */
 export class WhisperProvider implements TranscriptionProvider {
@@ -33,8 +35,12 @@ export class WhisperProvider implements TranscriptionProvider {
     const env = getEnv();
     this.model = env.WHISPER_MODEL;
     this.client = new OpenAI({
-      apiKey: env.WHISPER_API_KEY,
+      // Local servers ignore the key, but the SDK requires one.
+      apiKey: env.WHISPER_API_KEY || "local",
       baseURL: env.WHISPER_BASE_URL,
+      // A whole lecture is one request; never re-upload it on a slow answer.
+      timeout: env.WHISPER_TIMEOUT_MS,
+      maxRetries: 0,
     });
   }
 
