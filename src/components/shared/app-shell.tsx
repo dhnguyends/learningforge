@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
-import { LogOut, Plus, Settings, ShieldCheck } from "lucide-react";
+import { Cloud, Cpu, LogOut, Plus, Settings, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { LogoWordmark } from "@/components/shared/brand";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
+import { useActiveAi } from "@/hooks/use-api";
 
 /** Top bar for the authenticated app: brand, quick-create, account menu. */
 export function AppShell({ children, breadcrumb }: { children: React.ReactNode; breadcrumb?: React.ReactNode }) {
@@ -31,6 +32,9 @@ export function AppShell({ children, breadcrumb }: { children: React.ReactNode; 
               <LogoWordmark />
             </Link>
             {breadcrumb && <div className="hidden min-w-0 items-center gap-2 text-sm text-muted-foreground md:flex">{breadcrumb}</div>}
+          </div>
+          <div className="flex min-w-0 flex-1 justify-center">
+            <ActiveModelBadge isAdmin={user?.role === "ADMIN"} />
           </div>
           <div className="flex items-center gap-1.5">
             <Button asChild variant="outline" size="sm" className="gap-1.5">
@@ -72,5 +76,29 @@ export function AppShell({ children, breadcrumb }: { children: React.ReactNode; 
       </header>
       <main className="flex-1">{children}</main>
     </div>
+  );
+}
+
+/** The AI model generating content right now; administrators can click through to change it. */
+function ActiveModelBadge({ isAdmin }: { isAdmin: boolean }) {
+  const { data } = useActiveAi();
+  if (!data) return null;
+  const Icon = data.cloud ? Cloud : Cpu;
+  const chip = (
+    <span
+      className="inline-flex max-w-full items-center gap-1.5 truncate rounded-full border border-border bg-muted/50 px-3 py-1 text-xs text-muted-foreground"
+      title={`AI model: ${data.model}${data.cloud ? " (cloud)" : " (runs on this computer)"}`}
+    >
+      <Icon className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
+      <span className="hidden sm:inline">AI model:</span>
+      <span className="truncate font-medium text-foreground">{data.label}</span>
+    </span>
+  );
+  return isAdmin ? (
+    <Link href="/admin" aria-label={`AI model: ${data.label}. Change it in Administration`} className="min-w-0 rounded-full hover:opacity-80">
+      {chip}
+    </Link>
+  ) : (
+    chip
   );
 }

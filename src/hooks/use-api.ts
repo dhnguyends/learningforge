@@ -773,8 +773,22 @@ export function useAdminAiSettings() {
 export function useSaveAiChoice() {
   return useLfMutation(
     (choice: AiChoiceInput) => api<AdminAiSettings>("/api/admin/ai", { method: "PUT", body: JSON.stringify(choice) }),
-    () => [adminAiKey],
+    () => [adminAiKey, activeAiKey],
   );
+}
+
+export interface ActiveAi {
+  provider: string;
+  model: string;
+  label: string;
+  cloud: boolean;
+}
+
+const activeAiKey = ["ai", "active"] as const;
+
+/** The generation model in use (top bar). */
+export function useActiveAi() {
+  return useQuery({ queryKey: activeAiKey, queryFn: () => api<ActiveAi>("/api/ai/active"), staleTime: 60_000 });
 }
 
 export function useTestAiChoice() {

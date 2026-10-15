@@ -30,7 +30,7 @@ export type AiChoice = z.infer<typeof aiChoiceSchema>;
 export interface ResolvedAi {
   provider: Env["AI_PROVIDER"];
   model: string;
-  /** "admin" = stored choice; "env" = AI_PROVIDER default; "fallback" = stored Gemini choice without GEMINI_API_KEY. */
+  /** "admin" = stored choice; "env" = AI_PROVIDER default; "fallback" = Gemini chosen without GEMINI_API_KEY (runs locally). */
   source: "admin" | "env" | "fallback";
 }
 
@@ -45,6 +45,10 @@ export function geminiConfigured(env: Env = getEnv()): boolean {
 }
 
 function envDefault(env: Env): ResolvedAi {
+  // Gemini is the default; without a key it would fail every job, so run locally instead.
+  if (env.AI_PROVIDER === "gemini" && !geminiConfigured(env)) {
+    return { provider: "local", model: env.LOCAL_AI_MODEL, source: "fallback" };
+  }
   const model =
     env.AI_PROVIDER === "local"
       ? env.LOCAL_AI_MODEL
@@ -114,3 +118,11 @@ export async function aiSettingsView() {
   };
 }
 export type AiSettingsView = Awaited<ReturnType<typeof aiSettingsView>>;
+
+/** Human label for the top bar ("Gemini 3.8 Flash", "Gemma 4 · local"). */
+export function aiLabel(ai: Pick<ResolvedAi, "provider" | "model">): string {
+  if (ai.provider === "gemini") return GEMINI_MODELS.find((m) => m.id === ai.model)?.label ?? ai.model;
+  if (ai.provider === "local") return /gemma-?4/i.test(ai.model) ? "Gemma 4 · local" : `${ai.model} · local`;
+  if (ai.provider === "mock") return "Offline demo";
+  return ai.model;
+}

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { z } from "zod";
 import type { Env } from "@/lib/env";
 import { GeminiGenerator, toGeminiSchema } from "@/lib/ai/gemini";
-import { resolveAi } from "@/lib/ai/settings";
+import { aiLabel, resolveAi } from "@/lib/ai/settings";
 import { zodToJsonSchema } from "@/lib/ai/zod-to-json-schema";
 
 const KEY = "test-gemini-key-not-real";
@@ -129,6 +129,20 @@ describe("resolveAi (admin choice over the environment default)", () => {
   it("applies the stored choice", () => {
     expect(resolveAi({ provider: "gemini", model: "gemini-3.5-flash-lite" }, env())).toEqual({ provider: "gemini", model: "gemini-3.5-flash-lite", source: "admin" });
     expect(resolveAi({ provider: "local" }, env({ AI_PROVIDER: "gemini" }))).toEqual({ provider: "local", model: "gemma4:latest", source: "admin" });
+  });
+
+  it("defaults to Gemini (GEMINI_MODEL) when AI_PROVIDER=gemini", () => {
+    expect(resolveAi(null, env({ AI_PROVIDER: "gemini" }))).toEqual({ provider: "gemini", model: "gemini-3.8-flash", source: "env" });
+  });
+
+  it("runs locally when the Gemini default has no API key", () => {
+    expect(resolveAi(null, env({ AI_PROVIDER: "gemini", GEMINI_API_KEY: "" }))).toEqual({ provider: "local", model: "gemma4:latest", source: "fallback" });
+  });
+
+  it("labels the active model for the top bar", () => {
+    expect(aiLabel({ provider: "gemini", model: "gemini-3.8-flash" })).toBe("Gemini 3.8 Flash");
+    expect(aiLabel({ provider: "local", model: "gemma4:latest" })).toBe("Gemma 4 · local");
+    expect(aiLabel({ provider: "mock", model: "mock" })).toBe("Offline demo");
   });
 
   it("falls back to the default when Gemini is chosen but no key is configured", () => {
