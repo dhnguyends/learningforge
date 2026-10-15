@@ -9,6 +9,8 @@
   "scripts": {
     "predev": "prisma generate",
     "dev": "next dev",
+    "predev:https": "prisma generate",
+    "dev:https": "next dev --experimental-https --experimental-https-key certificates/localhost-key.pem --experimental-https-cert certificates/localhost.pem",
     "build": "prisma generate && next build",
     "start": "next start",
     "worker": "tsx watch src/workers/index.ts",

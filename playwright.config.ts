@@ -28,6 +28,8 @@ export default defineConfig({
   globalSetup: "./tests/e2e/global-setup.ts",
   use: {
     storageState: "test-results/.auth/access.json",
+    // Local HTTPS uses an mkcert certificate; Node-side requests don't read the Windows trust store.
+    ignoreHTTPSErrors: true,
     baseURL,
     trace: "on-first-retry",
     navigationTimeout: 30_000,
@@ -35,8 +37,10 @@ export default defineConfig({
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
-    command: `npm run dev -- -p ${port}`,
+    // https:// base URL => the mkcert-backed dev server (npm run dev:https).
+    command: `npm run ${baseURL.startsWith("https://") ? "dev:https" : "dev"} -- -p ${port}`,
     url: baseURL,
+    ignoreHTTPSErrors: true,
     timeout: 120_000,
     reuseExistingServer: true,
     env: {

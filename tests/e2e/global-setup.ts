@@ -17,7 +17,7 @@ export default async function globalSetup(config: FullConfig) {
     return;
   }
   const baseURL = config.projects[0]?.use.baseURL;
-  const ctx = await request.newContext({ baseURL });
+  const ctx = await request.newContext({ baseURL, ignoreHTTPSErrors: true });
   const res = await ctx.post("/api/access", { data: { key } });
   if (!res.ok()) throw new Error(`Could not unlock the access gate for E2E: HTTP ${res.status()}`);
   await ctx.storageState({ path: ACCESS_STATE });

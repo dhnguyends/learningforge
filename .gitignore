@@ -39,3 +39,7 @@ backups/
 *.bak
 # pod TLS root CA downloaded for local trust (public cert, machine-specific)
 pod-root-ca.crt
+
+# local tools (mkcert) and dev TLS certificates — never commit
+.tools/
+certificates/

@@ -132,6 +132,33 @@ E2E notes learned the hard way (Windows dev box):
 - Never put provider keys in client code; env access goes through
   `src/lib/env.ts` (Zod-validated, lazy).
 
+## Local HTTPS (optional)
+
+`npm run dev:https` serves the app on `https://localhost:<port>` with a
+locally trusted certificate from [mkcert](https://github.com/FiloSottile/mkcert)
+v1.4.4 (kept in the git-ignored `.tools/mkcert/`; certificates in the
+git-ignored `certificates/`). One-time setup, run by **you** in PowerShell
+from the project folder — it adds a root CA to your *Current User* trust store
+(Windows asks for confirmation; no admin rights):
+
+```powershell
+.\.tools\mkcert\mkcert.exe -install
+.\.tools\mkcert\mkcert.exe -cert-file certificates\localhost.pem -key-file certificates\localhost-key.pem localhost 127.0.0.1 ::1
+```
+
+Then start with matching URLs (cookies become `Secure`):
+
+```powershell
+$env:NEXTAUTH_URL="https://localhost:3001"; $env:APP_URL="https://localhost:3001"
+npm run dev:https -- -p 3001
+```
+
+E2E: `$env:E2E_BASE_URL="https://localhost:3001"; npm run test:e2e` (the config
+starts `dev:https` for an https base URL). Notes: Git-for-Windows `curl` uses
+Schannel and fails mkcert certificates on revocation lookup — add
+`--ssl-no-revoke`; the CA's private key lives in `%LOCALAPPDATA%\mkcert`
+(never share it); undo everything with `.\.tools\mkcert\mkcert.exe -uninstall`.
+
 ## Troubleshooting
 
 - **`Unknown argument <field>` from `prisma.….create()` after a schema change** —
