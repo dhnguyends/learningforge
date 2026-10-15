@@ -35,6 +35,7 @@ async function main() {
     data: {
       email: "demo@learningforge.app",
       name: "Demo Student",
+      nature: "BOT", // demo/sample account, not a person
       passwordHash: await bcrypt.hash("demo-password", 12),
       preferences: { theme: "system" },
     },

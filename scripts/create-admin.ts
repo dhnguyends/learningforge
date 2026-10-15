@@ -28,6 +28,10 @@ async function main() {
 
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
+    // Only Human accounts can be Admin; a Bot is never promoted silently.
+    if (existing.nature !== "HUMAN") {
+      throw new Error(`${email} is a Bot account — change its nature to Human at /admin first, then promote it.`);
+    }
     await prisma.user.update({
       where: { id: existing.id },
       data: { role: "ADMIN", ...(name ? { name } : {}), ...(password ? { passwordHash: await hashPassword(password) } : {}) },
@@ -38,7 +42,8 @@ async function main() {
   }
 
   if (!password) throw new Error(`No account ${email} exists — set ADMIN_PASSWORD to create it.`);
-  const user = await prisma.user.create({ data: { email, name, role: "ADMIN", passwordHash: await hashPassword(password) } });
+  // The administrator this script bootstraps is the person running it — and only Humans can be Admin.
+  const user = await prisma.user.create({ data: { email, name, role: "ADMIN", nature: "HUMAN", passwordHash: await hashPassword(password) } });
   await ensureUserWorkspace(user.id, user.name);
   await audit({ userId: user.id, action: "admin.bootstrap_create", entityType: "user", entityId: user.id });
   console.log(`Created administrator ${email}.`);

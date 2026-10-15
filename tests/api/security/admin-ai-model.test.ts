@@ -31,7 +31,7 @@ let saved: { value: unknown; updatedById: string | null } | null = null;
 beforeAll(async () => {
   saved = await prisma.appSetting.findUnique({ where: { key: "ai" }, select: { value: true, updatedById: true } });
   admin = await createTestUser("AI admin");
-  await prisma.user.update({ where: { id: admin.id }, data: { role: "ADMIN" } });
+  await prisma.user.update({ where: { id: admin.id }, data: { role: "ADMIN", nature: "HUMAN" } }); // only Human accounts can be Admin
   user = await createTestUser("AI plain user");
 });
 

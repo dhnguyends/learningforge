@@ -37,4 +37,8 @@ export interface StorageDriver {
   /** Permanently delete an object. */
   delete(key: string): Promise<void>;
   deletePrefix(prefix: string): Promise<void>;
+  /** Keys of every object under `prefix/` (e.g. a whole study set). */
+  list(prefix: string): Promise<string[]>;
+  /** Server-side copy of one object (content type preserved). */
+  copy(fromKey: string, toKey: string): Promise<void>;
 }

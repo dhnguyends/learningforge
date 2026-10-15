@@ -2,9 +2,9 @@ import { z } from "zod";
 import { prisma, jsonSafe } from "@/lib/db";
 import { apiHandler, ok, parseJsonBody, requireAdmin, badRequest, notFound } from "@/lib/api";
 import { hashPassword } from "@/lib/auth";
-import { getStorage } from "@/lib/storage";
+import { deleteAccountCompletely } from "@/lib/deletion";
 import { audit } from "@/lib/audit";
-import { ADMIN_USER_SELECT } from "@/lib/admin";
+import { ADMIN_USER_SELECT, adminRuleViolation } from "@/lib/admin";
 
 type Ctx = { params: { userId: string } };
 
@@ -14,6 +14,7 @@ const patchSchema = z
     email: z.string().trim().email().max(320).optional(),
     password: z.string().min(10, "Password must be at least 10 characters").max(256).optional(),
     role: z.enum(["USER", "ADMIN"]).optional(),
+    nature: z.enum(["HUMAN", "BOT"]).optional(),
   })
   .refine((b) => Object.values(b).some((v) => v !== undefined), { message: "Nothing to update" });
 
@@ -28,8 +29,14 @@ async function assertNotLastAdmin(userId: string): Promise<void> {
 export const PATCH = apiHandler<Ctx>(async (req, { params }) => {
   const admin = await requireAdmin();
   const body = await parseJsonBody(req, patchSchema);
-  const existing = await prisma.user.findUnique({ where: { id: params.userId }, select: { id: true, role: true } });
+  const existing = await prisma.user.findUnique({ where: { id: params.userId }, select: { id: true, role: true, nature: true } });
   if (!existing) throw notFound("User");
+  // Promotion rule: only Human accounts can be Admin (a Bot is made Human first).
+  const violation = adminRuleViolation(
+    { role: body.role ?? existing.role, nature: body.nature ?? existing.nature },
+    { role: existing.role, nature: existing.nature },
+  );
+  if (violation) throw badRequest(violation);
 
   if (body.role === "USER" && existing.role === "ADMIN") await assertNotLastAdmin(existing.id);
   const email = body.email?.toLowerCase();
@@ -44,6 +51,7 @@ export const PATCH = apiHandler<Ctx>(async (req, { params }) => {
       ...(body.name !== undefined ? { name: body.name } : {}),
       ...(email ? { email } : {}),
       ...(body.role ? { role: body.role } : {}),
+      ...(body.nature ? { nature: body.nature } : {}),
       ...(body.password ? { passwordHash: await hashPassword(body.password) } : {}),
     },
     select: ADMIN_USER_SELECT,
@@ -66,14 +74,8 @@ export const DELETE = apiHandler<Ctx>(async (_req, { params }) => {
   if (!existing) throw notFound("User");
   await assertNotLastAdmin(existing.id);
 
-  // Purge stored files of the workspaces this user OWNS (not shared ones they
-  // merely belong to), then cascade the rows.
-  const owned = await prisma.workspace.findMany({ where: { ownerId: existing.id }, select: { id: true } });
-  const storage = getStorage();
-  for (const w of owned) {
-    await storage.deletePrefix(`workspaces/${w.id}`).catch((err) => console.error("[admin.user_delete] storage purge failed", err));
-  }
-  await prisma.user.delete({ where: { id: existing.id } });
-  await audit({ userId: admin.user.id, action: "admin.user_delete", entityType: "user", entityId: existing.id });
-  return ok({ deleted: true });
+  // The account, every study set it owns (with all sources) and their files.
+  const removed = await deleteAccountCompletely(existing.id);
+  await audit({ userId: admin.user.id, action: "admin.user_delete", entityType: "user", entityId: existing.id, metadata: { ...removed } });
+  return ok({ deleted: true, ...removed });
 });

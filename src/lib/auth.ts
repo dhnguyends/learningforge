@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
 import { getEnv } from "@/lib/env";
 import { clientIp, rateLimit, resetRateLimit } from "@/lib/rate-limit";
+import { effectiveRole } from "@/lib/admin";
 
 /** Sign-in throttling: per account (primary) and per client IP (secondary). */
 export const SIGN_IN_WINDOW_MS = 15 * 60 * 1000;
@@ -41,7 +42,8 @@ export const authOptions: AuthOptions = {
         const valid = await bcrypt.compare(credentials.password, user.passwordHash);
         if (!valid) return null;
         resetRateLimit(`signin:account:${email}`);
-        return { id: user.id, email: user.email, name: user.name, image: user.image, role: user.role };
+        await prisma.user.update({ where: { id: user.id }, data: { lastActiveAt: new Date() } });
+        return { id: user.id, email: user.email, name: user.name, image: user.image, role: effectiveRole(user.role, user.nature) };
       },
     }),
   ],
@@ -50,6 +52,12 @@ export const authOptions: AuthOptions = {
       if (user) {
         token.sub = user.id;
         token.role = user.role ?? "USER";
+      } else if (token.sub) {
+        // Re-read the role whenever the session is refreshed, so a promotion or
+        // demotion at /admin takes effect without signing out and in again
+        // (the middleware guards /admin with this token).
+        const current = await prisma.user.findUnique({ where: { id: token.sub }, select: { role: true, nature: true } });
+        token.role = current ? effectiveRole(current.role, current.nature) : "USER";
       }
       return token;
     },

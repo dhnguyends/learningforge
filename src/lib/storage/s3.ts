@@ -4,6 +4,7 @@ import {
   GetObjectCommand,
   DeleteObjectCommand,
   ListObjectsV2Command,
+  CopyObjectCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type { Env } from "@/lib/env";
@@ -83,5 +84,24 @@ export class S3Storage implements StorageDriver {
       }
       token = listed.IsTruncated ? listed.NextContinuationToken : undefined;
     } while (token);
+  }
+
+  async list(prefix: string): Promise<string[]> {
+    const keys: string[] = [];
+    let token: string | undefined;
+    do {
+      const listed = await this.client.send(
+        new ListObjectsV2Command({ Bucket: this.bucket, Prefix: `${assertSafeKey(prefix)}/`, ContinuationToken: token }),
+      );
+      for (const obj of listed.Contents ?? []) if (obj.Key) keys.push(obj.Key);
+      token = listed.IsTruncated ? listed.NextContinuationToken : undefined;
+    } while (token);
+    return keys.sort();
+  }
+
+  async copy(fromKey: string, toKey: string): Promise<void> {
+    // CopySource is "<bucket>/<key>", URL-encoded per path segment.
+    const source = `${this.bucket}/${assertSafeKey(fromKey).split("/").map(encodeURIComponent).join("/")}`;
+    await this.client.send(new CopyObjectCommand({ ...this.objectName(toKey), CopySource: source }));
   }
 }

@@ -78,4 +78,26 @@ export class LocalStorage implements StorageDriver {
   async deletePrefix(prefix: string): Promise<void> {
     await fs.rm(localStoragePath(prefix), { recursive: true, force: true });
   }
+
+  async list(prefix: string): Promise<string[]> {
+    const dir = localStoragePath(prefix);
+    let entries: import("node:fs").Dirent[];
+    try {
+      entries = await fs.readdir(dir, { recursive: true, withFileTypes: true });
+    } catch {
+      return []; // nothing stored under this prefix
+    }
+    return entries
+      .filter((e) => e.isFile() && !e.name.endsWith(".meta")) // .meta = content-type sidecar
+      .map((e) => path.relative(LOCAL_STORAGE_ROOT, path.join(e.parentPath, e.name)).split(path.sep).join("/"))
+      .sort();
+  }
+
+  async copy(fromKey: string, toKey: string): Promise<void> {
+    const from = localStoragePath(fromKey);
+    const to = localStoragePath(toKey);
+    await fs.mkdir(path.dirname(to), { recursive: true });
+    await fs.copyFile(from, to);
+    await fs.copyFile(`${from}.meta`, `${to}.meta`).catch(() => undefined); // older objects may have none
+  }
 }

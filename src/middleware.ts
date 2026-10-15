@@ -32,8 +32,11 @@ export default async function middleware(req: NextRequest) {
       // https NEXTAUTH_URL => next-auth issues the __Secure- prefixed session cookie.
       secureCookie: (process.env.NEXTAUTH_URL ?? "").startsWith("https://"),
     });
-    const allowed = Boolean(token) && (!pathname.startsWith("/admin") || token?.role === "ADMIN");
-    if (!allowed) return NextResponse.redirect(`${browserOrigin(req)}/auth/sign-in?callbackUrl=${here}`);
+    if (!token) return NextResponse.redirect(`${browserOrigin(req)}/auth/sign-in?callbackUrl=${here}`);
+    // Signed in but not an Admin: back to their dashboard, with an "Access denied" pop-up.
+    if (pathname.startsWith("/admin") && token.role !== "ADMIN") {
+      return NextResponse.redirect(`${browserOrigin(req)}/dashboard?denied=admin`);
+    }
   }
   return NextResponse.next();
 }

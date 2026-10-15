@@ -204,12 +204,22 @@ enum UserRole {
   ADMIN
 }
 
+/// Who uses an account: a person, or an automated agent / test (e.g. accounts
+/// created by an AI agent for testing). Anything created by code defaults to BOT.
+enum UserNature {
+  HUMAN
+  BOT
+}
+
 model User {
-  id            String    @id @default(cuid())
+  id            String     @id @default(cuid())
   name          String?
-  email         String    @unique
+  email         String     @unique
   /// ADMIN can manage accounts at /admin (self-registration is disabled).
-  role          UserRole  @default(USER)
+  role          UserRole   @default(USER)
+  nature        UserNature @default(BOT)
+  /// Last sign-in or API activity (updated at most every few minutes).
+  lastActiveAt  DateTime?
   emailVerified DateTime?
   image         String?
   passwordHash  String?

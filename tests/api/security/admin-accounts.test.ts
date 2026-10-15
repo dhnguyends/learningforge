@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, afterEach } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from "vitest";
 import { NextRequest } from "next/server";
 import "../helpers";
 import { prisma, createTestUser, disposeTestUser, signInAs, jsonRequest, type TestUser } from "../helpers";
@@ -8,6 +8,7 @@ import { POST as register } from "@/app/api/auth/register/route";
 import { POST as unlock } from "@/app/api/access/route";
 import { GET as listStudySets } from "@/app/api/study-sets/route";
 import { ACCESS_COOKIE } from "@/lib/access-gate";
+import { prisma as appDb } from "@/lib/db";
 
 /**
  * Invite-only accounts: self-registration is closed, only ADMINs manage
@@ -21,7 +22,7 @@ const created: string[] = [];
 
 beforeAll(async () => {
   admin = await createTestUser("Admin");
-  await prisma.user.update({ where: { id: admin.id }, data: { role: "ADMIN" } });
+  await prisma.user.update({ where: { id: admin.id }, data: { role: "ADMIN", nature: "HUMAN" } }); // only Human accounts can be Admin
   user = await createTestUser("Plain user");
 });
 
@@ -63,8 +64,9 @@ describe("account management", () => {
     const email = newEmail();
     const res = await createUser(jsonRequest(`${BASE}/api/admin/users`, "POST", { name: "New Person", email, password: "first-password-1" }), {} as never);
     expect(res.status).toBe(201);
-    const { user: made } = (await res.json()) as { user: { id: string; role: string; passwordHash?: string } };
+    const { user: made } = (await res.json()) as { user: { id: string; role: string; nature: string; passwordHash?: string } };
     expect(made.role).toBe("USER");
+    expect(made.nature).toBe("BOT"); // created by code without a nature => Bot
     expect(made.passwordHash).toBeUndefined();
     expect(await prisma.workspaceMember.count({ where: { userId: made.id, role: "OWNER" } })).toBe(1);
 
@@ -73,6 +75,11 @@ describe("account management", () => {
     expect(list.users.every((u) => !("passwordHash" in u))).toBe(true);
 
     const before = (await prisma.user.findUniqueOrThrow({ where: { id: made.id } })).passwordHash;
+    // A Bot cannot be promoted; it becomes Human first, then Admin.
+    const refused = await updateUser(jsonRequest(`${BASE}/api/admin/users/${made.id}`, "PATCH", { role: "ADMIN" }), ctx(made.id));
+    expect(refused.status).toBe(400);
+    expect(((await refused.json()) as { error: string }).error).toMatch(/Only Human accounts can be promoted to Admin/);
+    expect((await updateUser(jsonRequest(`${BASE}/api/admin/users/${made.id}`, "PATCH", { nature: "HUMAN" }), ctx(made.id))).status).toBe(200);
     const upd = await updateUser(jsonRequest(`${BASE}/api/admin/users/${made.id}`, "PATCH", { name: "Renamed", password: "second-password-2", role: "ADMIN" }), ctx(made.id));
     expect(upd.status).toBe(200);
     const after = await prisma.user.findUniqueOrThrow({ where: { id: made.id } });
@@ -94,8 +101,9 @@ describe("account management", () => {
 
   it("protects the last administrator and the caller's own account", async () => {
     signInAs(admin.id);
-    const others = await prisma.user.findMany({ where: { role: "ADMIN", NOT: { id: admin.id } }, select: { id: true } });
-    await prisma.user.updateMany({ where: { id: { in: others.map((o) => o.id) } }, data: { role: "USER" } });
+    // Simulate "this is the only administrator" instead of demoting the real
+    // admins of the shared database (the owner's account included).
+    const countAdmins = vi.spyOn(appDb.user, "count").mockResolvedValue(1);
     try {
       const demote = await updateUser(jsonRequest(`${BASE}/api/admin/users/${admin.id}`, "PATCH", { role: "USER" }), ctx(admin.id));
       expect(demote.status).toBe(400);
@@ -103,7 +111,7 @@ describe("account management", () => {
       const self = await deleteUser(jsonRequest(`${BASE}/api/admin/users/${admin.id}`, "DELETE"), ctx(admin.id));
       expect(self.status).toBe(400);
     } finally {
-      await prisma.user.updateMany({ where: { id: { in: others.map((o) => o.id) } }, data: { role: "ADMIN" } });
+      countAdmins.mockRestore();
     }
   });
 

@@ -9,6 +9,10 @@ export default defineConfig({
     environment: "node",
     include: ["tests/unit/**/*.test.ts", "tests/api/**/*.test.ts"],
     testTimeout: 30_000,
+    // API tests share one development database (accounts, admin settings), so
+    // test files run one at a time: global rules such as "last administrator"
+    // or the stored AI model must not see another file's half-finished state.
+    fileParallelism: false,
     hookTimeout: 30_000,
     env: {
       // API tests exercise real route handlers against the local database.

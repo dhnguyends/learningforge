@@ -134,7 +134,10 @@ describe("middleware sign-in guard", () => {
     const cookie = (jwt: string) => ({ headers: { cookie: `next-auth.session-token=${jwt}` } });
     const user = await session("USER");
     expect((await middleware(new NextRequest("http://localhost/dashboard", cookie(user)))).status).toBe(200);
-    expect((await middleware(new NextRequest("http://localhost/admin", cookie(user)))).status).toBe(307);
+    const denied = await middleware(new NextRequest("http://localhost/admin", cookie(user)));
+    expect(denied.status).toBe(307);
+    // Signed in but standard: back to the dashboard with the "Access denied" pop-up.
+    expect(denied.headers.get("location")).toBe("http://localhost/dashboard?denied=admin");
     const admin = await session("ADMIN");
     expect((await middleware(new NextRequest("http://localhost/admin", cookie(admin)))).status).toBe(200);
   });

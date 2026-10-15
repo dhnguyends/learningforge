@@ -3,7 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma, jsonSafe } from "@/lib/db";
 import { apiHandler, ok, parseJsonBody, requireSession } from "@/lib/api";
 import { assertStudySetAccess } from "@/lib/access";
-import { getStorage } from "@/lib/storage";
+import { deleteStudySetCompletely } from "@/lib/deletion";
 import { audit } from "@/lib/audit";
 import { ensureRecovered } from "@/lib/queue/recovery";
 
@@ -114,9 +114,8 @@ export const DELETE = apiHandler<Ctx>(async (_req, { params }) => {
   const session = await requireSession();
   const studySet = await assertStudySetAccess(session.user.id, params.studySetId, "write");
 
-  // Permanent deletion: purge stored objects first, then cascade the rows.
-  await getStorage().deletePrefix(`workspaces/${studySet.workspaceId}/study-sets/${studySet.id}`);
-  await prisma.studySet.delete({ where: { id: studySet.id } });
+  // Permanent deletion of the set, its sources and their stored files.
+  await deleteStudySetCompletely(studySet.id);
   await audit({ userId: session.user.id, action: "study_set.delete", entityType: "study_set", entityId: studySet.id });
   return ok({ deleted: true });
 });

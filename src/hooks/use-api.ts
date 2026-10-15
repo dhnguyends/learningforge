@@ -727,6 +727,10 @@ export interface AdminUserRow {
   name: string | null;
   email: string;
   role: "USER" | "ADMIN";
+  /** HUMAN = a person; BOT = tests / AI agents. Only Humans can be Admin. */
+  nature: "HUMAN" | "BOT";
+  /** Last sign-in or activity (ISO), null if never used since tracking began. */
+  lastActiveAt: string | null;
   createdAt: string;
   updatedAt: string;
   _count: { studySets: number };
@@ -740,7 +744,7 @@ export function useAdminUsers() {
 
 export function useCreateUser() {
   return useLfMutation(
-    (vars: { name: string; email: string; password: string; role: "USER" | "ADMIN" }) =>
+    (vars: { name: string; email: string; password: string; role: "USER" | "ADMIN"; nature: "HUMAN" | "BOT" }) =>
       api<{ user: AdminUserRow }>("/api/admin/users", { method: "POST", body: JSON.stringify(vars) }),
     () => [adminUsersKey],
   );
@@ -748,7 +752,7 @@ export function useCreateUser() {
 
 export function useUpdateUser() {
   return useLfMutation(
-    ({ id, ...vars }: { id: string; name?: string; email?: string; password?: string; role?: "USER" | "ADMIN" }) =>
+    ({ id, ...vars }: { id: string; name?: string; email?: string; password?: string; role?: "USER" | "ADMIN"; nature?: "HUMAN" | "BOT" }) =>
       api<{ user: AdminUserRow }>(`/api/admin/users/${id}`, { method: "PATCH", body: JSON.stringify(vars) }),
     () => [adminUsersKey],
   );
@@ -756,8 +760,46 @@ export function useUpdateUser() {
 
 export function useDeleteUser() {
   return useLfMutation(
-    (id: string) => api<{ deleted: boolean }>(`/api/admin/users/${id}`, { method: "DELETE" }),
-    () => [adminUsersKey],
+    (id: string) => api<{ deleted: boolean; studySets: number; sources: number }>(`/api/admin/users/${id}`, { method: "DELETE" }),
+    () => [adminUsersKey, adminStudySetsKey],
+  );
+}
+
+/* ---------------------------- admin: courses ----------------------------- */
+
+export interface AdminStudySetRow {
+  id: string;
+  title: string;
+  subject: string | null;
+  course: string | null;
+  createdAt: string;
+  updatedAt: string;
+  owner: { id: string; name: string | null; email: string; nature: "HUMAN" | "BOT" };
+  busy: boolean;
+  _count: { sources: number; guides: number; decks: number; quizzes: number; exerciseSets: number };
+}
+
+const adminStudySetsKey = ["admin", "study-sets"] as const;
+
+export function useAdminStudySets() {
+  return useQuery({ queryKey: adminStudySetsKey, queryFn: () => api<{ studySets: AdminStudySetRow[] }>("/api/admin/study-sets") });
+}
+
+/** Delete a course (any owner) with its sources, generated material and files. */
+export function useAdminDeleteStudySet() {
+  return useLfMutation(
+    (studySetId: string) =>
+      api<{ deleted: boolean; studySets: number; sources: number }>(`/api/admin/study-sets/${studySetId}`, { method: "DELETE" }),
+    () => [adminStudySetsKey, adminUsersKey, qk.studySets],
+  );
+}
+
+/** Give a study set to another account (files and learning history move with it). */
+export function useTransferStudySet() {
+  return useLfMutation(
+    ({ studySetId, userId }: { studySetId: string; userId: string }) =>
+      api<{ filesMoved: number }>(`/api/admin/study-sets/${studySetId}/owner`, { method: "PUT", body: JSON.stringify({ userId }) }),
+    () => [adminStudySetsKey, adminUsersKey, qk.studySets],
   );
 }
 

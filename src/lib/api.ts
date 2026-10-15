@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth";
 import type { Session } from "next-auth";
 import { prisma } from "@/lib/db";
 import { getEnv, type Env } from "@/lib/env";
+import { effectiveRole } from "@/lib/admin";
 
 export class ApiError extends Error {
   status: number;
@@ -57,13 +58,23 @@ export async function requireSession(): Promise<Session> {
   if (!session?.user?.id) throw unauthorized();
   // Sessions are stateless JWTs: without this check an account deleted by an
   // administrator could keep using the API until its token expired.
-  const user = await prisma.user.findUnique({ where: { id: session.user.id }, select: { role: true } });
+  const user = await prisma.user.findUnique({ where: { id: session.user.id }, select: { role: true, nature: true, lastActiveAt: true } });
   if (!user) throw unauthorized();
-  session.user.role = user.role;
+  // Current database role (not the JWT's), and never ADMIN for a Bot account.
+  session.user.role = effectiveRole(user.role, user.nature);
+  await touchLastActive(session.user.id, user.lastActiveAt);
   return session;
 }
 
-/** Requires a signed-in ADMIN, checked against the database (not the JWT). */
+/** "Last used" (admin Users tab) is refreshed at most this often, not on every request. */
+const LAST_ACTIVE_RESOLUTION_MS = 5 * 60_000;
+
+async function touchLastActive(userId: string, lastActiveAt: Date | null): Promise<void> {
+  if (lastActiveAt && Date.now() - lastActiveAt.getTime() < LAST_ACTIVE_RESOLUTION_MS) return;
+  await prisma.user.update({ where: { id: userId }, data: { lastActiveAt: new Date() } }).catch(() => undefined);
+}
+
+/** Requires a signed-in ADMIN (Human), checked against the database (not the JWT). */
 export async function requireAdmin(): Promise<Session> {
   const session = await requireSession();
   if (session.user.role !== "ADMIN") throw forbidden();

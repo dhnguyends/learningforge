@@ -28,7 +28,8 @@ export interface TestUser {
 export async function createTestUser(name = "Api Test"): Promise<TestUser> {
   const email = `api-test-${crypto.randomUUID()}@test.lectureforge`;
   const user = await prisma.user.create({
-    data: { email, name, passwordHash: await bcrypt.hash("irrelevant-password", 4) },
+    // Test accounts are bots (also the database default).
+    data: { email, name, nature: "BOT", passwordHash: await bcrypt.hash("irrelevant-password", 4) },
   });
   const workspace = await prisma.workspace.create({
     data: { name: `${name} workspace`, ownerId: user.id, members: { create: { userId: user.id, role: "OWNER" } } },

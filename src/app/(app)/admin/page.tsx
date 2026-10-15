@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { Loader2, Pencil, Plus, ShieldCheck, Trash2, UserRound } from "lucide-react";
+import { Bot, BookOpen, Cpu, Loader2, Pencil, Plus, ShieldCheck, ShieldPlus, Trash2, UserRound, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,29 +12,118 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useAdminUsers, useCreateUser, useDeleteUser, useUpdateUser, type AdminUserRow } from "@/hooks/use-api";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AiModelCard } from "@/components/shared/ai-model-card";
+import { AdminCourses } from "@/components/shared/admin-courses";
+import { useConfirm } from "@/components/shared/confirm-dialog";
 
 type Role = "USER" | "ADMIN";
+type Nature = "HUMAN" | "BOT";
+
+const ADMIN_NEEDS_HUMAN = "Only Human accounts can be promoted to Admin — change the nature to Human first.";
+
+/** "just now", "12 min ago", "3 h ago", "5 days ago", or the date for older activity. */
+function lastUsed(iso: string | null): string {
+  if (!iso) return "Never";
+  const minutes = Math.round((Date.now() - new Date(iso).getTime()) / 60_000);
+  if (minutes < 2) return "Just now";
+  if (minutes < 60) return `${minutes} min ago`;
+  if (minutes < 48 * 60) return `${Math.round(minutes / 60)} h ago`;
+  if (minutes < 14 * 24 * 60) return `${Math.round(minutes / (24 * 60))} days ago`;
+  return new Date(iso).toLocaleDateString();
+}
 type EditorState = { mode: "create" } | { mode: "edit"; user: AdminUserRow } | null;
+
+const TABS = ["users", "ai", "courses"] as const;
+type Tab = (typeof TABS)[number];
+
+/**
+ * Administration, in three tabs: user accounts, the AI model used for
+ * generation, and courses (every study set and its owner). Every action is
+ * re-authorised server-side against the database role. The open tab is kept
+ * in the URL (?tab=) so it survives reloads and can be linked to.
+ */
+export default function AdminPage() {
+  return (
+    <Suspense fallback={null}>
+      <AdminTabs />
+    </Suspense>
+  );
+}
+
+function AdminTabs() {
+  const params = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  const requested = params.get("tab");
+  const tab: Tab = TABS.includes(requested as Tab) ? (requested as Tab) : "users";
+
+  return (
+    <div className="mx-auto max-w-6xl space-y-6 px-4 py-8 sm:px-6">
+      <div>
+        <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight">
+          <ShieldCheck className="h-5 w-5 text-primary" aria-hidden="true" /> Administration
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">Accounts, the AI model and courses for this LearningForge instance.</p>
+      </div>
+      <Tabs value={tab} onValueChange={(next) => router.replace(`${pathname}?tab=${next}`, { scroll: false })}>
+        <TabsList>
+          <TabsTrigger value="users" className="gap-1.5">
+            <Users className="h-3.5 w-3.5" aria-hidden="true" /> Users
+          </TabsTrigger>
+          <TabsTrigger value="ai" className="gap-1.5">
+            <Cpu className="h-3.5 w-3.5" aria-hidden="true" /> AI model
+          </TabsTrigger>
+          <TabsTrigger value="courses" className="gap-1.5">
+            <BookOpen className="h-3.5 w-3.5" aria-hidden="true" /> Courses
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="users" className="mt-4">
+          <UsersPanel />
+        </TabsContent>
+        <TabsContent value="ai" className="mt-4">
+          <AiModelCard />
+        </TabsContent>
+        <TabsContent value="courses" className="mt-4">
+          <AdminCourses />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
 
 /**
  * Account administration. Self-registration is disabled, so this is the only
- * way accounts are created. Every action is re-authorised server-side against
- * the database role, and the last administrator cannot be removed.
+ * way accounts are created, and the last administrator cannot be removed.
  */
-export default function AdminPage() {
+function UsersPanel() {
   const { data: session } = useSession();
   const { data, isLoading, error } = useAdminUsers();
   const [editor, setEditor] = useState<EditorState>(null);
   const [deleting, setDeleting] = useState<AdminUserRow | null>(null);
+  const update = useUpdateUser();
+  const confirm = useConfirm();
+
+  async function promote(u: AdminUserRow) {
+    const ok = await confirm({
+      title: "Promote to Admin?",
+      description: `${u.name ?? u.email} will be able to manage accounts, the AI model and courses. The change applies at once.`,
+      confirmLabel: "Promote to Admin",
+    });
+    if (!ok) return;
+    try {
+      await update.mutateAsync({ id: u.id, role: "ADMIN" });
+      toast.success(`${u.name ?? u.email} is now an Admin`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Promotion failed");
+    }
+  }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 px-4 py-8 sm:px-6">
+    <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight">
-            <ShieldCheck className="h-5 w-5 text-primary" aria-hidden="true" /> Accounts
-          </h1>
+          <h2 className="text-base font-semibold">Accounts</h2>
           <p className="mt-1 text-sm text-muted-foreground">
             LearningForge is invite-only: create accounts here and share the sign-in details with each person.
           </p>
@@ -59,7 +149,9 @@ export default function AdminPage() {
                   <th scope="col" className="px-4 py-3 font-medium">Name</th>
                   <th scope="col" className="px-4 py-3 font-medium">Email</th>
                   <th scope="col" className="px-4 py-3 font-medium">Role</th>
+                  <th scope="col" className="px-4 py-3 font-medium">Nature</th>
                   <th scope="col" className="px-4 py-3 font-medium">Study sets</th>
+                  <th scope="col" className="px-4 py-3 font-medium">Last used</th>
                   <th scope="col" className="px-4 py-3 font-medium">Created</th>
                   <th scope="col" className="px-4 py-3 text-right font-medium">
                     <span className="sr-only">Actions</span>
@@ -73,19 +165,45 @@ export default function AdminPage() {
                     <tr key={u.id} className="border-b border-border/60 last:border-0">
                       <td className="px-4 py-3">
                         <span className="inline-flex items-center gap-2 font-medium">
-                          <UserRound className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                          {u.nature === "BOT" ? (
+                            <Bot className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                          ) : (
+                            <UserRound className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                          )}
                           {u.name ?? "—"}
                           {isSelf && <Badge variant="outline" className="text-[10px]">you</Badge>}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-muted-foreground">{u.email}</td>
+                      {/* Long (test) addresses wrap so the action icons stay in view. */}
+                      <td className="max-w-[16rem] break-all px-4 py-3 text-muted-foreground">{u.email}</td>
                       <td className="px-4 py-3">
                         <Badge variant={u.role === "ADMIN" ? "default" : "secondary"}>{u.role === "ADMIN" ? "Admin" : "User"}</Badge>
                       </td>
-                      <td className="px-4 py-3 tabular-nums">{u._count.studySets}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{new Date(u.createdAt).toLocaleDateString()}</td>
                       <td className="px-4 py-3">
-                        <div className="flex justify-end gap-1">
+                        <Badge variant={u.nature === "HUMAN" ? "outline" : "secondary"}>{u.nature === "HUMAN" ? "Human" : "Bot"}</Badge>
+                      </td>
+                      <td className="px-4 py-3 tabular-nums">{u._count.studySets}</td>
+                      <td
+                        className="whitespace-nowrap px-4 py-3 text-muted-foreground"
+                        title={u.lastActiveAt ? new Date(u.lastActiveAt).toLocaleString() : "No activity recorded"}
+                      >
+                        {lastUsed(u.lastActiveAt)}
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">{new Date(u.createdAt).toLocaleDateString()}</td>
+                      <td className="whitespace-nowrap px-2 py-3">
+                        <div className="flex justify-end gap-0.5">
+                          {u.role === "USER" && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => void promote(u)}
+                              disabled={u.nature !== "HUMAN" || update.isPending}
+                              title={u.nature !== "HUMAN" ? ADMIN_NEEDS_HUMAN : "Promote to Admin"}
+                              aria-label={`Promote ${u.email} to Admin`}
+                            >
+                              <ShieldPlus className="h-4 w-4" aria-hidden="true" />
+                            </Button>
+                          )}
                           <Button variant="ghost" size="sm" onClick={() => setEditor({ mode: "edit", user: u })} aria-label={`Edit ${u.email}`}>
                             <Pencil className="h-4 w-4" aria-hidden="true" />
                           </Button>
@@ -111,8 +229,6 @@ export default function AdminPage() {
         </Card>
       )}
 
-      <AiModelCard />
-
       <UserEditor state={editor} onClose={() => setEditor(null)} />
       <DeleteDialog user={deleting} onClose={() => setDeleting(null)} />
     </div>
@@ -123,13 +239,20 @@ function UserEditor({ state, onClose }: { state: EditorState; onClose: () => voi
   const editing = state?.mode === "edit" ? state.user : null;
   const create = useCreateUser();
   const update = useUpdateUser();
-  const [form, setForm] = useState({ name: "", email: "", password: "", role: "USER" as Role });
+  // A person filling in this form is inviting a person: new accounts default to Human.
+  const [form, setForm] = useState({ name: "", email: "", password: "", role: "USER" as Role, nature: "HUMAN" as Nature });
   const [openedFor, setOpenedFor] = useState<EditorState>(null);
 
   // Reset the form whenever the dialog opens for a different target.
   if (state !== openedFor) {
     setOpenedFor(state);
-    setForm({ name: editing?.name ?? "", email: editing?.email ?? "", password: "", role: editing?.role ?? "USER" });
+    setForm({
+      name: editing?.name ?? "",
+      email: editing?.email ?? "",
+      password: "",
+      role: editing?.role ?? "USER",
+      nature: editing?.nature ?? "HUMAN",
+    });
   }
 
   const pending = create.isPending || update.isPending;
@@ -143,6 +266,7 @@ function UserEditor({ state, onClose }: { state: EditorState; onClose: () => voi
           name: form.name,
           email: form.email,
           role: form.role,
+          nature: form.nature,
           ...(form.password ? { password: form.password } : {}),
         });
         toast.success("Account updated");
@@ -198,8 +322,28 @@ function UserEditor({ state, onClose }: { state: EditorState; onClose: () => voi
                 className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <option value="USER">User — studies with their own study sets</option>
-                <option value="ADMIN">Admin — can also manage accounts</option>
+                <option value="ADMIN" disabled={form.nature !== "HUMAN"}>
+                  Admin — can also manage accounts, AI model and courses
+                </option>
               </select>
+              {form.nature !== "HUMAN" && <p className="text-xs text-muted-foreground">{ADMIN_NEEDS_HUMAN}</p>}
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="acct-nature">Nature</Label>
+              <select
+                id="acct-nature"
+                value={form.nature}
+                onChange={(e) => setForm({ ...form, nature: e.target.value as Nature })}
+                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <option value="HUMAN">Human — a person</option>
+                <option value="BOT" disabled={form.role === "ADMIN"}>
+                  Bot — automated tests or AI agents
+                </option>
+              </select>
+              {form.role === "ADMIN" && (
+                <p className="text-xs text-muted-foreground">An Admin must be Human — set the role to User before making it a Bot.</p>
+              )}
             </div>
           </div>
           <DialogFooter>
@@ -223,8 +367,8 @@ function DeleteDialog({ user, onClose }: { user: AdminUserRow | null; onClose: (
         <DialogHeader>
           <DialogTitle>Delete {user?.email}?</DialogTitle>
           <DialogDescription>
-            This permanently deletes the account, its {user?._count.studySets ?? 0} study set(s), uploaded files and study history. It
-            cannot be undone.
+            This permanently deletes the account and everything it owns: its {user?._count.studySets ?? 0} study set(s) with all their
+            sources, uploaded files, generated material and study history. It cannot be undone.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
@@ -236,8 +380,8 @@ function DeleteDialog({ user, onClose }: { user: AdminUserRow | null; onClose: (
               user &&
               void del
                 .mutateAsync(user.id)
-                .then(() => {
-                  toast.success("Account deleted");
+                .then((r) => {
+                  toast.success(`Account deleted, with ${r.studySets} study set(s) and ${r.sources} source(s)`);
                   onClose();
                 })
                 .catch((err) => toast.error(err instanceof Error ? err.message : "Delete failed"))
