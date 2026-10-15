@@ -21,7 +21,9 @@ import {
   type QuizRow,
   type AnchorRef,
   type QuizAttemptResult,
+  useIndexingReadiness,
 } from "@/hooks/use-api";
+import { IndexingNotice } from "@/components/study/indexing-notice";
 import { cn } from "@/lib/utils";
 
 const QUESTION_TYPES: { value: string; label: string }[] = [
@@ -41,6 +43,9 @@ export default function QuizPage() {
   const { studySetId } = useParams<{ studySetId: string }>();
   const { data, isLoading } = useQuizzes(studySetId);
   const generate = useGenerateQuiz(studySetId);
+  const readiness = useIndexingReadiness(studySetId);
+  // Generation waits until every source is vectorized and indexed.
+  const canGenerate = readiness.data?.ready === true;
   const [takingId, setTakingId] = useState<string | null>(null);
   const [genOpen, setGenOpen] = useState(false);
   const [count, setCount] = useState(8);
@@ -72,10 +77,12 @@ export default function QuizPage() {
             Graded server-side — answers stay hidden until you submit. Distractors explain why they&apos;re wrong.
           </p>
         </div>
-        <Button onClick={() => setGenOpen(true)} disabled={generate.isPending}>
+        <Button onClick={() => setGenOpen(true)} disabled={generate.isPending || !canGenerate}>
           <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" /> Generate quiz
         </Button>
       </div>
+
+      <IndexingNotice readiness={readiness.data} />
 
       {isLoading ? (
         <div className="h-32 animate-pulse rounded-lg bg-muted" />
@@ -164,7 +171,7 @@ export default function QuizPage() {
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setGenOpen(false)}>Cancel</Button>
-            <Button onClick={() => void onGenerate()} disabled={generate.isPending}>
+            <Button onClick={() => void onGenerate()} disabled={generate.isPending || !canGenerate}>
               {generate.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
               Generate
             </Button>

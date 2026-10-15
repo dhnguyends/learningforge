@@ -783,3 +783,25 @@ export function useTestAiChoice() {
     () => [],
   );
 }
+
+/* ------------------------- import readiness (gate) ------------------------ */
+
+export interface IndexingReadiness {
+  ready: boolean;
+  sources: { total: number; ready: number; processing: number; failed: number };
+  pendingChunks: number;
+  reason: string | null;
+}
+
+/**
+ * Generation (guide, flashcards, quiz, exercises) is only allowed once every
+ * source is vectorized and indexed. Polls while an import is running; the key
+ * nests under the study set, so invalidating the set refreshes it too.
+ */
+export function useIndexingReadiness(studySetId: string) {
+  return useQuery({
+    queryKey: [...qk.studySet(studySetId), "readiness"],
+    queryFn: () => api<IndexingReadiness>(`/api/study-sets/${studySetId}/readiness`),
+    refetchInterval: (q) => (q.state.data && !q.state.data.ready && q.state.data.sources.processing > 0 ? 4000 : false),
+  });
+}

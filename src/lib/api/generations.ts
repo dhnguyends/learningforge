@@ -1,6 +1,7 @@
 import type { JobType } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { rateLimited } from "@/lib/api";
+import { ApiError, rateLimited } from "@/lib/api";
+import { getIndexingReadiness } from "@/lib/retrieval/readiness";
 import { rateLimit } from "@/lib/rate-limit";
 import { enqueue, type JobName } from "@/lib/queue";
 
@@ -25,4 +26,14 @@ export async function startGeneration(opts: {
     generationJobId: job.id,
   });
   return { jobId: job.id };
+}
+
+/**
+ * Generation waits until the whole study set is imported (every source READY,
+ * every passage vectorized and indexed). Called before any artifact row is
+ * created, so a refused request leaves nothing behind.
+ */
+export async function assertSourcesIndexed(studySetId: string): Promise<void> {
+  const readiness = await getIndexingReadiness(studySetId);
+  if (!readiness.ready) throw new ApiError(409, readiness.reason ?? "Sources are not ready", "sources_not_ready");
 }

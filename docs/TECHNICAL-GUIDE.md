@@ -313,6 +313,7 @@ UI phases (`pipeline-phases.ts`): **Uploading → Extracting text → Chunking �
 
 ### 5.3 Generation (guide, flashcards, quiz, exercises, recap)
 
+0. **Import gate:** the route first calls `assertSourcesIndexed()` (`src/lib/retrieval/readiness.ts`). It answers 409 `sources_not_ready`, and creates nothing, until every source is READY and every passage has a vector from the current embeddings model. The UI reads `GET /api/study-sets/:id/readiness` to disable the generate buttons and explain why. Post-import auto-generation (`maybeAutoGenerate`) waits for the same condition, so it runs when the *last* source finishes, once per set (job `idempotencyKey`).
 1. The route creates the artifact row (`Quiz`, `ExerciseSet`, …) and calls `startGeneration()`. That function applies the rate limit, creates a `GenerationJob`, and enqueues it.
 2. The processor retrieves context: `searchChunks(studySetId, topic, {k})` (cosine similarity, READY sources only).
 3. It calls `(await getGenerator()).generate({schema})`. The output is Zod-validated, with one repair round.

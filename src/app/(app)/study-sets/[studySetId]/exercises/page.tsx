@@ -31,7 +31,9 @@ import {
   useRevealSolution,
   type ExerciseRow,
   type AnchorRef,
+  useIndexingReadiness,
 } from "@/hooks/use-api";
+import { IndexingNotice } from "@/components/study/indexing-notice";
 import { cn } from "@/lib/utils";
 
 const EXERCISE_TYPES = ["derivation", "quantitative", "proof", "algorithm_design", "code_completion", "code_debugging", "conceptual_transfer", "paper_critique"];
@@ -40,6 +42,9 @@ export default function ExercisesPage() {
   const { studySetId } = useParams<{ studySetId: string }>();
   const { data, isLoading } = useExerciseSets(studySetId);
   const generate = useGenerateExercises(studySetId);
+  const readiness = useIndexingReadiness(studySetId);
+  // Generation waits until every source is vectorized and indexed.
+  const canGenerate = readiness.data?.ready === true;
   const [openSetId, setOpenSetId] = useState<string | null>(null);
   const [genOpen, setGenOpen] = useState(false);
   const [topic, setTopic] = useState("");
@@ -70,10 +75,12 @@ export default function ExercisesPage() {
             Advanced STEM problems with prerequisites, assumptions, progressive hints, and rubric-based feedback.
           </p>
         </div>
-        <Button onClick={() => setGenOpen(true)} disabled={generate.isPending}>
+        <Button onClick={() => setGenOpen(true)} disabled={generate.isPending || !canGenerate}>
           <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" /> Generate exercises
         </Button>
       </div>
+
+      <IndexingNotice readiness={readiness.data} />
 
       {isLoading ? (
         <div className="h-32 animate-pulse rounded-lg bg-muted" />
@@ -157,7 +164,7 @@ export default function ExercisesPage() {
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setGenOpen(false)}>Cancel</Button>
-            <Button onClick={() => void onGenerate()} disabled={generate.isPending}>
+            <Button onClick={() => void onGenerate()} disabled={generate.isPending || !canGenerate}>
               {generate.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
               Generate
             </Button>

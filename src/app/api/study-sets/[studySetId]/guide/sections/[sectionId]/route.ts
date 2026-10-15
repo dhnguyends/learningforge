@@ -2,7 +2,7 @@ import { z } from "zod";
 import { prisma, jsonSafe } from "@/lib/db";
 import { apiHandler, ok, parseJsonBody, requireSession, notFound } from "@/lib/api";
 import { assertStudySetAccess } from "@/lib/access";
-import { startGeneration } from "@/lib/api/generations";
+import { assertSourcesIndexed, startGeneration } from "@/lib/api/generations";
 
 type Ctx = { params: { studySetId: string; sectionId: string } };
 
@@ -52,6 +52,7 @@ export const PATCH = apiHandler<Ctx>(async (req, { params }) => {
 export const POST = apiHandler<Ctx>(async (_req, { params }) => {
   const session = await requireSession();
   const studySet = await assertStudySetAccess(session.user.id, params.studySetId, "write");
+  await assertSourcesIndexed(studySet.id);
   const section = await prisma.studyGuideSection.findFirst({
     where: { id: params.sectionId, guide: { studySetId: studySet.id } },
   });

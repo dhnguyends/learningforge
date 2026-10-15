@@ -2,7 +2,7 @@ import { z } from "zod";
 import { prisma, jsonSafe } from "@/lib/db";
 import { apiHandler, ok, parseJsonBody, requireSession } from "@/lib/api";
 import { assertStudySetAccess } from "@/lib/access";
-import { startGeneration } from "@/lib/api/generations";
+import { assertSourcesIndexed, startGeneration } from "@/lib/api/generations";
 
 type Ctx = { params: { studySetId: string } };
 
@@ -42,6 +42,7 @@ const generateSchema = z.object({
 export const POST = apiHandler<Ctx>(async (req, { params }) => {
   const session = await requireSession();
   const studySet = await assertStudySetAccess(session.user.id, params.studySetId, "write");
+  await assertSourcesIndexed(studySet.id);
   const body = await parseJsonBody(req, generateSchema);
 
   const exerciseSet = await prisma.exerciseSet.create({

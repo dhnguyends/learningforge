@@ -31,7 +31,9 @@ import {
   useEditCard,
   type FlashcardRow,
   type AnchorRef,
+  useIndexingReadiness,
 } from "@/hooks/use-api";
+import { IndexingNotice } from "@/components/study/indexing-notice";
 import { cn } from "@/lib/utils";
 import { CLOZE_BLANK, clozeAnswer, clozeBack, clozeFront, hasCloze } from "@/lib/cloze";
 
@@ -78,12 +80,14 @@ function DeckPanel({
   onBrowse: (deckId: string) => void;
 }) {
   const generate = useGenerateDeck(studySetId);
+  const readiness = useIndexingReadiness(studySetId);
+  // Generation waits until every source is vectorized and indexed.
+  const canGenerate = readiness.data?.ready === true;
   const [genOpen, setGenOpen] = useState(false);
   const [focus, setFocus] = useState("");
   const [count, setCount] = useState(14);
   const [types, setTypes] = useState<string[]>([]);
 
-  const sourcesReady = (decks?.length ?? 0) >= 0; // generation requires indexed sources; button shows clear error otherwise
 
   async function onGenerate() {
     try {
@@ -108,10 +112,12 @@ function DeckPanel({
             Scheduled with FSRS-4.5 at ~90% target retention. Every card cites the source it came from.
           </p>
         </div>
-        <Button onClick={() => setGenOpen(true)} disabled={generate.isPending}>
+        <Button onClick={() => setGenOpen(true)} disabled={generate.isPending || !canGenerate}>
           <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" /> New deck
         </Button>
       </div>
+
+      <IndexingNotice readiness={readiness.data} />
 
       {isLoading ? (
         <div className="h-32 animate-pulse rounded-lg bg-muted" />
@@ -123,7 +129,7 @@ function DeckPanel({
               <p className="font-medium">No decks yet</p>
               <p className="mt-1 text-sm text-muted-foreground">Generate a deck from your indexed sources — cloze, equations, code, concepts.</p>
             </div>
-            <Button onClick={() => setGenOpen(true)} disabled={!sourcesReady}>Generate flashcards</Button>
+            <Button onClick={() => setGenOpen(true)} disabled={!canGenerate}>Generate flashcards</Button>
           </CardContent>
         </Card>
       ) : (
@@ -206,7 +212,7 @@ function DeckPanel({
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setGenOpen(false)}>Cancel</Button>
-            <Button onClick={() => void onGenerate()} disabled={generate.isPending}>
+            <Button onClick={() => void onGenerate()} disabled={generate.isPending || !canGenerate}>
               {generate.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
               Generate
             </Button>

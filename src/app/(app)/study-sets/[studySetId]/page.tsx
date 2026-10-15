@@ -24,12 +24,13 @@ import { Input } from "@/components/ui/input";
 import { JobProgressRow } from "@/components/shared/job-status";
 import { PipelineStatusBar } from "@/components/shared/pipeline-status";
 import { ingestJobFor } from "@/lib/pipeline-phases";
-import { useStudySet, useGenerateGuide, useGenerateDeck, useGenerateQuiz, useGenerateExercises, usePatchStudySet } from "@/hooks/use-api";
+import { useStudySet, useGenerateGuide, useGenerateDeck, useGenerateQuiz, useGenerateExercises, usePatchStudySet, useIndexingReadiness } from "@/hooks/use-api";
 
 export default function OverviewTab() {
   const { studySetId } = useParams<{ studySetId: string }>();
   const { data, isLoading } = useStudySet(studySetId);
   const patch = usePatchStudySet(studySetId);
+  const readiness = useIndexingReadiness(studySetId);
   const genGuide = useGenerateGuide(studySetId);
   const genDeck = useGenerateDeck(studySetId);
   const genQuiz = useGenerateQuiz(studySetId);
@@ -78,6 +79,8 @@ export default function OverviewTab() {
   }
 
   const ready = set.counts.sourcesReady > 0;
+  // Generation waits for the WHOLE set to be imported (vectorized + indexed).
+  const blockedReason = readiness.data?.ready ? null : (readiness.data?.reason ?? "Checking sources…");
   const examDays = set.examDate ? Math.ceil((new Date(set.examDate).getTime() - Date.now()) / 86400000) : null;
 
   return (
@@ -126,13 +129,13 @@ export default function OverviewTab() {
         </p>
       </div>
 
-      {!ready && (
+      {blockedReason && (
         <Card className="border-primary/40 bg-primary/5">
           <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
             <p className="text-sm">
               {set.counts.sources === 0
                 ? "No sources yet — upload a lecture, paper, or notes to get started."
-                : "Sources are still processing. Outputs will generate automatically once they're indexed."}
+                : `${blockedReason} Study guide, flashcards, quizzes and exercises are generated only from fully imported sources.`}
             </p>
             <Button asChild size="sm">
               <Link href={`/create?studySetId=${studySetId}`}>
@@ -151,6 +154,7 @@ export default function OverviewTab() {
           state={guide ? (guide.status === "GENERATING" ? "generating" : `${guide.sections?.length ?? 0} sections`) : "not created"}
           busy={guide?.status === "GENERATING"}
           disabled={!ready}
+          blockedReason={blockedReason}
           href={guide ? `/study-sets/${studySetId}/guide` : undefined}
           onAction={
             guide
@@ -166,6 +170,7 @@ export default function OverviewTab() {
           state={deck ? `${data?.decks.reduce((n, d) => n + d.total, 0)} cards · ${data?.decks.reduce((n, d) => n + d.due, 0)} due` : "not created"}
           busy={genDeck.isPending}
           disabled={!ready}
+          blockedReason={blockedReason}
           href={deck ? `/study-sets/${studySetId}/flashcards` : undefined}
           onAction={() => void run("Flashcards", () => genDeck.mutateAsync(deck ? { deckId: deck.id } : {}))}
           actionLabel={deck ? "Add cards" : "Generate"}
@@ -177,6 +182,7 @@ export default function OverviewTab() {
           state={data?.quizzes.length ? `${data.quizzes.length} generated` : "not created"}
           busy={genQuiz.isPending}
           disabled={!ready}
+          blockedReason={blockedReason}
           href={data?.quizzes.length ? `/study-sets/${studySetId}/quiz` : undefined}
           onAction={() => void run("Quiz", () => genQuiz.mutateAsync({ difficulty: "adaptive" }))}
           actionLabel="Generate"
@@ -188,6 +194,7 @@ export default function OverviewTab() {
           state={data?.exerciseSets.length ? `${data.exerciseSets.length} sets` : "not created"}
           busy={genExercises.isPending}
           disabled={!ready}
+          blockedReason={blockedReason}
           href={data?.exerciseSets.length ? `/study-sets/${studySetId}/exercises` : undefined}
           onAction={() => void run("Exercises", () => genExercises.mutateAsync({}))}
           actionLabel="Generate"
@@ -277,6 +284,7 @@ function ActionCard({
   href,
   busy,
   disabled,
+  blockedReason,
   enabled = true,
 }: {
   icon: LucideIcon;
@@ -287,6 +295,8 @@ function ActionCard({
   href?: string;
   busy?: boolean;
   disabled?: boolean;
+  /** Set while generation is not allowed (sources still importing); shown as the button's tooltip. */
+  blockedReason?: string | null;
   enabled?: boolean;
 }) {
   return (
@@ -308,7 +318,13 @@ function ActionCard({
               <Link href={href} aria-label={`Open ${title.toLowerCase()}`}>Open</Link>
             </Button>
           )}
-          <Button size="sm" variant="ghost" onClick={onAction} disabled={disabled || busy}>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={onAction}
+            disabled={disabled || busy || Boolean(blockedReason)}
+            title={blockedReason ?? undefined}
+          >
             {busy && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden="true" />}
             {actionLabel}
           </Button>

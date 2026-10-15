@@ -11,7 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Markdown } from "@/components/shared/markdown";
 import { ClaimBadge } from "@/components/shared/claim-badge";
 import { CitationList, type AnchorData } from "@/components/shared/citation-chip";
-import { useGuide, useGenerateGuide, usePatchGuideSection, useRegenerateSection, useGenerateRecap, type GuideSectionRow } from "@/hooks/use-api";
+import { useGuide, useGenerateGuide, usePatchGuideSection, useRegenerateSection, useGenerateRecap, useIndexingReadiness, type GuideSectionRow } from "@/hooks/use-api";
+import { IndexingNotice } from "@/components/study/indexing-notice";
 
 const STYLES: { value: string; label: string }[] = [
   { value: "LECTURE_NOTES", label: "Lecture notes" },
@@ -26,6 +27,8 @@ export default function GuidePage() {
   const { data, isLoading } = useGuide(studySetId);
   const generate = useGenerateGuide(studySetId);
   const recap = useGenerateRecap(studySetId);
+  const readiness = useIndexingReadiness(studySetId);
+  const canGenerate = readiness.data?.ready === true;
 
   const [style, setStyle] = useState("LECTURE_NOTES");
   const guide = data?.guide;
@@ -67,6 +70,7 @@ export default function GuidePage() {
               provenance label.
             </p>
           </div>
+          <IndexingNotice readiness={readiness.data} />
           <div className="flex items-center gap-2">
             <Select value={style} onValueChange={setStyle}>
               <SelectTrigger className="w-44" aria-label="Guide style"><SelectValue /></SelectTrigger>
@@ -76,7 +80,7 @@ export default function GuidePage() {
                 ))}
               </SelectContent>
             </Select>
-            <Button onClick={() => void onGenerate(false)} disabled={generate.isPending}>
+            <Button onClick={() => void onGenerate(false)} disabled={generate.isPending || !canGenerate}>
               {generate.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
               Generate guide
             </Button>
@@ -115,11 +119,13 @@ export default function GuidePage() {
               ))}
             </SelectContent>
           </Select>
-          <Button variant="outline" size="sm" onClick={() => void onGenerate(true)} disabled={generate.isPending}>
+          <Button variant="outline" size="sm" onClick={() => void onGenerate(true)} disabled={generate.isPending || !canGenerate}>
             <RefreshCw className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" /> Regenerate all
           </Button>
         </div>
       </div>
+
+      <IndexingNotice readiness={readiness.data} />
 
       {/* Audio recap */}
       <Card>
@@ -162,6 +168,7 @@ export default function GuidePage() {
 function GuideSection({ section, studySetId }: { section: GuideSectionRow; studySetId: string }) {
   const patch = usePatchGuideSection(studySetId);
   const regen = useRegenerateSection(studySetId);
+  const canGenerate = useIndexingReadiness(studySetId).data?.ready === true;
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(section.title);
   const [content, setContent] = useState(section.content);
@@ -226,7 +233,7 @@ function GuideSection({ section, studySetId }: { section: GuideSectionRow; study
             <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="Edit section" onClick={() => setEditing((v) => !v)}>
               <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
             </Button>
-            <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="Regenerate this section only" onClick={() => void regenerate()} disabled={regen.isPending}>
+            <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="Regenerate this section only" onClick={() => void regenerate()} disabled={regen.isPending || !canGenerate}>
               <RefreshCw className={`h-3.5 w-3.5 ${regen.isPending ? "animate-spin" : ""}`} aria-hidden="true" />
             </Button>
           </div>

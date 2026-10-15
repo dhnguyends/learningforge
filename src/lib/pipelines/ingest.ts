@@ -1,4 +1,4 @@
-import type { Source, SourceAsset, StudySet } from "@prisma/client";
+import { Prisma, type Source, type SourceAsset, type StudySet } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { getStorage, sourceDerivedKey } from "@/lib/storage";
 import { getTranscriber } from "@/lib/transcription";
@@ -6,6 +6,7 @@ import { extractAudio, probeMedia, fetchYouTubeAudio } from "@/lib/media/ffmpeg"
 import { parseDocument } from "@/lib/documents/parse";
 import { chunkTranscript, chunkDocument } from "@/lib/retrieval/chunking";
 import { indexChunks } from "@/lib/retrieval";
+import { getIndexingReadiness } from "@/lib/retrieval/readiness";
 import type { JobContext } from "@/lib/queue/types";
 import { enqueue } from "@/lib/queue";
 import { audit } from "@/lib/audit";
@@ -214,20 +215,23 @@ async function indexAndFinish(
   await ctx.updateStage("complete", 100);
 }
 
-// --- Auto-generation after first successful ingest --------------------------------
+// --- Auto-generation once the whole set is imported ---------------------------
 
+/**
+ * Creates the requested outputs (guide, flashcards) once — when the LAST
+ * source of the set finishes importing, never from a partly imported set.
+ * Each source's completion calls this; only the call that finds every source
+ * vectorized and indexed proceeds, and the idempotency key on the job keeps two
+ * sources finishing together from generating twice.
+ */
 async function maybeAutoGenerate(studySetId: string): Promise<void> {
   const studySet = await prisma.studySet.findUnique({
     where: { id: studySetId },
-    include: { sources: { select: { status: true } }, guides: { select: { id: true } }, decks: { select: { id: true } } },
+    include: { guides: { select: { id: true } }, decks: { select: { id: true } } },
   });
-  if (!studySet) return;
-  const settings = studySet.settings as Record<string, unknown>;
+  if (!studySet || studySet.outputTypes.length === 0) return;
+  if (!(await getIndexingReadiness(studySetId)).ready) return;
   const outputs = studySet.outputTypes;
-  const readyCount = studySet.sources.filter((s) => s.status === "READY").length;
-  if (readyCount === 0 || outputs.length === 0) return;
-  // Only auto-generate once the first source is ready (user can regenerate later).
-  if (readyCount > 1 && settings.autoGenerate !== "always") return;
 
   const created: { id: string; type: string }[] = [];
   if (outputs.includes("GUIDE") && studySet.guides.length === 0) {
@@ -242,13 +246,25 @@ async function maybeAutoGenerate(studySetId: string): Promise<void> {
   }
 
   for (const item of created) {
-    const job = await prisma.generationJob.create({
-      data: {
-        studySetId,
-        type: item.type === "guide" ? "GENERATE_GUIDE" : "GENERATE_FLASHCARDS",
-        payload: { [item.type === "guide" ? "guideId" : "deckId"]: item.id },
-      },
-    });
+    let job;
+    try {
+      job = await prisma.generationJob.create({
+        data: {
+          studySetId,
+          type: item.type === "guide" ? "GENERATE_GUIDE" : "GENERATE_FLASHCARDS",
+          payload: { [item.type === "guide" ? "guideId" : "deckId"]: item.id },
+          idempotencyKey: `auto:${item.type}:${studySetId}`,
+        },
+      });
+    } catch (err) {
+      // Another source finished at the same moment and already started it.
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+        if (item.type === "guide") await prisma.studyGuide.delete({ where: { id: item.id } });
+        else await prisma.flashcardDeck.delete({ where: { id: item.id } });
+        continue;
+      }
+      throw err;
+    }
     if (item.type === "guide") {
       await enqueue("generate.guide", { studySetId, guideId: item.id, generationJobId: job.id });
     } else {
