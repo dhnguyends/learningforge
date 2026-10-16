@@ -193,6 +193,11 @@ TRANSCRIPTION_PROVIDER=mock
 TTS_PROVIDER=mock
 GENERATION_RATE_LIMIT_PER_HOUR=30
 EOF
+# Cloud keys (e.g. ZAI_API_KEY, GEMINI_API_KEY) live only on the pod, in
+# $DATA_DIR/extra.env, and survive redeploys; later lines override the above.
+if [ -s "$DATA_DIR/extra.env" ]; then
+  { echo; echo "# From $DATA_DIR/extra.env"; cat "$DATA_DIR/extra.env"; } >> "$APP_DIR/.env.production.local"
+fi
 # Prisma CLI / scripts read .env, not .env.production.local.
 ln -sf .env.production.local "$APP_DIR/.env"
 

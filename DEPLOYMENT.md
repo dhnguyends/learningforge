@@ -153,6 +153,12 @@ Access and accounts on the pod:
   `ssh … 'cd ~/lectureforge && ADMIN_PASSWORD=… npx tsx scripts/create-admin.ts you@example.com "Your Name"'`,
   then manage everyone else at `/admin`.
 
+Cloud keys on the pod (optional): put them in `~/lectureforge-data/extra.env`
+(for example `ZAI_API_KEY`, `GLM_AI_MODEL`, `GEMINI_API_KEY`). `setup.sh` appends
+that file to the generated env on every deploy, so the keys never travel through
+git. Send it over SSH without echoing it:
+`grep -E '^(ZAI|GLM)_' .env | ssh … 'umask 077 && cat > ~/lectureforge-data/extra.env'`.
+
 Know before you use it:
 
 - **Pods launched without persistent storage lose everything when stopped.** Run
