@@ -1,6 +1,6 @@
 # PolyLingue — build plan
 
-_Date: 2026-10-16 · Status: Phase 1 (MVP) built, with immersion from B2; Phase 2 complete (skills, adaptive difficulty within the chosen level, placement test, hints, lessons from your own material); Phases 3–5 planned_
+_Date: 2026-10-16 · Status: Phase 1 (MVP) built, with immersion from B2; Phase 2 complete (skills, adaptive difficulty within the chosen level, placement test, hints, lessons from your own material); Phase 3 built (reminders in the app and as browser notifications, installable app with offline lessons, badges and streak freezes, friends' leagues by invite code, weekly summary); Phases 4–5 planned_
 
 ## What we are building (my understanding)
 
@@ -110,16 +110,16 @@ Goal: a learner can start a language, take short lessons with instant feedback a
     - Turn a LearningForge source in the target language (a transcript or document, or its reading translation) into a lesson: key vocabulary and exercises.
     - Its words go into review.
 
-## Phase 3 — Habit and motivation
+## Phase 3 — Habit and motivation ✅ built
 
-21. **Reminders.**
+21. **Reminders. ✅ built (in the app and as browser notifications; e-mail not built).**
     - Browser notifications (Web Push with a service worker) at the time the learner chooses.
-    - Optional daily e-mail through `SMTP_URL`.
+    - Optional daily e-mail through `SMTP_URL` (left for later: in-app and push were chosen).
     - "Your streak is at risk" in the evening.
-22. **Installable app (PWA).** Manifest and icons, "Add to home screen", and the next lessons cached for offline practice.
-23. **Achievements.** Badges such as first lesson, 7-day streak, 100 words, perfect lesson; plus a streak freeze earned with XP.
-24. **Leaderboards.** Weekly XP leagues, opt-in, among friends or a class only. No public ranking by default.
-25. **Weekly summary.** XP, time, words, and the skills to work on.
+22. **Installable app (PWA). ✅ built.** Manifest and icons, "Add to home screen", and the next lessons cached for offline practice.
+23. **Achievements. ✅ built** (16 badges per language). Badges such as first lesson, 7-day streak, 100 words, perfect lesson; plus a streak freeze earned with XP.
+24. **Leaderboards. ✅ built** as friends' leagues joined with an invite code and a nickname (class leagues come with Phase 4). Weekly XP leagues, opt-in, among friends or a class only. No public ranking by default.
+25. **Weekly summary. ✅ built.** XP, time, words, and the skills to work on.
 
 ## Phase 4 — Teacher dashboard ("PolyLingue for Schools")
 

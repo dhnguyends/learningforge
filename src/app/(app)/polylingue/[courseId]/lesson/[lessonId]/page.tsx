@@ -1,18 +1,62 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { LessonPlayer } from "@/components/polylingue/lesson-player";
+import { OfflineCourse } from "@/components/polylingue/offline-lessons";
 import { usePlayerLesson, usePolyCourse } from "@/hooks/use-polylingue";
+import { isNetworkError, savedPackage, type OfflinePackage } from "@/lib/polylingue/pwa-client";
 
 /** A PolyLingue lesson: written by the AI model the first time it is opened, then played. */
 export default function PolyLessonPage() {
   const { courseId, lessonId } = useParams<{ courseId: string; lessonId: string }>();
   const { data: course } = usePolyCourse(courseId);
   const { data: lesson, error, refetch, isFetching } = usePlayerLesson(courseId, lessonId);
+  // Without a connection: the copy saved on this device (corrected in the browser). The server
+  // counts as unreachable on a network error, when the browser says it is offline, or after 4 s
+  // without an answer (some browsers report "online" behind a dead connection).
+  const [saved, setSaved] = useState<OfflinePackage | null | undefined>(undefined);
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    void savedPackage(courseId)
+      .then(setSaved)
+      .catch(() => setSaved(null));
+  }, [courseId]);
+  useEffect(() => {
+    if (lesson) return;
+    const t = setTimeout(() => setSlow(true), 4000);
+    return () => clearTimeout(t);
+  }, [lesson]);
+  const savedLesson = saved?.lessons.find((l) => l.player.id === lessonId);
+  const browserOffline = typeof navigator !== "undefined" && !navigator.onLine;
+  const unreachable = !lesson && (isNetworkError(error) || browserOffline || (slow && Boolean(savedLesson)));
+  if (unreachable) {
+    if (saved === undefined) return <div className="mx-auto mt-6 h-64 max-w-2xl animate-pulse rounded-lg bg-muted" />;
+    if (!savedLesson || !saved) return <OfflineCourse courseId={courseId} message="This lesson is not saved on this device." />;
+    const following = saved.lessons[saved.lessons.indexOf(savedLesson) + 1];
+    return (
+      <div className="mx-auto w-full max-w-2xl space-y-4 px-4 py-6 sm:px-6">
+        <div>
+          <p className="flex items-center gap-1.5 text-xs uppercase tracking-wide text-muted-foreground">
+            <WifiOff className="h-3.5 w-3.5" aria-hidden="true" /> Offline · {savedLesson.player.unitTitle}
+          </p>
+          <h1 className="text-xl font-semibold tracking-tight">{savedLesson.player.title}</h1>
+        </div>
+        <LessonPlayer
+          key={savedLesson.player.id}
+          courseId={courseId}
+          lang={saved.targetLang}
+          lesson={savedLesson.player}
+          nextHref={following ? `/polylingue/${courseId}/lesson/${following.player.id}` : `/polylingue/${courseId}`}
+          offlineExercises={savedLesson.exercises}
+        />
+      </div>
+    );
+  }
 
   const all = course?.units.flatMap((u) => u.lessons) ?? [];
   const grammar = course?.units.find((u) => u.lessons.some((l) => l.id === lessonId))?.grammar;

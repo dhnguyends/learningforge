@@ -1,0 +1,16 @@
+{
+  "name": "PolyLingue — LearningForge",
+  "short_name": "PolyLingue",
+  "description": "Learn a foreign language: short lessons, reading, listening, writing and speaking, at your level.",
+  "id": "/polylingue",
+  "start_url": "/polylingue",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0f766e",
+  "icons": [
+    { "src": "/icons/polylingue-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/polylingue-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/polylingue-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

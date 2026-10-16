@@ -57,12 +57,15 @@ export interface ProgressStats {
   xp: number;
   streak: number;
   bestStreak: number;
+  /** Streak freezes held, and XP towards the next one. */
+  streakFreezes: number;
+  freezeXp: number;
   lessonsDone: number;
   words: number;
   mastered: number;
   accuracy: number | null;
   activeDays: number;
-  days: { day: string; xp: number; minutes: number }[];
+  days: { day: string; xp: number; minutes: number; frozen: boolean }[];
   weakWords: { id: string; term: string; translation: string; lapses: number }[];
   dailyGoalMinutes: number;
   skills: { name: string; answers: number; accuracy: number | null }[];
@@ -162,6 +165,8 @@ export function useCompleteLesson(courseId: string, lessonId: string) {
       void qc.invalidateQueries({ queryKey: keys.course(courseId) });
       void qc.invalidateQueries({ queryKey: keys.courses });
       void qc.invalidateQueries({ queryKey: keys.progress(courseId) });
+      // Badges just earned show at once.
+      void qc.invalidateQueries({ queryKey: ["polylingue", "notifications"] });
     },
   });
 }
@@ -402,4 +407,107 @@ export function useCreateSourceLesson(courseId: string) {
       api<{ id: string }>(`/api/polylingue/courses/${courseId}/source-lessons`, { method: "POST", body: JSON.stringify(input) }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: keys.course(courseId) }),
   });
+}
+
+/* ------------------------------------------------- habit and motivation (3) */
+
+export type PolyNotifications = Awaited<ReturnType<typeof import("@/lib/polylingue/habits-service").notifications>>;
+export type AchievementsView = { courses: Awaited<ReturnType<typeof import("@/lib/polylingue/habits-service").listAchievements>> };
+export type LeaguesView = Awaited<ReturnType<typeof import("@/lib/polylingue/habits-service").myLeagues>>;
+export type WeeklySummary = Awaited<ReturnType<typeof import("@/lib/polylingue/habits-service").weeklySummary>>;
+export interface ReminderView {
+  enabled: boolean;
+  time: string;
+  timeZone: string;
+  streakWarning: boolean;
+  push: boolean;
+  weeklySummary: boolean;
+  pushAvailable: boolean;
+  vapidPublicKey: string | null;
+  browsers: number;
+}
+
+const habitKeys = {
+  notifications: ["polylingue", "notifications"] as const,
+  achievements: ["polylingue", "achievements"] as const,
+  leagues: ["polylingue", "leagues"] as const,
+  reminders: ["polylingue", "reminders"] as const,
+  summary: (week: string | null) => ["polylingue", "summary", week ?? "last"] as const,
+};
+
+/** Badges to announce and reminders due, checked every minute and when the window gets focus. */
+export function usePolyNotifications() {
+  return useQuery({
+    queryKey: habitKeys.notifications,
+    queryFn: () => api<PolyNotifications>("/api/polylingue/notifications"),
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
+  });
+}
+
+export function useMarkBadgesSeen() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) => api<{ ok: true }>("/api/polylingue/notifications/seen", { method: "POST", body: JSON.stringify({ ids }) }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: habitKeys.notifications }),
+  });
+}
+
+export function useAchievements() {
+  return useQuery({ queryKey: habitKeys.achievements, queryFn: () => api<AchievementsView>("/api/polylingue/achievements") });
+}
+
+export function useLeagues() {
+  return useQuery({ queryKey: habitKeys.leagues, queryFn: () => api<LeaguesView>("/api/polylingue/leagues"), refetchInterval: 60_000 });
+}
+
+export function useCreateLeague() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { name: string; nickname: string }) => api<{ id: string; code: string }>("/api/polylingue/leagues", { method: "POST", body: JSON.stringify(input) }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: habitKeys.leagues }),
+  });
+}
+
+export function useJoinLeague() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { code: string; nickname: string }) => api<{ id: string; name: string }>("/api/polylingue/leagues/join", { method: "POST", body: JSON.stringify(input) }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: habitKeys.leagues }),
+  });
+}
+
+export function useLeaveLeague() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (leagueId: string) => api<{ ok: true }>(`/api/polylingue/leagues/${leagueId}`, { method: "DELETE" }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: habitKeys.leagues }),
+  });
+}
+
+export function useReminders() {
+  return useQuery({ queryKey: habitKeys.reminders, queryFn: () => api<ReminderView>("/api/polylingue/reminders") });
+}
+
+export function useUpdateReminders() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: Partial<Pick<ReminderView, "enabled" | "time" | "timeZone" | "streakWarning" | "push" | "weeklySummary">>) =>
+      api<ReminderView>("/api/polylingue/reminders", { method: "PUT", body: JSON.stringify(input) }),
+    onSuccess: (data) => {
+      qc.setQueryData(habitKeys.reminders, data);
+      void qc.invalidateQueries({ queryKey: habitKeys.notifications });
+    },
+  });
+}
+
+export function useWeeklySummary(week: string | null) {
+  return useQuery({
+    queryKey: habitKeys.summary(week),
+    queryFn: () => api<WeeklySummary>(`/api/polylingue/summary${week ? `?week=${week}` : ""}`),
+  });
+}
+
+export function invalidateReminders(qc: ReturnType<typeof useQueryClient>) {
+  void qc.invalidateQueries({ queryKey: habitKeys.reminders });
 }

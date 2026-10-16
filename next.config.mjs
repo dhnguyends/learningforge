@@ -1,6 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
+    // src/instrumentation.ts: starts the PolyLingue reminder ticker.
+    instrumentationHook: true,
     // Keep native/optional-dependency packages out of the bundler.
     serverComponentsExternalPackages: [
       "ffmpeg-static",
@@ -14,6 +16,7 @@ const nextConfig = {
       "mammoth",
       "jszip",
       "@prisma/client",
+      "web-push",
     ],
   },
   eslint: {

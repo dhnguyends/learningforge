@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, BarChart3, CheckCircle2, Circle, Lightbulb, Loader2, Play, Repeat, Settings2, Trash2 } from "lucide-react";
+import { ArrowLeft, BarChart3, CheckCircle2, Circle, Lightbulb, Loader2, Play, Repeat, Settings2, Snowflake, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -14,6 +14,8 @@ import { useConfirm } from "@/components/shared/confirm-dialog";
 import { GoalRing, StreakBadge } from "@/components/polylingue/goal-ring";
 import { LangBadge } from "@/components/polylingue/lang-badge";
 import { SourceLessons } from "@/components/polylingue/source-lessons";
+import { OfflineCard, OfflineCourse } from "@/components/polylingue/offline-lessons";
+import { isNetworkError } from "@/lib/polylingue/pwa-client";
 import { cn } from "@/lib/utils";
 import { BASE_LANGUAGES, CEFR_LEVELS, DAILY_GOALS, LEVELS, isImmersion, targetLanguage, type Cefr } from "@/lib/polylingue/levels";
 import { useDeleteCourse, usePolyCourse, useStartCourse, useUpdateCourse, type CourseDetail } from "@/hooks/use-polylingue";
@@ -29,6 +31,8 @@ export default function PolyCoursePage() {
   const retry = useStartCourse();
 
   if (isLoading) return <div className="mx-auto mt-6 h-64 max-w-3xl animate-pulse rounded-lg bg-muted" />;
+  // Without a connection, the lessons saved on this device.
+  if (error && (isNetworkError(error) || (typeof navigator !== "undefined" && !navigator.onLine))) return <OfflineCourse courseId={courseId} />;
   if (error || !course) return <p className="mx-auto mt-6 max-w-3xl px-4 text-sm text-destructive">{error?.message ?? "Course not found"}</p>;
 
   const lang = targetLanguage(course.targetLang);
@@ -55,12 +59,21 @@ export default function PolyCoursePage() {
             <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               <StreakBadge streak={course.streak} />
               <span>Best streak {course.bestStreak}</span>
+              <span
+                className="inline-flex items-center gap-0.5 text-sky-600"
+                title={`${course.streakFreezes} streak freeze${course.streakFreezes === 1 ? "" : "s"}: each keeps your streak through a missed day`}
+              >
+                <Snowflake className="h-3.5 w-3.5" aria-hidden="true" /> {course.streakFreezes}
+                <span className="sr-only"> streak freezes</span>
+              </span>
               {course.today.goalMet && <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">Daily goal reached</Badge>}
             </div>
           </div>
           <GoalRing minutes={course.today.minutes} goal={course.dailyGoalMinutes} size={72} />
         </CardContent>
       </Card>
+
+      {course.curriculum.status === "READY" && <OfflineCard courseId={course.id} nextLessonId={course.nextLesson?.id ?? null} />}
 
       {preparing ? (
         <Card>

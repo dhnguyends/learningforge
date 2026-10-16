@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Snowflake } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { SpeakButtons } from "@/components/polylingue/speak";
 import { StreakBadge } from "@/components/polylingue/goal-ring";
@@ -35,7 +35,11 @@ export default function PolyProgressPage() {
         <>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             <Tile label="XP" value={String(s.xp)} />
-            <Tile label="Streak" value={<StreakBadge streak={s.streak} />} sub={`Best ${s.bestStreak}`} />
+            <Tile
+              label="Streak"
+              value={<StreakBadge streak={s.streak} />}
+              sub={`Best ${s.bestStreak} · ${s.streakFreezes} freeze${s.streakFreezes === 1 ? "" : "s"} (next in ${Math.max(0, 300 - s.freezeXp)} XP)`}
+            />
             <Tile label="Lessons done" value={String(s.lessonsDone)} />
             <Tile label="Active days (5 weeks)" value={String(s.activeDays)} />
             <Tile label="Words learned" value={String(s.words)} />
@@ -82,18 +86,24 @@ export default function PolyProgressPage() {
                     <div
                       key={d.day}
                       role="listitem"
-                      title={`${d.day}: ${d.minutes} min, ${d.xp} XP`}
+                      title={d.frozen && d.xp === 0 ? `${d.day}: covered by a streak freeze` : `${d.day}: ${d.minutes} min, ${d.xp} XP`}
                       className={cn(
                         "flex aspect-square items-center justify-center rounded-md text-[10px] tabular-nums",
-                        d.xp === 0 ? "bg-muted text-muted-foreground" : met ? "bg-emerald-500 text-white" : "bg-emerald-500/30",
+                        d.frozen && d.xp === 0
+                          ? "bg-sky-500/20 text-sky-700 dark:text-sky-300"
+                          : d.xp === 0
+                            ? "bg-muted text-muted-foreground"
+                            : met
+                              ? "bg-emerald-500 text-white"
+                              : "bg-emerald-500/30",
                       )}
                     >
-                      {Number(d.day.slice(8))}
+                      {d.frozen && d.xp === 0 ? <Snowflake className="h-3.5 w-3.5" aria-label="Streak freeze" /> : Number(d.day.slice(8))}
                     </div>
                   );
                 })}
               </div>
-              <p className="mt-2 text-xs text-muted-foreground">Green: daily goal reached · light green: some practice</p>
+              <p className="mt-2 text-xs text-muted-foreground">Green: daily goal reached · light green: some practice · blue: a missed day covered by a streak freeze</p>
             </CardContent>
           </Card>
 

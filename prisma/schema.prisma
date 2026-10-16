@@ -9,9 +9,9 @@ generator client {
 }
 
 datasource db {
-  provider     = "postgresql"
-  url          = env("DATABASE_URL")
-  extensions   = [vector]
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector]
 }
 
 // ---------------------------------------------------------------------------
@@ -223,23 +223,27 @@ model User {
   emailVerified DateTime?
   image         String?
   passwordHash  String?
-  preferences   Json      @default("{}")
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  preferences   Json       @default("{}")
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
 
-  accounts        Account[]
-  sessions        Session[]
-  studySets       StudySet[]         @relation("StudySetCreator")
-  tutorChats      TutorConversation[]
-  attempts        Attempt[]
-  studySessions   StudySession[]
-  progressMetrics ProgressMetric[]
-  flashcardLogs   FlashcardReview[]
-  edits           ArtifactEdit[]
-  auditLogs       AuditLog[]
-  workspaces      WorkspaceMember[]
-  languageCourses LanguageCourse[]
-  ownedWorkspaces Workspace[]     @relation("WorkspaceOwner")
+  accounts          Account[]
+  sessions          Session[]
+  studySets         StudySet[]          @relation("StudySetCreator")
+  tutorChats        TutorConversation[]
+  attempts          Attempt[]
+  studySessions     StudySession[]
+  progressMetrics   ProgressMetric[]
+  flashcardLogs     FlashcardReview[]
+  edits             ArtifactEdit[]
+  auditLogs         AuditLog[]
+  workspaces        WorkspaceMember[]
+  languageCourses   LanguageCourse[]
+  ownedWorkspaces   Workspace[]         @relation("WorkspaceOwner")
+  pushSubscriptions PushSubscription[]
+  langReminder      LangReminder?
+  langLeagues       LangLeagueMember[]
+  createdLeagues    LangLeague[]        @relation("LeagueCreator")
 
   @@map("users")
 }
@@ -291,7 +295,7 @@ model Workspace {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  owner     User             @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  owner     User              @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   members   WorkspaceMember[]
   studySets StudySet[]
 
@@ -335,21 +339,21 @@ model StudySet {
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
-  workspace    Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  createdBy    User               @relation("StudySetCreator", fields: [createdById], references: [id], onDelete: Cascade)
-  topic        TaxonomyNode?      @relation(fields: [topicId], references: [id], onDelete: SetNull)
+  workspace     Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy     User                   @relation("StudySetCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  topic         TaxonomyNode?          @relation(fields: [topicId], references: [id], onDelete: SetNull)
   relatedTopics StudySetRelatedTopic[]
-  sources      Source[]
-  guides       StudyGuide[]
-  decks        FlashcardDeck[]
-  quizzes      Quiz[]
-  exerciseSets ExerciseSet[]
+  sources       Source[]
+  guides        StudyGuide[]
+  decks         FlashcardDeck[]
+  quizzes       Quiz[]
+  exerciseSets  ExerciseSet[]
   conversations TutorConversation[]
-  jobs         GenerationJob[]
-  plans        StudyPlan[]
-  sessions     StudySession[]
-  metrics      ProgressMetric[]
-  attempts     Attempt[]
+  jobs          GenerationJob[]
+  plans         StudyPlan[]
+  sessions      StudySession[]
+  metrics       ProgressMetric[]
+  attempts      Attempt[]
 
   @@index([workspaceId])
   @@index([topicId])
@@ -369,9 +373,9 @@ model TaxonomyNode {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  parent    TaxonomyNode?  @relation("TaxonomyTree", fields: [parentId], references: [id], onDelete: Restrict)
-  children  TaxonomyNode[] @relation("TaxonomyTree")
-  studySets StudySet[]
+  parent           TaxonomyNode?          @relation("TaxonomyTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children         TaxonomyNode[]         @relation("TaxonomyTree")
+  studySets        StudySet[]
   relatedStudySets StudySetRelatedTopic[]
 
   @@unique([parentId, name])
@@ -397,27 +401,27 @@ model StudySetRelatedTopic {
 }
 
 model Source {
-  id                String      @id @default(cuid())
-  studySetId        String
-  type              SourceType
-  title             String
-  description       String?
-  status            SourceStatus @default(PENDING_UPLOAD)
-  externalUrl       String?
-  durationSec       Float?
-  language          String?
+  id                 String       @id @default(cuid())
+  studySetId         String
+  type               SourceType
+  title              String
+  description        String?
+  status             SourceStatus @default(PENDING_UPLOAD)
+  externalUrl        String?
+  durationSec        Float?
+  language           String?
   consentConfirmedAt DateTime?
-  metadata          Json        @default("{}")
-  error             String?
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
+  metadata           Json         @default("{}")
+  error              String?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
 
-  studySet  StudySet       @relation(fields: [studySetId], references: [id], onDelete: Cascade)
-  assets    SourceAsset[]
+  studySet    StudySet         @relation(fields: [studySetId], references: [id], onDelete: Cascade)
+  assets      SourceAsset[]
   transcripts Transcript[]
-  chunks    ExtractedChunk[]
-  anchors   CitationAnchor[]
-  jobs      GenerationJob[]
+  chunks      ExtractedChunk[]
+  anchors     CitationAnchor[]
+  jobs        GenerationJob[]
 
   @@index([studySetId])
   @@map("sources")
@@ -443,17 +447,17 @@ model SourceAsset {
 }
 
 model Transcript {
-  id           String   @id @default(cuid())
+  id           String      @id @default(cuid())
   sourceId     String
-  language     String   @default("en")
+  language     String      @default("en")
   provider     String
-  isPrimary    Boolean  @default(true)
+  isPrimary    Boolean     @default(true)
   status       GuideStatus @default(QUEUED)
-  wordCount    Int      @default(0)
-  segmentCount Int      @default(0)
-  metadata     Json     @default("{}")
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  wordCount    Int         @default(0)
+  segmentCount Int         @default(0)
+  metadata     Json        @default("{}")
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
 
   source   Source              @relation(fields: [sourceId], references: [id], onDelete: Cascade)
   segments TranscriptSegment[]
@@ -463,19 +467,19 @@ model Transcript {
 }
 
 model TranscriptSegment {
-  id           String   @id @default(cuid())
+  id           String  @id @default(cuid())
   transcriptId String
   idx          Int
   startMs      Int
   endMs        Int
   speaker      String?
-  text         String   @db.Text
+  text         String  @db.Text
   confidence   Float?
-  edited       Boolean  @default(false)
-  flagged      Boolean  @default(false)
+  edited       Boolean @default(false)
+  flagged      Boolean @default(false)
   note         String?
   /// Automatic translations of `text` by language, e.g. { "en": "…" }.
-  translations Json     @default("{}")
+  translations Json    @default("{}")
 
   transcript Transcript @relation(fields: [transcriptId], references: [id], onDelete: Cascade)
 
@@ -487,29 +491,29 @@ model TranscriptSegment {
 /// Semantic chunk of a source, preserving citation anchors (time range or page).
 /// Embedding column is managed via raw SQL (pgvector); Prisma treats it as null.
 model ExtractedChunk {
-  id         String    @id @default(cuid())
-  sourceId   String
-  ordinal    Int
-  kind       ChunkKind
-  heading    String?
-  content    String    @db.Text
-  page       Int?
-  startMs    Int?
-  endMs      Int?
-  speaker    String?
-  tokenCount Int
-  embedding  Unsupported("vector(1536)")?
+  id                  String                       @id @default(cuid())
+  sourceId            String
+  ordinal             Int
+  kind                ChunkKind
+  heading             String?
+  content             String                       @db.Text
+  page                Int?
+  startMs             Int?
+  endMs               Int?
+  speaker             String?
+  tokenCount          Int
+  embedding           Unsupported("vector(1536)")?
   /// Vector space the embedding belongs to (e.g. "ollama:embeddinggemma"); NULL = legacy mock-hash.
-  embeddingModel String?
+  embeddingModel      String?
   /// ISO 639-1 code of `content` ("fr", "en"); NULL = not detected (older imports).
-  language        String?
+  language            String?
   /// Set on an automatic translation (e.g. the English version of a French
   /// passage): it is searchable, but citations always point at the original.
-  translationOfId String?
+  translationOfId     String?
   /// Reading translations by language code, e.g. { "es": "…" }: shown and read
   /// aloud on the source page, never embedded or searched.
-  readingTranslations Json @default("{}")
-  createdAt  DateTime  @default(now())
+  readingTranslations Json                         @default("{}")
+  createdAt           DateTime                     @default(now())
 
   source        Source           @relation(fields: [sourceId], references: [id], onDelete: Cascade)
   anchors       CitationAnchor[]
@@ -534,14 +538,14 @@ model CitationAnchor {
   excerpt    String     @db.Text
   createdAt  DateTime   @default(now())
 
-  source Source              @relation(fields: [sourceId], references: [id], onDelete: Cascade)
-  chunk  ExtractedChunk?     @relation(fields: [chunkId], references: [id], onDelete: SetNull)
+  source Source          @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  chunk  ExtractedChunk? @relation(fields: [chunkId], references: [id], onDelete: SetNull)
 
-  guideSections  StudyGuideSection[]
-  flashcards     Flashcard[]
-  quizQuestions  QuizQuestion[]
-  exercises      Exercise[]
-  tutorMessages  TutorMessage[]
+  guideSections StudyGuideSection[]
+  flashcards    Flashcard[]
+  quizQuestions QuizQuestion[]
+  exercises     Exercise[]
+  tutorMessages TutorMessage[]
 
   @@index([sourceId])
   @@map("citation_anchors")
@@ -563,7 +567,7 @@ model StudyGuide {
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
-  studySet StudySet             @relation(fields: [studySetId], references: [id], onDelete: Cascade)
+  studySet StudySet            @relation(fields: [studySetId], references: [id], onDelete: Cascade)
   sections StudyGuideSection[]
 
   @@index([studySetId])
@@ -597,13 +601,13 @@ model StudyGuideSection {
 }
 
 model FlashcardDeck {
-  id           String   @id @default(cuid())
-  studySetId   String
-  name         String
-  algorithm    String   @default("fsrs-4.5")
-  generatedFrom Json?   // { sourceIds?, guideSectionIds? }
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id            String   @id @default(cuid())
+  studySetId    String
+  name          String
+  algorithm     String   @default("fsrs-4.5")
+  generatedFrom Json? // { sourceIds?, guideSectionIds? }
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   studySet StudySet    @relation(fields: [studySetId], references: [id], onDelete: Cascade)
   cards    Flashcard[]
@@ -613,30 +617,30 @@ model FlashcardDeck {
 }
 
 model Flashcard {
-  id            String    @id @default(cuid())
-  deckId        String
-  type          CardType
-  front         String    @db.Text
-  back          String    @db.Text
-  context       String?   @db.Text // extra source excerpt shown after reveal
-  tags          String[]  @default([])
-  suspended     Boolean   @default(false)
-  warnings      String[]  @default([])
+  id             String    @id @default(cuid())
+  deckId         String
+  type           CardType
+  front          String    @db.Text
+  back           String    @db.Text
+  context        String?   @db.Text // extra source excerpt shown after reveal
+  tags           String[]  @default([])
+  suspended      Boolean   @default(false)
+  warnings       String[]  @default([])
   // Scheduling state (FSRS-4.5 by default; algorithm is swappable per deck)
-  algorithm     String    @default("fsrs-4.5")
-  state         CardState @default(NEW)
-  stability     Float?
-  difficulty    Float?
-  dueAt         DateTime  @default(now())
-  reps          Int       @default(0)
-  lapses        Int       @default(0)
+  algorithm      String    @default("fsrs-4.5")
+  state          CardState @default(NEW)
+  stability      Float?
+  difficulty     Float?
+  dueAt          DateTime  @default(now())
+  reps           Int       @default(0)
+  lapses         Int       @default(0)
   lastReviewedAt DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  deck      FlashcardDeck      @relation(fields: [deckId], references: [id], onDelete: Cascade)
-  anchors   CitationAnchor[]
-  reviews   FlashcardReview[]
+  deck    FlashcardDeck     @relation(fields: [deckId], references: [id], onDelete: Cascade)
+  anchors CitationAnchor[]
+  reviews FlashcardReview[]
 
   @@index([deckId, dueAt])
   @@map("flashcards")
@@ -678,35 +682,35 @@ model Quiz {
 }
 
 model QuizQuestion {
-  id                 String       @id @default(cuid())
-  quizId             String
-  ordinal            Int
-  type               QuestionType
-  stem               String       @db.Text
-  options            Json? // [{id, text}]
-  answer             Json // correct option ids / expected text / numeric + tolerance / order / pairs
-  explanation        String?      @db.Text
+  id                  String       @id @default(cuid())
+  quizId              String
+  ordinal             Int
+  type                QuestionType
+  stem                String       @db.Text
+  options             Json? // [{id, text}]
+  answer              Json // correct option ids / expected text / numeric + tolerance / order / pairs
+  explanation         String?      @db.Text
   distractorRationale Json? // { optionId: why it is wrong }
-  learningObjective  String
-  difficulty         Difficulty
-  points             Float        @default(1)
-  warnings           String[]     @default([])
+  learningObjective   String
+  difficulty          Difficulty
+  points              Float        @default(1)
+  warnings            String[]     @default([])
 
-  quiz     Quiz             @relation(fields: [quizId], references: [id], onDelete: Cascade)
-  anchors  CitationAnchor[]
+  quiz    Quiz             @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  anchors CitationAnchor[]
 
   @@index([quizId])
   @@map("quiz_questions")
 }
 
 model ExerciseSet {
-  id        String      @id @default(cuid())
+  id         String      @id @default(cuid())
   studySetId String
-  title     String
-  status    GuideStatus @default(QUEUED)
-  config    Json        @default("{}")
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
+  title      String
+  status     GuideStatus @default(QUEUED)
+  config     Json        @default("{}")
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
 
   studySet  StudySet   @relation(fields: [studySetId], references: [id], onDelete: Cascade)
   exercises Exercise[]
@@ -716,25 +720,25 @@ model ExerciseSet {
 }
 
 model Exercise {
-  id               String       @id @default(cuid())
-  exerciseSetId    String
-  ordinal          Int
-  type             ExerciseType
-  title            String
-  prompt           String       @db.Text
-  prerequisites    String[]     @default([])
-  assumptions      String[]     @default([])
-  requiredKnowledge String[]    @default([])
-  expectedOutput   String?      @db.Text
-  estimatedMinutes Int          @default(15)
-  difficulty       Difficulty   @default(HARD)
-  grounded         Boolean      @default(true) // true = derived from source, false = transfer/practice
-  hints            String[]     @default([])
-  solution         String?      @db.Text // hidden until explicitly revealed
-  rubric           Json? // { criteria: [{id, description, weight}] }
-  warnings         String[]     @default([])
+  id                String       @id @default(cuid())
+  exerciseSetId     String
+  ordinal           Int
+  type              ExerciseType
+  title             String
+  prompt            String       @db.Text
+  prerequisites     String[]     @default([])
+  assumptions       String[]     @default([])
+  requiredKnowledge String[]     @default([])
+  expectedOutput    String?      @db.Text
+  estimatedMinutes  Int          @default(15)
+  difficulty        Difficulty   @default(HARD)
+  grounded          Boolean      @default(true) // true = derived from source, false = transfer/practice
+  hints             String[]     @default([])
+  solution          String?      @db.Text // hidden until explicitly revealed
+  rubric            Json? // { criteria: [{id, description, weight}] }
+  warnings          String[]     @default([])
 
-  exerciseSet ExerciseSet       @relation(fields: [exerciseSetId], references: [id], onDelete: Cascade)
+  exerciseSet ExerciseSet      @relation(fields: [exerciseSetId], references: [id], onDelete: Cascade)
   anchors     CitationAnchor[]
 
   @@index([exerciseSetId])
@@ -746,13 +750,13 @@ model Exercise {
 // ---------------------------------------------------------------------------
 
 model TutorConversation {
-  id        String   @id @default(cuid())
+  id         String   @id @default(cuid())
   studySetId String
-  userId    String
-  title     String   @default("New conversation")
-  hintsUsed Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  userId     String
+  title      String   @default("New conversation")
+  hintsUsed  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   studySet StudySet       @relation(fields: [studySetId], references: [id], onDelete: Cascade)
   user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -763,14 +767,14 @@ model TutorConversation {
 }
 
 model TutorMessage {
-  id              String      @id @default(cuid())
-  conversationId  String
-  role            MessageRole
-  content         String      @db.Text
-  claimType       ClaimType?
-  mode            String? // "answer" | "hint" | "explain_differently" | "challenge" | "reveal_solution"
-  metadata        Json        @default("{}") // { retrievalScores, notFoundInSources, ... }
-  createdAt       DateTime    @default(now())
+  id             String      @id @default(cuid())
+  conversationId String
+  role           MessageRole
+  content        String      @db.Text
+  claimType      ClaimType?
+  mode           String? // "answer" | "hint" | "explain_differently" | "challenge" | "reveal_solution"
+  metadata       Json        @default("{}") // { retrievalScores, notFoundInSources, ... }
+  createdAt      DateTime    @default(now())
 
   conversation TutorConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   anchors      CitationAnchor[]
@@ -811,19 +815,19 @@ model GenerationJob {
 }
 
 model Attempt {
-  id          String            @id @default(cuid())
+  id          String             @id @default(cuid())
   userId      String
   studySetId  String
   subjectType AttemptSubjectType
   subjectId   String // QuizQuestion.id | Exercise.id | Flashcard.id (no FK: polymorphic)
-  response    Json              @default("{}")
+  response    Json               @default("{}")
   score       Float? // 0..1
   feedback    Json? // { summary, criteria[], correctAnswer? }
   durationMs  Int?
-  createdAt   DateTime          @default(now())
+  createdAt   DateTime           @default(now())
 
-  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  studySet   StudySet      @relation(fields: [studySetId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  studySet StudySet @relation(fields: [studySetId], references: [id], onDelete: Cascade)
   // subjectId is deliberately NOT a foreign key: it points at QuizQuestion,
   // Exercise, or Flashcard depending on subjectType (polymorphic association).
   // Referential integrity is enforced in application code; the target rows are
@@ -849,13 +853,13 @@ model StudyPlan {
 }
 
 model StudySession {
-  id        String      @id @default(cuid())
-  userId    String
+  id         String      @id @default(cuid())
+  userId     String
   studySetId String
-  kind      SessionKind
-  startedAt DateTime    @default(now())
-  endedAt   DateTime?
-  metrics   Json        @default("{}")
+  kind       SessionKind
+  startedAt  DateTime    @default(now())
+  endedAt    DateTime?
+  metrics    Json        @default("{}")
 
   user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   studySet StudySet @relation(fields: [studySetId], references: [id], onDelete: Cascade)
@@ -970,28 +974,28 @@ model LangCurriculum {
 /// A learner can also make personal lessons from their own LearningForge
 /// sources (courseId and sourceId set, no place in the course order).
 model LangLesson {
-  id           String      @id @default(cuid())
-  curriculumId String
+  id            String      @id @default(cuid())
+  curriculumId  String
   /// Order in the course (unit by unit); null for a personal lesson.
-  ordinal      Int?
-  unitIndex    Int?
+  ordinal       Int?
+  unitIndex     Int?
   /// Unit title, or the source's title for a personal lesson.
-  unitTitle    String
+  unitTitle     String
   /// Owner of a personal lesson (null: shared course lesson).
-  courseId     String?
+  courseId      String?
   /// LearningForge source the personal lesson was made from (kept if the source is deleted).
-  sourceId     String?
+  sourceId      String?
   /// The excerpt of the source the lesson is built on (target language).
   sourceExcerpt String?
-  title        String
-  focus        String
-  status       GuideStatus @default(QUEUED)
+  title         String
+  focus         String
+  status        GuideStatus @default(QUEUED)
   /// { intro, words: [...], exercises: [...] } — see src/lib/polylingue/content.ts
-  content      Json?
-  model        String?
-  error        String?
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  content       Json?
+  model         String?
+  error         String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
 
   curriculum LangCurriculum       @relation(fields: [curriculumId], references: [id], onDelete: Cascade)
   owner      LanguageCourse?      @relation("OwnLessons", fields: [courseId], references: [id], onDelete: Cascade)
@@ -1017,18 +1021,23 @@ model LanguageCourse {
   bestStreak       Int       @default(0)
   /// YYYY-MM-DD in the learner's time zone.
   lastActiveDay    String?
+  /// Streak freezes held (each covers one missed day), earned with XP.
+  streakFreezes    Int       @default(0)
+  /// XP earned towards the next streak freeze.
+  freezeXp         Int       @default(0)
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
-  user       User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  curriculum LangCurriculum        @relation(fields: [curriculumId], references: [id])
-  lessons    LangLessonProgress[]
-  attempts   LangExerciseAttempt[]
-  cards      LangCard[]
-  days       LangDailyActivity[]
-  practices  LangPracticeProgress[]
-  ownPractices LangPractice[]       @relation("OwnPractices")
-  ownLessons   LangLesson[]         @relation("OwnLessons")
+  user         User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  curriculum   LangCurriculum         @relation(fields: [curriculumId], references: [id])
+  lessons      LangLessonProgress[]
+  attempts     LangExerciseAttempt[]
+  cards        LangCard[]
+  days         LangDailyActivity[]
+  practices    LangPracticeProgress[]
+  ownPractices LangPractice[]         @relation("OwnPractices")
+  ownLessons   LangLesson[]           @relation("OwnLessons")
+  achievements LangAchievement[]
 
   @@unique([userId, targetLang])
   @@map("language_courses")
@@ -1099,13 +1108,15 @@ model LangCard {
 
 /// Minutes, XP, lessons and reviews per day (learner's time zone), for goals and streaks.
 model LangDailyActivity {
-  id      String @id @default(cuid())
+  id       String  @id @default(cuid())
   courseId String
-  day     String
-  seconds Int    @default(0)
-  xp      Int    @default(0)
-  lessons Int    @default(0)
-  reviews Int    @default(0)
+  day      String
+  seconds  Int     @default(0)
+  xp       Int     @default(0)
+  lessons  Int     @default(0)
+  reviews  Int     @default(0)
+  /// A missed day covered by a streak freeze.
+  frozen   Boolean @default(false)
 
   course LanguageCourse @relation(fields: [courseId], references: [id], onDelete: Cascade)
 
@@ -1187,4 +1198,101 @@ model LangPlacementBank {
 
   @@unique([targetLang, baseLang])
   @@map("lang_placement_banks")
+}
+
+/// A badge earned in a language course (first lesson, 7-day streak, 100 words…).
+model LangAchievement {
+  id       String    @id @default(cuid())
+  courseId String
+  key      String
+  earnedAt DateTime  @default(now())
+  /// When the learner saw the "badge earned" message.
+  seenAt   DateTime?
+
+  course LanguageCourse @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([courseId, key])
+  @@map("lang_achievements")
+}
+
+/// A friends' league: learners who share its code compare their weekly XP (opt-in).
+model LangLeague {
+  id          String   @id @default(cuid())
+  name        String
+  /// Invite code, e.g. "K7Q-2MX".
+  code        String   @unique
+  createdById String
+  createdAt   DateTime @default(now())
+
+  createdBy User               @relation("LeagueCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  members   LangLeagueMember[]
+
+  @@map("lang_leagues")
+}
+
+model LangLeagueMember {
+  id       String   @id @default(cuid())
+  leagueId String
+  userId   String
+  /// Name shown to the other members (never the e-mail).
+  nickname String
+  joinedAt DateTime @default(now())
+
+  league LangLeague @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  user   User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([leagueId, userId])
+  @@index([userId])
+  @@map("lang_league_members")
+}
+
+/// A learner's PolyLingue reminders: in the app always, and as browser notifications when enabled.
+model LangReminder {
+  userId          String   @id
+  /// Daily reminder at `time` (HH:MM) in `timeZone`.
+  enabled         Boolean  @default(true)
+  time            String   @default("19:00")
+  timeZone        String   @default("UTC")
+  /// "Your streak is at risk" at 21:00 when nothing was done that day.
+  streakWarning   Boolean  @default(true)
+  /// Send them as browser notifications (needs a push subscription).
+  push            Boolean  @default(false)
+  weeklySummary   Boolean  @default(true)
+  lastReminderDay String?
+  lastWarningDay  String?
+  /// Monday (YYYY-MM-DD) of the last week whose summary was announced.
+  lastSummaryWeek String?
+  updatedAt       DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("lang_reminders")
+}
+
+/// A browser's Web Push subscription (one per browser and device).
+model PushSubscription {
+  id         String    @id @default(cuid())
+  userId     String
+  endpoint   String    @unique
+  p256dh     String
+  auth       String
+  userAgent  String?
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_subscriptions")
+}
+
+/// A lesson played offline and sent when back online: applied once.
+model LangOfflineSync {
+  /// Chosen by the browser, so a retried upload is not counted twice.
+  id        String   @id
+  courseId  String
+  lessonId  String
+  createdAt DateTime @default(now())
+
+  @@map("lang_offline_syncs")
 }

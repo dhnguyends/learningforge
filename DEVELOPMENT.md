@@ -156,6 +156,9 @@ Plan and phases: `docs/POLYLINGUE-PLAN.md`. Code: `src/lib/polylingue/` (levels,
 - **Answers never reach the browser** before they are checked: `/answer` checks on the server (`src/lib/polylingue/check.ts`).
 - **Audio:** `/api/polylingue/speech` uses the per-language voice (`speakerForLanguage`) and caches clips under `polylingue/tts/`; slow playback is the browser's `playbackRate`.
 - **Tests** (`tests/api/polylingue.test.ts`) only use language/level pairs nobody has started, and delete them afterwards, so mock lessons never reach real learners.
+- **Habit and motivation (Phase 3):** pure rules in `src/lib/polylingue/habits.ts` (streak freezes, badges, weeks, league codes, reminder timing), services in `habits-service.ts`, push in `push.ts`, offline lessons in `offline.ts`; the browser side is `pwa-client.ts` and `public/sw.js`.
+- **Browser notifications** need a VAPID key pair in `.env` (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`; generate with `npx web-push generate-vapid-keys`). `src/instrumentation.ts` then starts a once-a-minute reminder pass in the server process. Without keys, reminders show in the app only.
+- **Installable app and offline:** `public/polylingue.webmanifest` and `public/sw.js` (scope `/`, it only handles PolyLingue pages, Next.js static files and lesson audio). "Available offline" on a course page saves the next 3 lessons (with their answers, corrected in the browser) and their audio; results played offline are sent once back online through `/offline/sync`, applied once per sync id.
 
 ## Database workflow
 

@@ -121,6 +121,11 @@ const envSchema = z.object({
 
   SMTP_URL: z.string().optional(),
 
+  // Web Push for PolyLingue reminders (generate with: npx web-push generate-vapid-keys).
+  VAPID_PUBLIC_KEY: z.string().optional(),
+  VAPID_PRIVATE_KEY: z.string().optional(),
+  VAPID_SUBJECT: z.string().optional(),
+
   // GPU detection (nvidia-smi) for local processing; "off" = always report No GPU.
   GPU_DETECTION: z.enum(["auto", "off"]).default("auto"),
   // Without a GPU, local transcription/embedding/Gemma timeouts are multiplied by this.

@@ -85,6 +85,10 @@ export function isGateExempt(pathname: string): boolean {
     pathname === "/api/access" ||
     pathname.startsWith("/_next/") ||
     pathname === "/favicon.ico" ||
-    pathname === "/robots.txt"
+    pathname === "/robots.txt" ||
+    // Installable PolyLingue: browsers fetch the manifest without cookies.
+    pathname === "/polylingue.webmanifest" ||
+    pathname === "/sw.js" ||
+    pathname.startsWith("/icons/")
   );
 }

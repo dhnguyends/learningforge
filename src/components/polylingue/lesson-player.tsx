@@ -11,7 +11,8 @@ import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { SpeakButtons, useSpeak } from "@/components/polylingue/speak";
 import { useAnswer, useCompleteLesson, useHint, type AnswerResult, type PlayerLesson } from "@/hooks/use-polylingue";
-import type { LessonWord } from "@/lib/polylingue/content";
+import type { Exercise, LessonWord } from "@/lib/polylingue/content";
+import { flushOutbox, offlineRun } from "@/lib/polylingue/pwa-client";
 import type { PlayerExercise } from "@/lib/polylingue/content";
 import { MODE_LABELS, type AdaptedFields } from "@/lib/polylingue/adapt";
 
@@ -43,6 +44,7 @@ export function LessonPlayer({
   lesson,
   nextHref,
   grammar,
+  offlineExercises,
 }: {
   courseId: string;
   lang: string;
@@ -50,6 +52,8 @@ export function LessonPlayer({
   nextHref: string;
   /** Grammar focus of the lesson's unit, shown in the intro. */
   grammar?: string;
+  /** Played offline: the lesson's exercises with their answers, corrected here and sent later. */
+  offlineExercises?: Exercise[];
 }) {
   const content = lesson.content!;
   const total = content.exercises.length;
@@ -65,6 +69,12 @@ export function LessonPlayer({
   const [xp, setXp] = useState(0);
   const [summary, setSummary] = useState<{ score: number; bonusXp: number; newWords: number } | null>(null);
   const startedAt = useRef<number>(Date.now());
+  const offlineRunRef = useRef<ReturnType<typeof offlineRun> | null>(null);
+  const run = () => {
+    if (!offlineExercises) return null;
+    offlineRunRef.current ??= offlineRun(courseId, lesson.id, offlineExercises);
+    return offlineRunRef.current;
+  };
 
   /** Back to the start of the lesson (its intro); XP already earned is kept. */
   function restart() {
@@ -76,6 +86,7 @@ export function LessonPlayer({
     setSummary(null);
     setStarted(false);
     startedAt.current = Date.now();
+    offlineRunRef.current = null;
   }
 
   const item = queue[pos];
@@ -85,7 +96,8 @@ export function LessonPlayer({
   async function submit(given: string) {
     if (!item || result || answer.isPending) return;
     try {
-      const r = await answer.mutateAsync({ index: item.index, answer: given, retry: item.retry, hinted: Boolean(hint) });
+      const input = { index: item.index, answer: given, retry: item.retry, hinted: Boolean(hint) };
+      const r = run()?.answer(input) ?? (await answer.mutateAsync(input));
       setResult(r);
       setXp((x) => x + r.xp);
       if (!item.retry && r.verdict !== "wrong") setFirstTryCorrect((n) => n + 1);
@@ -97,6 +109,7 @@ export function LessonPlayer({
 
   async function showHint() {
     if (!item || hint) return;
+    if (offlineExercises) return void toast.info("Hints need a connection.");
     try {
       setHint((await hintQuery.mutateAsync(item.index)).hint);
     } catch (e) {
@@ -112,8 +125,12 @@ export function LessonPlayer({
       return;
     }
     try {
-      const s = await complete.mutateAsync({ firstTryCorrect, total, seconds: (Date.now() - startedAt.current) / 1000 });
+      const input = { firstTryCorrect, total, seconds: (Date.now() - startedAt.current) / 1000 };
+      const offline = run();
+      const s = offline ? offline.complete(input) : await complete.mutateAsync(input);
       setSummary(s);
+      // Back online already: send it now.
+      if (offline && navigator.onLine) void flushOutbox();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not save the lesson");
     }
@@ -131,7 +148,10 @@ export function LessonPlayer({
             <Stat label="New words" value={String(summary.newWords)} />
           </div>
           <p className="text-sm text-muted-foreground">
-            {summary.score === 100 ? "Perfect lesson: bonus XP! " : ""}The new words are in your review.
+            {summary.score === 100 ? "Perfect lesson: bonus XP! " : ""}
+            {offlineExercises
+              ? "Saved on this device: your XP and the lesson's words are added when you are back online."
+              : "The new words are in your review."}
           </p>
           <div className="flex flex-wrap justify-center gap-2">
             <Button asChild className="gap-1.5">

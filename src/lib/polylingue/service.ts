@@ -13,7 +13,9 @@ import { checkAnswer, type Verdict } from "@/lib/polylingue/check";
 import { EXERCISE_TYPES } from "@/lib/polylingue/levels";
 import { MODE_WINDOW, accuracy, adaptExercise, modeFor, type Mode } from "@/lib/polylingue/adapt";
 import { buildWeakSession, checkWeak, pickWeakCards, type WeakKind } from "@/lib/polylingue/weak";
-import { XP, answerXp, currentStreak, dayKey, lessonBonus, nextStreak, previousDay } from "@/lib/polylingue/progress";
+import { XP, answerXp, dayKey, lessonBonus, previousDay } from "@/lib/polylingue/progress";
+import { earnFreezes, streakOnActivity, visibleStreak } from "@/lib/polylingue/habits";
+import { checkAchievements } from "@/lib/polylingue/habits-service";
 
 /** Learner-side PolyLingue operations. Every function checks the course belongs to the user. */
 
@@ -23,11 +25,21 @@ export async function ownCourse(userId: string, courseId: string): Promise<Langu
   return course;
 }
 
-/** Adds XP, time, lessons or reviews to today, and moves the streak. */
+/**
+ * Adds XP, time, lessons or reviews to today and moves the streak: missed days
+ * are covered by streak freezes when there are enough (those days are marked
+ * frozen), and XP earns new freezes. New badges are stored for the learner.
+ */
 export async function addActivity(course: LanguageCourse, add: { xp?: number; seconds?: number; lessons?: number; reviews?: number }) {
   const today = dayKey(new Date(), course.timeZone);
   const active = (add.xp ?? 0) > 0 || (add.lessons ?? 0) > 0 || (add.reviews ?? 0) > 0;
-  const streak = active ? nextStreak(course.lastActiveDay, today, course.streak) : course.streak;
+  // The course row may be stale within a request: read the streak fields fresh.
+  const fresh = await prisma.languageCourse.findUniqueOrThrow({
+    where: { id: course.id },
+    select: { lastActiveDay: true, streak: true, bestStreak: true, streakFreezes: true, freezeXp: true },
+  });
+  const moved = active ? streakOnActivity(fresh.lastActiveDay, today, fresh.streak, fresh.streakFreezes) : null;
+  const freezes = earnFreezes(fresh.streakFreezes - (moved?.freezesUsed ?? 0), fresh.freezeXp, add.xp ?? 0);
   await prisma.$transaction([
     prisma.langDailyActivity.upsert({
       where: { courseId_day: { courseId: course.id, day: today } },
@@ -39,14 +51,24 @@ export async function addActivity(course: LanguageCourse, add: { xp?: number; se
         reviews: { increment: add.reviews ?? 0 },
       },
     }),
+    ...(moved?.frozenDays ?? []).map((day) =>
+      prisma.langDailyActivity.upsert({
+        where: { courseId_day: { courseId: course.id, day } },
+        create: { courseId: course.id, day, frozen: true },
+        update: { frozen: true },
+      }),
+    ),
     prisma.languageCourse.update({
       where: { id: course.id },
       data: {
         xp: { increment: add.xp ?? 0 },
-        ...(active ? { streak, bestStreak: Math.max(course.bestStreak, streak), lastActiveDay: today } : {}),
+        streakFreezes: freezes.freezes,
+        freezeXp: freezes.freezeXp,
+        ...(moved ? { streak: moved.streak, bestStreak: Math.max(fresh.bestStreak, moved.streak), lastActiveDay: today } : {}),
       },
     }),
   ]);
+  if (active) await checkAchievements(course.id).catch((err) => console.error("[polylingue] achievements", course.id, err));
 }
 
 /** Summary shown on cards and the course header. */
@@ -81,8 +103,9 @@ async function summary(course: LanguageCourse & { curriculum: { status: string; 
     dailyGoalMinutes: course.dailyGoalMinutes,
     timeZone: course.timeZone,
     xp: course.xp,
-    streak: currentStreak(course.lastActiveDay, today, course.streak),
+    streak: visibleStreak(course.lastActiveDay, today, course.streak, course.streakFreezes),
     bestStreak: course.bestStreak,
+    streakFreezes: course.streakFreezes,
     today: { minutes, xp: day?.xp ?? 0, lessons: day?.lessons ?? 0, reviews: day?.reviews ?? 0, goalMet: minutes >= course.dailyGoalMinutes },
     dueWords: due,
     words,
@@ -401,8 +424,10 @@ export async function progressStats(userId: string, courseId: string) {
   const answered = (counts.correct ?? 0) + (counts.almost ?? 0) + (counts.wrong ?? 0);
   return {
     xp: course.xp,
-    streak: currentStreak(course.lastActiveDay, today, course.streak),
+    streak: visibleStreak(course.lastActiveDay, today, course.streak, course.streakFreezes),
     bestStreak: course.bestStreak,
+    streakFreezes: course.streakFreezes,
+    freezeXp: course.freezeXp,
     lessonsDone,
     words,
     mastered,
@@ -411,7 +436,7 @@ export async function progressStats(userId: string, courseId: string) {
     days: days
       .slice()
       .reverse()
-      .map((d) => ({ day: d, xp: byDay.get(d)?.xp ?? 0, minutes: Math.round((byDay.get(d)?.seconds ?? 0) / 60) })),
+      .map((d) => ({ day: d, xp: byDay.get(d)?.xp ?? 0, minutes: Math.round((byDay.get(d)?.seconds ?? 0) / 60), frozen: byDay.get(d)?.frozen ?? false })),
     weakWords: weak,
     dailyGoalMinutes: course.dailyGoalMinutes,
     skills,
