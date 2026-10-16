@@ -70,7 +70,15 @@ These problems hurt relevance far more than any search tuning would.
 | Explain photosynthesis in plants (off-topic) | 0/8 → 0/8 ✅ | 0.080 → 0.154 | (rejected) |
 | How do I bake sourdough bread? (off-topic) | 0/8 → 0/8 ✅ | 0.097 → 0.113 | (rejected) |
 
-<!-- GUIDES -->
+**Study guides regenerated** with GLM-5.3-Flash (Z.ai), each reading the whole course:
+
+| Course | Sections | Citations | Time |
+|---|---|---|---|
+| Trading – From Basics to advanced | 24 | 86 (previous GLM guide: 57) | 13 min |
+| Trading – Technical Analysis Guide | 21 | 51 | 7 min |
+| Schmémas électronique | 22 | 44 | 8 min |
+
+Flashcards, quizzes and exercises were **not** regenerated: generating again adds a new deck, quiz or exercise set beside the old ones. Generate fresh ones from each course page.
 
 ## 1. What was measured
 

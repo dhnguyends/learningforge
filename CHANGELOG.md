@@ -2,9 +2,13 @@
 
 All notable changes to LearningForge.
 
-## Unreleased
+## 2.0 — 2026-10-16
+
+LearningForge becomes bilingual: French courses can be read, searched and listened to in English. This release also adds a database monitoring tab, whole-course generation, and fixes for the source viewer and the semantic-search pipeline.
 
 ### New features
+
+**Bilingual courses (French / English)**
 - **Bilingual French / English sources.**
   - The language of each source is detected at import. French sources are translated to English: every passage gets an English twin with its own embedding (so English questions find French material), and every transcript segment gets its English text. Citations always point at the original.
   - The translation runs after the source is ready, so it never delays generation. Sources imported earlier can be translated from their page with **Translate to English**.
@@ -14,7 +18,11 @@ All notable changes to LearningForge.
   - Translator: Gemma 4 (local, Ollama) or Azure AI Translator, with a test translation.
   - Read-aloud: Kokoro-82M or Piper (local, Speaches server), Azure Neural TTS or Gemini 3.8 Flash-Lite TTS, with a voice per language and a sample to listen to.
   - Cloud options show a privacy warning and stay disabled until their key is in the server `.env` (`AZURE_*`, or the Azure portal names `AZ_API_KEY1`, `AZ_VOICE_SYNTHESIS`, `AZ_API_TRANSLATE`).
+
+**Study material**
 - **Whole-course generation:** study guide, flashcards, quiz and exercises now read the **whole course** when it fits the model's budget (`WHOLE_SET_TOKEN_BUDGET`, 60k tokens for cloud models; `WHOLE_SET_TOKEN_BUDGET_LOCAL`, 6k for local Gemma). Before, they read 16–24 sampled passages.
+
+**Administration and operations**
 - **Database tab in `/admin`** for monitoring the vector database. It shows:
   - database and uploaded-file sizes;
   - courses, sources and passages, and the share of passages with a vector;
@@ -23,11 +31,20 @@ All notable changes to LearningForge.
   - the largest tables (data, indexes, overflow);
   - health of the semantic-search (HNSW) index, with a **Create / Rebuild index** button. It builds concurrently, so searches and imports keep running.
 - **GPU in the top bar.** The GPU used for local processing (transcription, embeddings, local models) is shown next to the AI model, for example "GTX 1080 Ti", or **No GPU**. It is detected with `nvidia-smi`. Without a GPU, processing runs on the CPU and its timeouts are multiplied by `CPU_TIMEOUT_FACTOR` (default 4).
+- **Cloud keys on the GPU pod** live in `~/lectureforge-data/extra.env`, which `deploy/packet/setup.sh` appends on every deploy. The keys never travel through git.
 
 ### Fixes
+
+**Source viewer**
+- **PDF sources were blank** on the source page: the app sent `X-Frame-Options: DENY` everywhere, so the browser refused to show the PDF in the page's own frame. `/api/files` now allows same-origin framing only (it serves an allow-list of types, never HTML or SVG); every other page still refuses framing.
+- **Image sources** had no preview. They now display inline, and a click opens them full size.
+- **Word (.docx) sources** could not be displayed, since browsers cannot render Word files. They are now converted to formatted text on the server (headings, lists, tables, links, embedded pictures), sanitized with a strict allow-list, with a link to download the original.
+
+**Search and generation (RAG audit, see `docs/RAG-AUDIT.md`)**
 - **Image-only PDFs** (scans, slides exported as pictures) were imported with no text and still showed READY. Pages without a text layer are now rendered and read with OCR, and a file that yields no text fails with a clear message instead.
 - **Placeholder transcripts:** mock transcription is refused outside tests unless `ALLOW_MOCK_PROVIDERS=true`, and a course whose sources still hold placeholder transcripts can't generate until they are imported again.
 - **Vector index lost on schema updates.** `prisma db push` silently dropped the HNSW vector index, so semantic search scanned every passage. `npm run db:push` and `npm run db:setup` now re-create it, and the server warns at startup when it is missing.
+- **Stuck and damaged imports** found by the audit (placeholder transcripts, a stuck YouTube import, a PDF with missing letters, image-only PDFs) were imported again, and the three study guides were regenerated from the whole course.
 
 ## 1.2 — 2026-10-16
 
