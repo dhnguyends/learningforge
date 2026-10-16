@@ -64,6 +64,20 @@ export function MediaPlayer({
         </div>
       );
     }
+    if (src.type === "IMAGE" && originalUrl) {
+      return (
+        <a
+          href={originalUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Open full size"
+          className="flex justify-center overflow-hidden rounded-lg border border-border bg-muted/40"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element -- authenticated same-origin file, not a static asset */}
+          <img src={originalUrl} alt={src.title} className="max-h-[70vh] w-auto object-contain" />
+        </a>
+      );
+    }
     return (
       <div className="flex items-center justify-center rounded-lg border border-dashed border-border p-10 text-sm text-muted-foreground">
         {src.status === "PROCESSING" ? "Still processing — preview appears when ready." : "No inline preview for this source type."}

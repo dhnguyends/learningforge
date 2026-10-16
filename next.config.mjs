@@ -37,6 +37,17 @@ const nextConfig = {
           { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
         ],
       },
+      {
+        // Uploaded sources (PDF) are shown inside the app's own pages, which
+        // DENY forbids. Same-origin framing only; /api/files serves an
+        // allow-list of types (no HTML or SVG), so nothing it returns can script
+        // the app. Later rules override the same header above.
+        source: "/api/files/:path*",
+        headers: [
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
+        ],
+      },
     ];
   },
 };
