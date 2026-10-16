@@ -2,10 +2,14 @@
 
 All notable changes to LearningForge.
 
-## Unreleased
+## 2.2 — 2026-10-16
+
+PolyLingue, a language-learning app inside LearningForge (phases 1 to 3), and sources you can translate into any language, correct by hand and scan with OCR.
 
 ### New features
-- **PolyLingue, learn a foreign language (Phase 1, MVP)**: a **PolyLingue** button on the Dashboard opens `/polylingue`.
+
+**PolyLingue**
+- **PolyLingue, learn a foreign language (Phases 1 and 2)**: a **PolyLingue** button on the Dashboard and in the Admin header opens `/polylingue`.
   - **Onboarding, level first:** choose your CEFR level (A1 to C2, each described), then the language to learn (Spanish, English, French, German, Italian, Portuguese), the language for explanations (English or French) and a daily goal (5, 10, 15 or 20 minutes). Several languages can be followed, each at its own level; the level can be changed later.
   - **A course per level:** the selected AI model writes the course for each language and level once (6 units of themed lessons with that level's vocabulary, grammar, sentence length and exercise mix), shared by every learner; each lesson is written the first time it is opened, and the next one ahead of time.
   - **Short lessons with instant correction:** 10–12 exercises of six types (multiple choice, listen and choose, match pairs, word order, fill in the blank, translate). Each answer is checked at once, forgiving case and punctuation; a missing accent or small typo counts as "almost". The correct answer and a one-line explanation follow, and missed exercises come back at the end.
@@ -29,13 +33,15 @@ All notable changes to LearningForge.
   - **Learn from your own material:** "Make a lesson" turns one of your LearningForge sources (lecture, document, video) available in the language you learn — originally or through its translation — into a personal lesson at your level, part by part; its words go into review when you finish it.
   - **Placement test** (about 5 minutes, at most 12 questions): adaptive from A2 up and down, mixing grammar, vocabulary, reading and listening; questions written once per language by the AI model and checked by a second review pass. It suggests a level that you confirm, from onboarding ("Not sure? Take the placement test") or from course settings.
   - **Left panel** on every PolyLingue page: your languages, then Lessons, Reading, Listening, Writing, Speaking, Weak words, Review and Progress of the open language (or of your most recent one on the PolyLingue home). Language badges replace flag emojis, which Windows does not draw.
-- **PolyLingue Phase 3, habit and motivation.** A "Keep going" section in the left panel: Badges, Leagues, Weekly summary and Reminders.
+- **PolyLingue Phase 3, habit and motivation.** A "Keep going" section in the left panel: Badges, Leagues, Weekly summary and Reminders. Streak freezes are also shown on the course page and progress calendar.
   - **Badges:** 16 per language (first lesson, flawless lesson, 10 and 50 lessons, 3-, 7- and 30-day streaks, 100 and 500 words, 1,000 and 5,000 XP, 100 reviews, all four skills, a lesson from your own material, daily goal 7 days in a row, saved by a streak freeze). A dialog announces each new badge once.
   - **Streak freezes:** one earned every 300 XP, two held at most. A missed day is covered by itself and shown in blue on the calendar; the course page shows how many you hold.
   - **Reminders:** a daily reminder at the time you choose when the goal is not met, "your streak is at risk" in the evening, and the weekly summary on Mondays. They show at the top of PolyLingue (dismissible for the day), and as **browser notifications** once turned on (Web Push, with a test button). The server sends each reminder once a day; expired browser subscriptions are removed.
   - **Friends' leagues:** create a league and share its invite code (like K7Q-2MX), or join one; weekly XP across all your languages, ranked from Monday, with a nickname instead of your name. Last week's podium is shown. Opt-in, up to 5 leagues of 50 members; leaving as the last member deletes the league.
   - **Weekly summary:** per language, XP and minutes (compared with the week before), active days, goal days, lessons, reviews, new words, accuracy per skill and what to work on; browse week by week.
   - **Installable app with offline lessons:** PolyLingue can be installed (manifest, icons, "Install the app" in the left panel). "Available offline" on a course page saves the next 3 lessons and their audio on the device (optionally kept up to date); without a connection they open and are corrected in the browser, and the results are added to your progress once you are back online (each run once).
+
+**Sources: translations, editing and OCR**
 - **Translate any source to read and listen to it.** The source page and the Transcript page have a **Translate…** button that lists every language the active translator offers (about 140 with Azure AI Translator, 35 with local Gemma 4). The chosen language appears as a new language pill next to the original.
   - These reading translations are **not vectorized**: search, citations and generated material are unchanged. (French sources still get their searchable English translation as before.)
   - **Read aloud** works in every language it can find a voice for: the selected model when it speaks the language, otherwise a local Kokoro (8 languages) or Piper (about 40 languages) voice, otherwise Azure Neural TTS or Gemini TTS when their key is set. The button shows the voice it uses, and is greyed out with an explanation when no voice speaks the language.
@@ -49,6 +55,16 @@ All notable changes to LearningForge.
   - Saving re-indexes what search uses: a corrected original passage, or the English search translation of a French source, gets a new embedding; a corrected transcript rebuilds the passages covering the changed segments. Reading translations are saved without being vectorized. The text before each correction is kept, and corrected passages are marked "edited". Reprocessing the source (or translating again into that language) replaces the corrections.
 - **Right-click menu on a translation** (its language pill, or the translated transcript or text; Shift+F10 from the keyboard): **Edit** it, **Translate again** into the same language, or **Delete** it. After a deletion the page offers to translate into that language again ("Translate again" / "Not now"). The original is never deleted; the confirmation says when hand corrections would be lost, or when the deleted translation is the English one search uses.
 - **Scan with OCR** on PDF and image sources: re-reads every page as an image, in the source's language (English, French, Spanish, German, Italian, Portuguese), for scans whose text is missing or garbled. A page keeps its text layer when OCR reads it less well (fewer real words, low confidence), so a good layer is never degraded. The source page says how its text was obtained: text layer, OCR on some or all pages, or text layer kept after a scan.
+
+### Fixes
+- **AI model choice kept:** the admin settings tests no longer overwrite the live AI model and speech settings (a model chosen at Admin › AI model could seem not to take effect after a test run).
+- **No "[Source 1]" markers** in texts generated for study (PolyLingue readings and lessons made from your sources).
+- **Azure read-aloud** picks a language's plain Neural voice before the HD / Dragon voices, which cost more.
+
+### Upgrade notes
+- Run `npm install` (adds `web-push`), then `npx prisma db push && node scripts/ensure-vector-index.mjs` for the new PolyLingue tables (badges, leagues, reminders, push subscriptions, offline syncs) and columns (streak freezes, frozen days).
+- **Browser notifications (optional):** add `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT` to `.env` (`npx web-push generate-vapid-keys`) and restart the server. Without them, reminders show in the app only.
+- The server now uses Next.js instrumentation (`src/instrumentation.ts`) to start the reminder pass, and serves `/sw.js`, `/polylingue.webmanifest` and `/icons/` without the access key (browsers fetch the manifest without cookies).
 
 ## 2.1 — 2026-10-16
 
