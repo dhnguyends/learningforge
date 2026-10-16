@@ -71,6 +71,20 @@
 }
 
 @layer components {
+  /* Word documents rendered on the source page (sanitized mammoth HTML). */
+  .doc-preview { @apply text-sm leading-relaxed text-foreground; }
+  .doc-preview h1 { @apply mb-3 mt-6 text-xl font-semibold; }
+  .doc-preview h2 { @apply mb-2 mt-5 text-lg font-semibold; }
+  .doc-preview h3, .doc-preview h4, .doc-preview h5, .doc-preview h6 { @apply mb-2 mt-4 font-semibold; }
+  .doc-preview p { @apply my-2; }
+  .doc-preview ul { @apply my-2 list-disc pl-6; }
+  .doc-preview ol { @apply my-2 list-decimal pl-6; }
+  .doc-preview li { @apply my-0.5; }
+  .doc-preview a { @apply text-primary underline; }
+  .doc-preview table { @apply my-3 w-full border-collapse text-xs; }
+  .doc-preview th, .doc-preview td { @apply border border-border px-2 py-1 align-top; }
+  .doc-preview img { @apply my-3 h-auto max-w-full rounded; }
+  .doc-preview blockquote { @apply my-2 border-l-2 border-border pl-3 text-muted-foreground; }
   /* Long-form study text: legible serif, generous measure. */
   .prose-study {
     @apply text-foreground;

@@ -331,6 +331,7 @@ export interface SourceDetail {
     playbackUrl: string | null;
     playbackKind: "video" | "audio" | "youtube" | "document";
     assetUrls: Record<string, string>;
+    assets: { id: string; kind: string; mimeType: string; filename: string }[];
     transcripts: { id: string; language: string | null; segments: TranscriptSegmentRow[] }[];
   };
 }
@@ -985,4 +986,14 @@ export function useTranslateSource(studySetId: string, sourceId: string) {
 /** URL of one item's read-aloud clip (generated on first request, then cached). */
 export function speechUrl(studySetId: string, sourceId: string, lang: ReaderLanguage, index: number): string {
   return `/api/study-sets/${studySetId}/sources/${sourceId}/speech?lang=${lang}&index=${index}`;
+}
+
+/** Sanitized HTML of a Word (.docx) source, which browsers cannot display themselves. */
+export function useDocumentPreview(studySetId: string, sourceId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: [...qk.source(studySetId, sourceId), "preview"],
+    queryFn: () => api<{ html: string }>(`/api/study-sets/${studySetId}/sources/${sourceId}/preview`),
+    enabled,
+    staleTime: 5 * 60_000,
+  });
 }

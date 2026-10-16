@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import type { SourceDetail, TranscriptSegmentRow } from "@/hooks/use-api";
-import { usePatchSegment } from "@/hooks/use-api";
+import { useDocumentPreview, usePatchSegment } from "@/hooks/use-api";
 import { cn, formatTimestamp } from "@/lib/utils";
 
 /* ------------------------------ media player ------------------------------ */
@@ -78,6 +78,10 @@ export function MediaPlayer({
         </a>
       );
     }
+    const original = src.assets?.find((a) => a.kind === "ORIGINAL");
+    if (original && (original.mimeType.includes("wordprocessingml") || original.filename.toLowerCase().endsWith(".docx"))) {
+      return <WordPreview studySetId={src.studySetId} sourceId={src.id} downloadUrl={originalUrl} />;
+    }
     return (
       <div className="flex items-center justify-center rounded-lg border border-dashed border-border p-10 text-sm text-muted-foreground">
         {src.status === "PROCESSING" ? "Still processing — preview appears when ready." : "No inline preview for this source type."}
@@ -89,6 +93,35 @@ export function MediaPlayer({
     <video key={key} ref={ref as React.RefObject<HTMLVideoElement>} controls preload="metadata" src={src.playbackUrl} className="max-h-[60vh] w-full rounded-lg border border-border bg-black" />
   ) : (
     <audio key={key} ref={ref as React.RefObject<HTMLAudioElement>} controls preload="metadata" src={src.playbackUrl} className="w-full rounded-lg" />
+  );
+}
+
+/** Word document shown as formatted text (converted and sanitized on the server). */
+function WordPreview({ studySetId, sourceId, downloadUrl }: { studySetId: string; sourceId: string; downloadUrl?: string }) {
+  const { data, isLoading, error } = useDocumentPreview(studySetId, sourceId, true);
+  return (
+    <div className="rounded-lg border border-border bg-background">
+      <div className="flex items-center justify-between border-b border-border px-4 py-2 text-xs text-muted-foreground">
+        <span>Word document — preview</span>
+        {downloadUrl && (
+          <a href={downloadUrl} className="text-primary hover:underline" download>
+            Download original
+          </a>
+        )}
+      </div>
+      <div className="scroll-thin max-h-[70vh] overflow-y-auto px-5 py-4">
+        {isLoading ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Loading the document…
+          </div>
+        ) : error || !data ? (
+          <p className="text-sm text-destructive">{error?.message ?? "Could not load the document"}</p>
+        ) : (
+          // Sanitized server-side with a strict allow-list (src/lib/documents/preview.ts).
+          <div className="doc-preview" dangerouslySetInnerHTML={{ __html: data.html }} />
+        )}
+      </div>
+    </div>
   );
 }
 
