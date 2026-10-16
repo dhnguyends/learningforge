@@ -2,6 +2,32 @@
 
 All notable changes to LearningForge.
 
+## 2.1 — 2026-10-16
+
+Courses are now organised in a four-level tree: Discipline › Subject › Course / Module › Topic.
+
+### New features
+
+**Course tree**
+- **A shared catalogue of topics:** 9 disciplines, 34 subjects, 107 courses/modules and 460 topics, kept in `docs/COURSE-TAXONOMY.txt` and loaded with `npm run taxonomy:import` (safe to re-run; `npm run taxonomy:export` writes the tree back to the file).
+- **Every name is unique in the whole tree.** Names that appeared twice were renamed (for example "Machine kinematics", "Image segmentation", "Financial derivatives"), and a duplicate is refused anywhere in the tree, ignoring case, accents and spaces.
+- **Main topic of a course.** An administrator files each course under one topic; its Discipline, Subject and Course / Module follow automatically from the tree. The course page shows the path, read-only for its owner. The existing courses are filed, with a new **Technical analysis** topic under Finance › Investments.
+- **Related ("connexe") topics.** A course can also link to up to 3 related topics, different from its main topic. The owner (or an administrator) adds or removes them from the Dashboard card's right-click menu, and the card shows "connexe : …" at the bottom.
+
+**Explore**
+- **Explore page** (top bar and Dashboard): browse the tree with the number of courses in each branch. Courses appear under their main topic and, marked "related", under their related topics. Users see their own courses; administrators can switch to all courses.
+- **"Has courses"** hides every branch without a course (on by default, remembered per browser).
+- **Search window** (arrow-in-a-circle button): type any part of a name to list every matching node, top to bottom, with its full path; choosing one opens its branch, scrolls to it and selects it.
+
+**Administration**
+- **Admin › Courses Tree** tab, between Courses and Database: the full tree with every course, to explore and maintain it.
+  - **Insert child** adds a first child one level down; **Insert neighbour** adds the next node at the same level. Both are on the toolbar and in a right-click menu (Shift+F10 on the keyboard); Insert child is greyed out on topics, which have no children.
+  - No parent can be created above an existing node, each node has one parent, and every change is audited. The tree can be downloaded as a `.txt` file.
+- **Admin › Courses** shows each course's classification and lets administrators assign or change its topic.
+
+**Navigation**
+- **"Back to Dashboard"** button (graduation cap) in the top bar of every page except the Dashboard.
+
 ## 2.0 — 2026-10-16
 
 LearningForge becomes bilingual: French courses can be read, searched and listened to in English. This release also adds a database monitoring tab, whole-course generation, and fixes for the source viewer and the semantic-search pipeline.
