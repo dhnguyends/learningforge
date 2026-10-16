@@ -10,6 +10,8 @@ import { getIndexingReadiness } from "@/lib/retrieval/readiness";
 import type { JobContext } from "@/lib/queue/types";
 import { enqueue } from "@/lib/queue";
 import { audit } from "@/lib/audit";
+import { detectLanguage, normalizeLanguage } from "@/lib/language";
+import { translateSource, translationTarget } from "@/lib/pipelines/translate";
 
 /**
  * Ingestion orchestrator (job stages mirror the UI processing dashboard):
@@ -49,6 +51,17 @@ export async function ingestSource(ctx: JobContext<{ sourceId: string }>): Promi
       data: { status: "FAILED", error: err instanceof Error ? err.message : String(err) },
     });
     throw err;
+  }
+
+  // French sources become bilingual once READY: the import gate never waits for
+  // the translation, and a failed translation never fails the import (the
+  // source page offers to retry it).
+  const ready = await prisma.source.findUnique({ where: { id: sourceId }, select: { language: true } });
+  if (translationTarget(ready?.language)) {
+    await ctx.updateStage("translating", 100);
+    const result = await translateSource(sourceId);
+    ctx.log(`translation for source ${sourceId}: ${result?.status ?? "skipped"}`, result?.error ? { error: result.error } : undefined);
+    await ctx.updateStage("complete", 100);
   }
 }
 
@@ -186,7 +199,8 @@ async function ingestAudioVideo(
 
   await ctx.updateStage("segmenting", 70);
   const chunks = chunkTranscript(transcript.segments);
-  await indexAndFinish(source, chunks, ctx);
+  const language = normalizeLanguage(transcript.language) ?? detectLanguage(transcript.segments.map((s) => s.text).join(" "));
+  await indexAndFinish(source, chunks, ctx, language);
 }
 
 // --- Document path --------------------------------------------------------------
@@ -206,17 +220,28 @@ async function ingestDocument(source: Source & { assets: SourceAsset[] }, ctx: J
 
   await ctx.updateStage("segmenting", 65);
   const chunks = chunkDocument(parsed);
-  await indexAndFinish(source, chunks, ctx);
+  if (chunks.length === 0) {
+    // Never mark a source READY with nothing in it: search and generation would
+    // silently ignore it.
+    throw new Error(
+      "No readable text was found in this file (empty, or images that OCR could not read). " +
+        "Check the file, then use Import again or delete it.",
+    );
+  }
+  await indexAndFinish(source, chunks, ctx, detectLanguage(parsed.pages.map((p) => p.text).join(" ")));
 }
 
 async function indexAndFinish(
   source: Source,
   chunks: Awaited<ReturnType<typeof chunkTranscript>>,
   ctx: JobContext<{ sourceId: string }>,
+  language: string | null,
 ): Promise<void> {
   // indexChunks reports the vectorizing + indexing stage transitions itself.
-  const indexed = await indexChunks(source.id, chunks, (stage, progress) => ctx.updateStage(stage, progress));
-  ctx.log(`indexed ${indexed.length} chunks for source ${source.id}`);
+  const indexed = await indexChunks(source.id, chunks, (stage, progress) => ctx.updateStage(stage, progress), language);
+  ctx.log(`indexed ${indexed.length} chunks for source ${source.id}`, { language });
+  // Undetected (short or mixed) text keeps whatever language the source had.
+  if (language) await prisma.source.update({ where: { id: source.id }, data: { language } });
   await ctx.updateStage("complete", 100);
 }
 

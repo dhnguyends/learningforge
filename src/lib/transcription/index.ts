@@ -1,4 +1,4 @@
-import { getEnv } from "@/lib/env";
+import { getEnv, mockProvidersAllowed } from "@/lib/env";
 import type { TranscriptionProvider, TranscriptionResult, TranscribeOptions } from "@/lib/transcription/types";
 import { coalesceSegments } from "@/lib/transcription/types";
 import { WhisperProvider } from "@/lib/transcription/whisper";
@@ -14,6 +14,14 @@ class MockTranscriber implements TranscriptionProvider {
   readonly supportsDiarization = true;
 
   async transcribe(audio: Buffer, _filename: string, opts: TranscribeOptions): Promise<TranscriptionResult> {
+    // Never let placeholder text pass for a real lecture outside tests and demos.
+    if (!mockProvidersAllowed()) {
+      throw new Error(
+        "Transcription is not configured (TRANSCRIPTION_PROVIDER=mock would store placeholder text). " +
+          'Set TRANSCRIPTION_PROVIDER="whisper" (e.g. the local Whisper server, see DEVELOPMENT.md) and import this source again, ' +
+          "or set ALLOW_MOCK_PROVIDERS=true for an offline demo.",
+      );
+    }
     const durationSec = opts.expectedDurationSec ?? estimateFromBytes(audio.byteLength) ?? 120;
     const segments = [];
     for (let start = 0; start < durationSec; start += 12) {

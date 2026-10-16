@@ -4,6 +4,7 @@ import type { GenerateOptions, GenerationResult, StructuredGenerator } from "@/l
 import { AIProviderError, JSON_CONTRACT_INSTRUCTION } from "@/lib/ai/types";
 import { parseWithRepair, type RawCompletion } from "@/lib/ai/shared";
 import { zodToJsonSchema } from "@/lib/ai/zod-to-json-schema";
+import { cpuTimeoutFactor } from "@/lib/gpu";
 
 interface OllamaChatResponse {
   message: { content: string };
@@ -58,6 +59,8 @@ export class LocalGenerator implements StructuredGenerator {
 
     let lastText = "";
     let truncated = false;
+    // Ollama runs on the CPU when there is no GPU: allow for it.
+    const timeoutMs = this.timeoutMs * (await cpuTimeoutFactor());
     const call = async (): Promise<RawCompletion> => {
       let res: Response;
       try {
@@ -65,12 +68,12 @@ export class LocalGenerator implements StructuredGenerator {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ model: this.model, messages, stream: false, format, think: this.think, options }),
-          signal: AbortSignal.timeout(this.timeoutMs),
+          signal: AbortSignal.timeout(timeoutMs),
         });
       } catch (err) {
         const reason =
           err instanceof Error && err.name === "TimeoutError"
-            ? `timed out after ${Math.round(this.timeoutMs / 1000)}s (raise LOCAL_AI_TIMEOUT_MS or use a smaller model)`
+            ? `timed out after ${Math.round(timeoutMs / 1000)}s (raise LOCAL_AI_TIMEOUT_MS or use a smaller model)`
             : `unreachable at ${this.baseUrl} — is Ollama running?`;
         throw new AIProviderError(`Local model ${this.model} ${reason}`, err);
       }

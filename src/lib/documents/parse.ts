@@ -15,7 +15,9 @@ export interface ParsedDocument {
 
 /**
  * Server-side document text extraction.
- * - PDF: per-page text via pdfjs (keeps page-level citation anchors)
+ * - PDF: per-page text via pdfjs (keeps page-level citation anchors); pages
+ *   without a text layer (scans, slides exported as images) are rendered and
+ *   OCR'd instead of silently yielding nothing
  * - PPTX: slide XML text via JSZip (each slide = one page)
  * - DOCX: plain text via mammoth (single page, split later by chunker)
  * - Images: OCR via tesseract.js (lazy-loaded; optional dependency in spirit)
@@ -44,21 +46,63 @@ export async function parseDocument(
   throw new Error(`Unsupported document type: ${ext || mimeType}`);
 }
 
+/** A page with less text than this has no usable text layer (scan or exported slide). */
+const MIN_PAGE_TEXT_CHARS = 25;
+/** Render scale for OCR: ~150 dpi for a letter-size page, enough for slide text. */
+const OCR_RENDER_SCALE = 2;
+
 async function parsePdf(buffer: Buffer): Promise<ParsedDocument> {
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
   const doc = await pdfjs.getDocument({ data: new Uint8Array(buffer), useSystemFonts: true }).promise;
   const pages: ParsedDocumentPage[] = [];
-  for (let i = 1; i <= doc.numPages; i++) {
-    const page = await doc.getPage(i);
-    const content = await page.getTextContent();
-    const text = content.items
-      .map((item) => ("str" in item ? item.str : ""))
-      .join(" ")
-      .replace(/\s+/g, " ")
-      .trim();
-    pages.push({ page: i, text, heading: firstLine(text) });
+  let ocr: Awaited<ReturnType<typeof startOcr>> | null = null;
+  let ocrPages = 0;
+  try {
+    for (let i = 1; i <= doc.numPages; i++) {
+      const page = await doc.getPage(i);
+      const content = await page.getTextContent();
+      let text = content.items
+        .map((item) => ("str" in item ? item.str : ""))
+        .join(" ")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (text.length < MIN_PAGE_TEXT_CHARS) {
+        // No text layer: render the page and read it with OCR.
+        ocr ??= await startOcr();
+        const image = await renderPdfPage(page, OCR_RENDER_SCALE);
+        const read = (await ocr.recognize(image)).data.text?.replace(/\s+/g, " ").trim() ?? "";
+        if (read.length > text.length) {
+          text = read;
+          ocrPages++;
+        }
+      }
+      pages.push({ page: i, text, heading: firstLine(text) });
+      page.cleanup();
+    }
+  } finally {
+    await ocr?.terminate();
+    await doc.destroy();
   }
-  return { pages, pageCount: doc.numPages, kind: "DOCUMENT", metadata: { format: "pdf" } };
+  return { pages, pageCount: doc.numPages, kind: "DOCUMENT", metadata: { format: "pdf", ocrPages } };
+}
+
+type PdfPage = Awaited<ReturnType<Awaited<ReturnType<typeof import("pdfjs-dist/legacy/build/pdf.mjs")["getDocument"]>["promise"]>["getPage"]>>;
+
+/** Render one PDF page to PNG bytes with @napi-rs/canvas (installed with pdfjs-dist). */
+async function renderPdfPage(page: PdfPage, scale: number): Promise<Buffer> {
+  const { createCanvas } = await import("@napi-rs/canvas");
+  const viewport = page.getViewport({ scale });
+  const canvas = createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
+  const context = canvas.getContext("2d");
+  context.fillStyle = "#ffffff"; // transparent backgrounds OCR poorly
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  await page.render({ canvasContext: context as unknown as CanvasRenderingContext2D, viewport }).promise;
+  return canvas.toBuffer("image/png");
+}
+
+async function startOcr() {
+  const { createWorker } = await import("tesseract.js");
+  return createWorker("eng");
 }
 
 async function parsePptx(buffer: Buffer): Promise<ParsedDocument> {

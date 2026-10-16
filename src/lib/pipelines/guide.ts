@@ -1,7 +1,7 @@
 import type { SectionKind } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { getGenerator, isMockAI } from "@/lib/ai";
-import { searchChunks, retrieveForWholeSet, formatRetrievedContext, emptyRetrievalError, type RetrievedChunk } from "@/lib/retrieval";
+import { searchChunks, retrieveForWholeSet, wholeSetTokenBudget, formatRetrievedContext, emptyRetrievalError, type RetrievedChunk } from "@/lib/retrieval";
 import { createAnchorsForChunks, chunkMap } from "@/lib/pipelines/anchors";
 import {
   guideOutlineSchema,
@@ -53,7 +53,7 @@ export async function generateGuideJob(ctx: JobContext<GuideJobPayload>): Promis
     await ctx.updateStage("retrieving-sources", 10);
     // A guide covers the whole set: rank by the set's metadata, but never
     // depend on it matching the material (see retrieveForWholeSet).
-    const overviewChunks = await retrieveForWholeSet(studySetId, `${studySet.title} ${studySet.subject ?? ""} ${studySet.course ?? ""}`, { k: 24 });
+    const overviewChunks = await retrieveForWholeSet(studySetId, `${studySet.title} ${studySet.subject ?? ""} ${studySet.course ?? ""}`, { k: 24, tokenBudget: await wholeSetTokenBudget() });
     if (overviewChunks.length === 0) throw await emptyRetrievalError(studySetId);
 
     await ctx.updateStage("generating-outline", 25);

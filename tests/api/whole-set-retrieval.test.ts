@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import "./helpers";
 import { prisma, createTestUser, disposeTestUser, type TestUser } from "./helpers";
-import { indexChunks, searchChunks } from "@/lib/retrieval";
+import { indexChunks, searchChunks, retrieveForWholeSet } from "@/lib/retrieval";
 import { generateGuideJob } from "@/lib/pipelines/guide";
 import { generateQuizJob } from "@/lib/pipelines/quiz";
 
@@ -90,5 +90,23 @@ describe("whole-set generation does not depend on the set's metadata matching it
     await expect(generateQuizJob({ payload: { studySetId, quizId: quiz.id }, ...noopCtx })).rejects.toThrow(
       /requested topic/,
     );
+  });
+});
+
+describe("coverage by token budget", () => {
+  it("gives the model the WHOLE course, in reading order, when it fits the budget", async () => {
+    const all = await retrieveForWholeSet(studySetId, "anything", { k: 2, tokenBudget: 10_000 });
+    expect(all).toHaveLength(PAGES.length); // k=2 is only a minimum
+    expect(all.map((c) => c.ordinal)).toEqual([0, 1, 2, 3, 4]);
+  });
+
+  it("takes as many passages as the budget holds when the course is larger", async () => {
+    // 5 passages of ~60 tokens = ~300 tokens; a 130-token budget holds 2.
+    const some = await retrieveForWholeSet(studySetId, "anything", { k: 1, tokenBudget: 130 });
+    expect(some.length).toBe(2);
+  });
+
+  it("keeps the fixed passage count without a budget (mock / tests)", async () => {
+    expect(await retrieveForWholeSet(studySetId, "anything", { k: 3 })).toHaveLength(3);
   });
 });

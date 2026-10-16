@@ -93,6 +93,12 @@ export class LocalStorage implements StorageDriver {
       .sort();
   }
 
+  async usage(prefix: string): Promise<{ objects: number; bytes: number }> {
+    const keys = await this.list(prefix);
+    const sizes = await Promise.all(keys.map((k) => fs.stat(localStoragePath(k)).then((s) => s.size, () => 0)));
+    return { objects: keys.length, bytes: sizes.reduce((a, b) => a + b, 0) };
+  }
+
   async copy(fromKey: string, toKey: string): Promise<void> {
     const from = localStoragePath(fromKey);
     const to = localStoragePath(toKey);

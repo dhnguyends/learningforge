@@ -8,7 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/misc";
 import { Label } from "@/components/ui/label";
 import { MediaPlayer, SegmentList, TranscriptSearch, useMediaSync } from "@/components/study/source-viewer";
-import { useSource, useStudySet } from "@/hooks/use-api";
+import { ReaderToolbar, useBilingualSource } from "@/components/study/bilingual-reader";
+import { useSource, useSourceReader, useStudySet } from "@/hooks/use-api";
 
 export default function TranscriptPage() {
   return (
@@ -40,7 +41,21 @@ function TranscriptPageInner() {
   const [flaggedOnly, setFlaggedOnly] = useState(false);
 
   const allSegments = useMemo(() => data?.source?.transcripts?.[0]?.segments ?? [], [data]);
-  const segments = useMemo(() => (flaggedOnly ? allSegments.filter((s) => s.flagged) : allSegments), [allSegments, flaggedOnly]);
+  const { data: reader } = useSourceReader(studySetId, sourceId);
+  const bilingual = useBilingualSource(studySetId, sourceId ?? "", reader, allSegments);
+  const { readAloud } = bilingual;
+  const segments = useMemo(
+    () => (flaggedOnly ? bilingual.segments.filter((s) => s.flagged) : bilingual.segments),
+    [bilingual.segments, flaggedOnly],
+  );
+  // Reading aloud and playing the recording are exclusive.
+  useEffect(() => {
+    if (playing && readAloud.reading) readAloud.stop();
+  }, [playing, readAloud]);
+  const readFrom = (index: number) => {
+    mediaRef.current?.pause();
+    readAloud.start(index);
+  };
   const editedCount = allSegments.filter((s) => s.edited).length;
   const flaggedCount = allSegments.filter((s) => s.flagged).length;
 
@@ -88,6 +103,16 @@ function TranscriptPageInner() {
                 <div className="min-w-0 flex-1">
                   <TranscriptSearch value={query} onChange={setQuery} />
                 </div>
+                <ReaderToolbar
+                  studySetId={studySetId}
+                  sourceId={sourceId}
+                  reader={reader}
+                  lang={bilingual.lang}
+                  onLangChange={bilingual.setLang}
+                  readAloud={{ ...readAloud, start: readFrom }}
+                  startIndex={bilingual.indexAt(timeMs)}
+                  canTranslate
+                />
                 <div className="flex items-center gap-2">
                   <Switch id="flagged" checked={flaggedOnly} onCheckedChange={setFlaggedOnly} aria-label="Show flagged segments only" />
                   <Label htmlFor="flagged" className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -105,7 +130,11 @@ function TranscriptPageInner() {
               {flaggedCount > 0 && <Badge variant="warning">{flaggedCount} flagged</Badge>}
               <span className="inline-flex items-center gap-1">
                 <Info className="h-3 w-3" aria-hidden="true" />
-                Click a timestamp to jump the player; edit icon fixes transcription errors.
+                {readAloud.reading
+                  ? "Reading aloud — click a timestamp to read from there."
+                  : bilingual.isOriginal
+                    ? "Click a timestamp to jump the player; edit icon fixes transcription errors."
+                    : "Machine translation — switch back to the original language to edit."}
               </span>
             </div>
           )}
@@ -114,10 +143,10 @@ function TranscriptPageInner() {
             <CardContent className="py-2">
               <SegmentList
                 segments={segments}
-                currentTimeMs={timeMs}
-                onSeekMs={seek}
-                playing={playing && !query}
-                editable
+                currentTimeMs={readAloud.reading ? (bilingual.readingStartMs ?? timeMs) : timeMs}
+                onSeekMs={(ms) => (readAloud.reading ? readFrom(bilingual.indexAt(ms)) : seek(ms))}
+                playing={(playing || readAloud.reading) && !query}
+                editable={bilingual.isOriginal}
                 filter={query}
               />
             </CardContent>

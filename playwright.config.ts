@@ -48,6 +48,7 @@ export default defineConfig({
       AI_PROVIDER: "mock",
       STORAGE_DRIVER: "local",
       TRANSCRIPTION_PROVIDER: "mock",
+      ALLOW_MOCK_PROVIDERS: "true", // E2E runs offline with placeholder transcripts
     },
   },
 });

@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { cpuTimeoutFactor } from "@/lib/gpu";
 import OpenAI from "openai";
 import { getEnv } from "@/lib/env";
 
@@ -115,7 +116,8 @@ class OllamaEmbeddings implements EmbeddingProvider {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ model: this.model, input }),
-          signal: AbortSignal.timeout(120_000),
+          // Embedding a long lecture on the CPU (no GPU) takes several times longer.
+          signal: AbortSignal.timeout(120_000 * (await cpuTimeoutFactor())),
         });
       } catch (err) {
         // Search embeddings always run locally (even when Gemini generates the

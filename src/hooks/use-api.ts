@@ -803,6 +803,30 @@ export function useTransferStudySet() {
   );
 }
 
+/* ---------------------------- admin: database ---------------------------- */
+
+export type AdminDatabaseStats = import("@/lib/db-stats").DatabaseStats;
+const adminDatabaseKey = ["admin", "database"] as const;
+
+/** Database monitoring figures; `refresh` > 0 bypasses the server's 30-second cache. */
+export function useAdminDatabase(refresh = 0) {
+  return useQuery({
+    queryKey: [...adminDatabaseKey, refresh],
+    queryFn: () => api<AdminDatabaseStats>(`/api/admin/database${refresh > 0 ? "?refresh=1" : ""}`),
+  });
+}
+
+/** Create or rebuild the semantic-search (HNSW) vector index. */
+export function useRebuildVectorIndex() {
+  return useLfMutation(
+    () =>
+      api<{ index: AdminDatabaseStats["index"]; rebuilt: boolean; created: boolean; ms: number }>("/api/admin/database/vector-index", {
+        method: "POST",
+      }),
+    () => [adminDatabaseKey],
+  );
+}
+
 /* ---------------------------- admin: AI model ---------------------------- */
 
 export type AiChoiceInput = { provider: "local" } | { provider: "gemini"; model: string } | { provider: "zai" };
@@ -833,6 +857,8 @@ export interface ActiveAi {
   model: string;
   label: string;
   cloud: boolean;
+  /** GPU for local processing (transcription, embeddings, local Gemma); label is "No GPU" without one. */
+  gpu: { available: boolean; name: string | null; label: string; memoryMiB: number | null };
 }
 
 const activeAiKey = ["ai", "active"] as const;
@@ -855,6 +881,7 @@ export interface IndexingReadiness {
   ready: boolean;
   sources: { total: number; ready: number; processing: number; failed: number };
   pendingChunks: number;
+  placeholderSources: number;
   reason: string | null;
 }
 
@@ -869,4 +896,93 @@ export function useIndexingReadiness(studySetId: string) {
     queryFn: () => api<IndexingReadiness>(`/api/study-sets/${studySetId}/readiness`),
     refetchInterval: (q) => (q.state.data && !q.state.data.ready && q.state.data.sources.processing > 0 ? 4000 : false),
   });
+}
+
+/* --------------------- translator + read-aloud (admin) -------------------- */
+
+export type SpeechSettings = import("@/lib/speech/settings").SpeechSettingsView;
+export type TranslatorChoiceInput = import("@/lib/speech/settings").TranslatorChoice;
+export type TtsChoiceInput = import("@/lib/speech/settings").TtsChoice;
+export interface TranslatorTestResult {
+  ok: boolean;
+  translator: string;
+  input: string;
+  output?: string;
+  latencyMs: number;
+  error?: string;
+}
+
+const adminSpeechKey = ["admin", "speech"] as const;
+
+export function useSpeechSettings() {
+  return useQuery({ queryKey: adminSpeechKey, queryFn: () => api<SpeechSettings>("/api/admin/tts") });
+}
+
+export function useSaveTranslatorChoice() {
+  return useLfMutation(
+    (choice: TranslatorChoiceInput) => api<SpeechSettings>("/api/admin/translator", { method: "PUT", body: JSON.stringify(choice) }),
+    () => [adminSpeechKey],
+  );
+}
+
+export function useTestTranslator() {
+  return useLfMutation(
+    (choice: TranslatorChoiceInput) =>
+      api<TranslatorTestResult>("/api/admin/translator/test", { method: "POST", body: JSON.stringify(choice) }),
+    () => [],
+  );
+}
+
+export function useSaveTtsChoice() {
+  return useLfMutation(
+    (choice: TtsChoiceInput) => api<SpeechSettings>("/api/admin/tts", { method: "PUT", body: JSON.stringify(choice) }),
+    () => [adminSpeechKey],
+  );
+}
+
+/** Speaks a fixed sample with a candidate voice; resolves to a playable blob URL and the latency. */
+export function useTestTts() {
+  return useLfMutation(
+    async ({ choice, lang }: { choice: TtsChoiceInput; lang: "fr" | "en" }) => {
+      const res = await fetch("/api/admin/tts/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ choice, lang }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(body?.error ?? `Request failed (${res.status})`);
+      }
+      const latencyMs = Number(res.headers.get("X-Latency-Ms") ?? 0);
+      return { url: URL.createObjectURL(await res.blob()), latencyMs };
+    },
+    () => [],
+  );
+}
+
+/* ------------------------ bilingual reader (source) ----------------------- */
+
+export type SourceReader = import("@/lib/speech/reader").SourceReader;
+export type ReaderLanguage = "fr" | "en";
+
+export function useSourceReader(studySetId: string, sourceId: string | null | undefined) {
+  return useQuery({
+    queryKey: [...qk.source(studySetId, sourceId ?? ""), "reader"],
+    queryFn: () => api<SourceReader>(`/api/study-sets/${studySetId}/sources/${sourceId}/reader`),
+    enabled: Boolean(sourceId),
+    // Follow a translation in progress.
+    refetchInterval: (q) => (q.state.data?.translation?.status === "running" ? 5000 : false),
+  });
+}
+
+export function useTranslateSource(studySetId: string, sourceId: string) {
+  return useLfMutation(
+    () => api<{ started: boolean }>(`/api/study-sets/${studySetId}/sources/${sourceId}/translate`, { method: "POST" }),
+    () => [[...qk.source(studySetId, sourceId), "reader"]],
+  );
+}
+
+/** URL of one item's read-aloud clip (generated on first request, then cached). */
+export function speechUrl(studySetId: string, sourceId: string, lang: ReaderLanguage, index: number): string {
+  return `/api/study-sets/${studySetId}/sources/${sourceId}/speech?lang=${lang}&index=${index}`;
 }

@@ -20,8 +20,8 @@ export interface TranscriptSegmentInput {
   text: string;
 }
 
-const TARGET_TOKENS = 320;
-const MAX_TOKENS = 480;
+export const TARGET_TOKENS = 320;
+export const MAX_TOKENS = 480;
 const PAUSE_BREAK_MS = 2500;
 
 export function estimateTokens(text: string): number {

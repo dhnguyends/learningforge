@@ -107,14 +107,51 @@ WHISPER_TIMEOUT_MS="3600000"
   because the whole lecture is one request and it is never retried.
 - The model returns `verbose_json` segments with start/end timestamps; they
   become the transcript segments and the citation anchors (seek-to-time).
+- **No GPU?** Use the CPU image (`ghcr.io/speaches-ai/speaches:0.8.3-cpu`, without
+  `--gpus=all`). The app detects the GPU with `nvidia-smi` and shows it next to the
+  AI model in the top bar, or **No GPU**. Without one, it multiplies the
+  transcription, embedding and local-model timeouts by `CPU_TIMEOUT_FACTOR`
+  (default 4), since CPU processing is several times slower.
 - Whisper has no speaker diarization; a warning is stored when it is requested.
 - Existing sources keep their old transcript until you use **Import again** on
   them (Sources page), then regenerate the study material.
 
+## Bilingual sources and read-aloud
+
+French sources are translated to English after import, and the source page can
+read text aloud in either language. Both models are chosen at `/admin` →
+**AI model** (Translator and Text to speech cards), stored in `app_settings`.
+
+- **Translator.** Local Gemma 4 through Ollama (default, uses `LOCAL_AI_MODEL`)
+  or Azure AI Translator (`AZURE_TRANSLATOR_KEY` / `AZ_API_KEY1`). A one-hour
+  lecture takes several minutes locally and a few seconds on Azure.
+- **Read-aloud, local.** Kokoro-82M and Piper run on the same Speaches server
+  as Whisper (`SPEACHES_BASE_URL`, default `http://localhost:8000/v1`). Voices
+  are downloaded on first use; to download them ahead of time:
+
+  ```bash
+  curl -X POST http://localhost:8000/v1/models/speaches-ai/Kokoro-82M-v1.0-ONNX-fp16
+  curl -X POST http://localhost:8000/v1/models/speaches-ai/piper-fr_FR-siwis-medium
+  ```
+
+- **Read-aloud, cloud.** Azure Neural TTS (`AZURE_SPEECH_KEY` +
+  `AZURE_SPEECH_REGION`, or `AZ_API_KEY1` + `AZ_VOICE_SYNTHESIS`) or Gemini TTS
+  (`GEMINI_API_KEY`, `GEMINI_TTS_MODEL`).
+- Clips are cached under the source's storage prefix (`…/tts/<voice>/<lang>/`)
+  and deleted with the source. Changing the voice or the text never replays an
+  old clip.
+- Sources imported before translation existed: open the source and use
+  **Translate to English** (no re-import needed).
+
 ## Database workflow
 
-- Schema changes: edit `prisma/schema.prisma` → `npm run db:push` (or
-  `npm run db:setup` when the change touches the vector column/index).
+- Schema changes: edit `prisma/schema.prisma` → `npm run db:push`. Prisma
+  cannot declare the HNSW vector index, so a plain `prisma db push` **drops
+  it**. `npm run db:push` re-creates it right after
+  (`scripts/ensure-vector-index.mjs`), so always use the npm script rather
+  than calling `npx prisma db push` directly. The server warns at startup if
+  the index is missing, and `/admin` → **Database** shows its status and can
+  rebuild it.
 - `prisma/seed.ts` is idempotent-ish but designed for a fresh DB; it creates
   the demo user, a fully-processed study set (video + slides + notes →
   transcript, chunks with embeddings, guide, FSRS deck with due cards,

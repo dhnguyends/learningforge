@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { warnIfVectorIndexMissing } from "@/lib/vector-index";
 import { getEnv } from "@/lib/env";
 import { enqueue, type JobName } from "@/lib/queue";
 
@@ -135,6 +136,7 @@ let recoveryStarted: Promise<void> | null = null;
  * A total failure clears the latch so a later request can retry.
  */
 export function ensureRecovered(): Promise<void> {
+  void warnIfVectorIndexMissing(); // once per process, never blocks
   recoveryStarted ??= recoverOrphanedJobs()
     .then(() => undefined)
     .catch((err) => {

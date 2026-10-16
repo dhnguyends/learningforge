@@ -99,6 +99,23 @@ export class S3Storage implements StorageDriver {
     return keys.sort();
   }
 
+  async usage(prefix: string): Promise<{ objects: number; bytes: number }> {
+    let objects = 0;
+    let bytes = 0;
+    let token: string | undefined;
+    do {
+      const listed = await this.client.send(
+        new ListObjectsV2Command({ Bucket: this.bucket, Prefix: `${assertSafeKey(prefix)}/`, ContinuationToken: token }),
+      );
+      for (const obj of listed.Contents ?? []) {
+        objects++;
+        bytes += obj.Size ?? 0;
+      }
+      token = listed.IsTruncated ? listed.NextContinuationToken : undefined;
+    } while (token);
+    return { objects, bytes };
+  }
+
   async copy(fromKey: string, toKey: string): Promise<void> {
     // CopySource is "<bucket>/<key>", URL-encoded per path segment.
     const source = `${this.bucket}/${assertSafeKey(fromKey).split("/").map(encodeURIComponent).join("/")}`;

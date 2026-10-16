@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { getEmbeddings } from "@/lib/ai/embeddings";
+import { mockProvidersAllowed } from "@/lib/env";
 
 /**
  * Is a study set fully imported, i.e. every source READY and every chunk
@@ -13,6 +14,8 @@ export interface IndexingReadiness {
   sources: { total: number; ready: number; processing: number; failed: number };
   /** Chunks of READY sources not searchable yet (no vector, or another embeddings model). */
   pendingChunks: number;
+  /** Sources whose transcript is placeholder text from the mock provider. */
+  placeholderSources: number;
   /** Why generation is blocked; null when ready. */
   reason: string | null;
 }
@@ -41,6 +44,11 @@ export async function getIndexingReadiness(studySetId: string): Promise<Indexing
   `);
   const searchable = Number(row?.searchable ?? 0);
   const pendingChunks = Number(row?.pending ?? 0);
+  // Placeholder transcripts (imported while transcription was a mock) must not
+  // be studied from; tests and demos allow them.
+  const placeholderSources = mockProvidersAllowed()
+    ? 0
+    : await prisma.source.count({ where: { studySetId, transcripts: { some: { provider: "mock" } } } });
 
   let reason: string | null = null;
   if (counts.total === 0) {
@@ -49,11 +57,13 @@ export async function getIndexingReadiness(studySetId: string): Promise<Indexing
     reason = `Importing sources: ${counts.ready} of ${counts.total} ready. Generation starts once every source is vectorized and indexed.`;
   } else if (counts.failed > 0) {
     reason = `${counts.failed} source${counts.failed > 1 ? "s" : ""} failed to import. Retry or remove ${counts.failed > 1 ? "them" : "it"} before generating.`;
+  } else if (placeholderSources > 0) {
+    reason = `${placeholderSources} source${placeholderSources > 1 ? "s have" : " has"} a placeholder transcript (imported before transcription was set up) — use "Import again" on ${placeholderSources > 1 ? "them" : "it"} first.`;
   } else if (pendingChunks > 0) {
     reason = `${pendingChunks} passage${pendingChunks > 1 ? "s are" : " is"} not indexed for the current embeddings model "${model}" — run \`npx tsx scripts/reembed.ts\`.`;
   } else if (searchable === 0) {
     reason = "The sources contain no extractable text to generate from.";
   }
 
-  return { ready: reason === null, sources: counts, pendingChunks, reason };
+  return { ready: reason === null, sources: counts, pendingChunks, placeholderSources, reason };
 }

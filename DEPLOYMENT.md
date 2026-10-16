@@ -20,11 +20,14 @@ ffmpeg`). The web process never shells out to FFmpeg.
 
    ```bash
    psql "$DATABASE_URL" -c "CREATE EXTENSION IF NOT EXISTS vector;"
-   npx prisma db push
+   npm run db:push        # prisma db push + re-creates the HNSW vector index
    ```
 
-   `npm run db:setup` does the same plus the HNSW index — it is safe to run
-   from anywhere that reaches the database.
+   `npm run db:setup` does the same in one step and is safe to run from
+   anywhere that reaches the database. Don't run a bare `npx prisma db push`:
+   it drops the HNSW index, because Prisma cannot declare it. If that
+   happens, run `node scripts/ensure-vector-index.mjs`, or use **Create
+   index** under `/admin` → Database.
 
 3. **Do not seed production.** `prisma/seed.ts` creates a public demo
    account with a known password; it exists for local development only.
@@ -116,6 +119,12 @@ Notes:
   invalidates sessions (users just sign in again).
 
 ## Alternative: single GPU pod on packet.ai (trial)
+
+> **GPU check.** After deploying, the top bar shows the GPU next to the AI model,
+> for example "GTX 1080 Ti" or "A100", when `nvidia-smi` works inside the pod.
+> **No GPU** means local processing runs on the CPU: transcription, embeddings
+> and local Gemma still work, with timeouts multiplied by `CPU_TIMEOUT_FACTOR`.
+> Use the Speaches `-cpu` image there.
 
 For a self-contained trial with a local model, everything — Next.js, PostgreSQL +
 pgvector, local file storage, the inline job queue and Ollama — runs on one

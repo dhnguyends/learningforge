@@ -7,6 +7,7 @@ const nextConfig = {
       "ffprobe-static",
       "fluent-ffmpeg",
       "pdfjs-dist",
+      "@napi-rs/canvas",
       "tesseract.js",
       "bullmq",
       "ioredis",

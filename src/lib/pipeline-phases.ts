@@ -32,6 +32,8 @@ const STAGE_TO_PHASE: Record<string, PipelineStep> = {
   segmenting: "chunking",
   vectorizing: "vectorizing",
   indexing: "indexing",
+  // French sources are translated after they are READY (searchable already).
+  translating: "complete",
   complete: "complete",
 };
 

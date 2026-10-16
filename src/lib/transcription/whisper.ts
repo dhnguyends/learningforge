@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import { getEnv } from "@/lib/env";
 import type { TranscribeOptions, TranscriptionProvider, TranscriptionResult } from "@/lib/transcription/types";
 import { coalesceSegments } from "@/lib/transcription/types";
+import { cpuTimeoutFactor } from "@/lib/gpu";
 
 interface WhisperVerboseSegment {
   start: number;
@@ -30,10 +31,12 @@ export class WhisperProvider implements TranscriptionProvider {
   readonly supportsDiarization = false;
   private client: OpenAI;
   private model: string;
+  private timeoutMs: number;
 
   constructor() {
     const env = getEnv();
     this.model = env.WHISPER_MODEL;
+    this.timeoutMs = env.WHISPER_TIMEOUT_MS;
     this.client = new OpenAI({
       // Local servers ignore the key, but the SDK requires one.
       apiKey: env.WHISPER_API_KEY || "local",
@@ -51,6 +54,9 @@ export class WhisperProvider implements TranscriptionProvider {
       response_format: "verbose_json",
       ...(opts.language ? { language: opts.language } : {}),
       temperature: 0,
+    }, {
+      // Without a GPU the server transcribes on the CPU, several times slower.
+      timeout: this.timeoutMs * (await cpuTimeoutFactor()),
     }) as unknown as WhisperVerboseResponse;
 
     const raw = (res.segments ?? []).map((s) => ({

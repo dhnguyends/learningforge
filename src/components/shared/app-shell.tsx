@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
-import { Cloud, Cpu, LogOut, Plus, Settings, ShieldCheck } from "lucide-react";
+import { Cloud, Cpu, LogOut, MemoryStick, Plus, Settings, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -84,14 +84,24 @@ function ActiveModelBadge({ isAdmin }: { isAdmin: boolean }) {
   const { data } = useActiveAi();
   if (!data) return null;
   const Icon = data.cloud ? Cloud : Cpu;
+  const gpu = data.gpu;
+  const gpuTitle = gpu.available
+    ? `GPU for local processing: ${gpu.name}${gpu.memoryMiB ? ` (${Math.round(gpu.memoryMiB / 1024)} GB)` : ""}`
+    : "No GPU: transcription, embeddings and local models run on the CPU (slower)";
   const chip = (
     <span
       className="inline-flex max-w-full items-center gap-1.5 truncate rounded-full border border-border bg-muted/50 px-3 py-1 text-xs text-muted-foreground"
-      title={`AI model: ${data.model}${data.cloud ? " (cloud)" : " (runs on this computer)"}`}
+      title={`AI model: ${data.model}${data.cloud ? " (cloud)" : " (runs on this computer)"} · ${gpuTitle}`}
     >
       <Icon className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
       <span className="hidden sm:inline">AI model:</span>
       <span className="truncate font-medium text-foreground">{data.label}</span>
+      <span aria-hidden="true" className="text-border">|</span>
+      <MemoryStick className={gpu.available ? "h-3.5 w-3.5 shrink-0 text-primary" : "h-3.5 w-3.5 shrink-0 text-amber-600"} aria-hidden="true" />
+      <span className={gpu.available ? "truncate font-medium text-foreground" : "truncate font-medium text-amber-700 dark:text-amber-400"}>
+        <span className="sr-only">GPU: </span>
+        {gpu.label}
+      </span>
     </span>
   );
   return isAdmin ? (

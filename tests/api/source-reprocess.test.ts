@@ -86,6 +86,17 @@ describe("re-submitting a source", () => {
     expect((await res.json()).error).toMatch(/no longer stored — delete this source and add the file again/);
   });
 
+  it("fails clearly, instead of READY with nothing in it, when a file has no readable text", async () => {
+    const id = await noteSource("blank", "   \n\n   ");
+    signInAs(me.id);
+    const res = await post(id);
+    expect(res.status).toBe(202);
+    expect((await waitForJob((await res.json()).jobId)).status).toBe("FAILED");
+    const after = await prisma.source.findUniqueOrThrow({ where: { id } });
+    expect(after.status).toBe("FAILED");
+    expect(after.error).toMatch(/No readable text was found in this file/);
+  });
+
   it("is limited to people with write access to the study set", async () => {
     const id = await noteSource("private", "Secret notes.");
     signInAs(other.id);

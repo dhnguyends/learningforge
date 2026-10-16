@@ -427,6 +427,8 @@ model TranscriptSegment {
   edited       Boolean  @default(false)
   flagged      Boolean  @default(false)
   note         String?
+  /// Automatic translations of `text` by language, e.g. { "en": "…" }.
+  translations Json     @default("{}")
 
   transcript Transcript @relation(fields: [transcriptId], references: [id], onDelete: Cascade)
 
@@ -452,12 +454,20 @@ model ExtractedChunk {
   embedding  Unsupported("vector(1536)")?
   /// Vector space the embedding belongs to (e.g. "ollama:embeddinggemma"); NULL = legacy mock-hash.
   embeddingModel String?
+  /// ISO 639-1 code of `content` ("fr", "en"); NULL = not detected (older imports).
+  language        String?
+  /// Set on an automatic translation (e.g. the English version of a French
+  /// passage): it is searchable, but citations always point at the original.
+  translationOfId String?
   createdAt  DateTime  @default(now())
 
-  source Source           @relation(fields: [sourceId], references: [id], onDelete: Cascade)
-  anchors CitationAnchor[]
+  source        Source           @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  anchors       CitationAnchor[]
+  translationOf ExtractedChunk?  @relation("ChunkTranslation", fields: [translationOfId], references: [id], onDelete: Cascade)
+  translations  ExtractedChunk[] @relation("ChunkTranslation")
 
   @@index([sourceId, ordinal])
+  @@index([translationOfId])
   @@map("extracted_chunks")
 }
 

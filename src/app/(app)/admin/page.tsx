@@ -3,7 +3,7 @@
 import { Suspense, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { Bot, BookOpen, Cpu, Loader2, Pencil, Plus, ShieldCheck, ShieldPlus, Trash2, UserRound, Users } from "lucide-react";
+import { Bot, BookOpen, Cpu, Database, Loader2, Pencil, Plus, ShieldCheck, ShieldPlus, Trash2, UserRound, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -14,7 +14,9 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useAdminUsers, useCreateUser, useDeleteUser, useUpdateUser, type AdminUserRow } from "@/hooks/use-api";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AiModelCard } from "@/components/shared/ai-model-card";
+import { TranslatorCard, TtsCard } from "@/components/shared/speech-model-cards";
 import { AdminCourses } from "@/components/shared/admin-courses";
+import { AdminDatabase } from "@/components/shared/admin-database";
 import { useConfirm } from "@/components/shared/confirm-dialog";
 
 type Role = "USER" | "ADMIN";
@@ -34,7 +36,7 @@ function lastUsed(iso: string | null): string {
 }
 type EditorState = { mode: "create" } | { mode: "edit"; user: AdminUserRow } | null;
 
-const TABS = ["users", "ai", "courses"] as const;
+const TABS = ["users", "ai", "courses", "database"] as const;
 type Tab = (typeof TABS)[number];
 
 /**
@@ -64,7 +66,7 @@ function AdminTabs() {
         <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight">
           <ShieldCheck className="h-5 w-5 text-primary" aria-hidden="true" /> Administration
         </h1>
-        <p className="mt-1 text-sm text-muted-foreground">Accounts, the AI model and courses for this LearningForge instance.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Accounts, the AI model, courses and the vector database of this LearningForge instance.</p>
       </div>
       <Tabs value={tab} onValueChange={(next) => router.replace(`${pathname}?tab=${next}`, { scroll: false })}>
         <TabsList>
@@ -77,15 +79,25 @@ function AdminTabs() {
           <TabsTrigger value="courses" className="gap-1.5">
             <BookOpen className="h-3.5 w-3.5" aria-hidden="true" /> Courses
           </TabsTrigger>
+          <TabsTrigger value="database" className="gap-1.5">
+            <Database className="h-3.5 w-3.5" aria-hidden="true" /> Database
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="users" className="mt-4">
           <UsersPanel />
         </TabsContent>
         <TabsContent value="ai" className="mt-4">
-          <AiModelCard />
+          <div className="space-y-4">
+            <AiModelCard />
+            <TranslatorCard />
+            <TtsCard />
+          </div>
         </TabsContent>
         <TabsContent value="courses" className="mt-4">
           <AdminCourses />
+        </TabsContent>
+        <TabsContent value="database" className="mt-4">
+          <AdminDatabase />
         </TabsContent>
       </Tabs>
     </div>

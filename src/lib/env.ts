@@ -89,6 +89,10 @@ const envSchema = z.object({
   EMBEDDINGS_DIMENSIONS: z.coerce.number().int().positive().default(1536),
 
   TRANSCRIPTION_PROVIDER: z.enum(["mock", "whisper", "deepgram"]).default("mock"),
+  // Mock transcription writes placeholder text ("[mock transcription 3] Lecture audio
+  // segment…") that then feeds search and generation as if it were the lecture.
+  // Allowed only in tests or when explicitly enabled for demos.
+  ALLOW_MOCK_PROVIDERS: boolish,
   WHISPER_BASE_URL: z.string().default("https://api.openai.com/v1"),
   WHISPER_API_KEY: z.string().optional(),
   WHISPER_MODEL: z.string().default("whisper-1"),
@@ -98,6 +102,17 @@ const envSchema = z.object({
   WHISPER_TIMEOUT_MS: z.coerce.number().int().positive().default(3_600_000),
   DEEPGRAM_API_KEY: z.string().optional(),
 
+  // Read-aloud of sources (FR/EN). The model is chosen at /admin → AI model:
+  // local Kokoro / Piper through the Speaches server, Azure Neural TTS or Gemini TTS.
+  SPEACHES_BASE_URL: z.string().default("http://localhost:8000/v1"),
+  GEMINI_TTS_MODEL: z.string().default("gemini-3.8-flash-lite-tts"),
+  // Azure (optional): Speech for TTS, Translator for FR→EN. Keys stay server-side.
+  AZURE_SPEECH_KEY: z.string().optional(),
+  AZURE_SPEECH_REGION: z.string().default("westeurope"),
+  AZURE_TRANSLATOR_KEY: z.string().optional(),
+  AZURE_TRANSLATOR_REGION: z.string().default("westeurope"),
+  AZURE_TRANSLATOR_ENDPOINT: z.string().default("https://api.cognitive.microsofttranslator.com"),
+  // Audio-recap TTS (separate from read-aloud).
   TTS_PROVIDER: z.enum(["mock", "openai"]).default("mock"),
   TTS_MODEL: z.string().default("tts-1"),
   TTS_VOICE: z.string().default("alloy"),
@@ -105,6 +120,16 @@ const envSchema = z.object({
   YOUTUBE_API_KEY: z.string().optional(),
 
   SMTP_URL: z.string().optional(),
+
+  // GPU detection (nvidia-smi) for local processing; "off" = always report No GPU.
+  GPU_DETECTION: z.enum(["auto", "off"]).default("auto"),
+  // Without a GPU, local transcription/embedding/Gemma timeouts are multiplied by this.
+  CPU_TIMEOUT_FACTOR: z.coerce.number().min(1).max(20).default(4),
+
+  // Tokens of source passages a whole-course generation (guide outline, flashcards,
+  // quiz, exercises) may read: the whole course when it fits, otherwise a spread sample.
+  WHOLE_SET_TOKEN_BUDGET: z.coerce.number().int().positive().default(60_000),
+  WHOLE_SET_TOKEN_BUDGET_LOCAL: z.coerce.number().int().positive().default(6_000),
 
   GENERATION_RATE_LIMIT_PER_HOUR: z.coerce.number().int().positive().default(30),
 });
@@ -114,6 +139,27 @@ export type Env = z.infer<typeof envSchema>;
 const WEAK_SECRETS = new Set(["change-me-development-secret", "lectureforge-development-secret"]);
 
 let cached: Env | null = null;
+
+/**
+ * Azure settings may also use the names of the Azure portal (AZ_API_KEY1/2 = one
+ * Azure AI Services key for both Speech and Translator, AZ_VOICE_SYNTHESIS =
+ * the regional TTS endpoint, AZ_API_TRANSLATE = the Translator endpoint). The
+ * AZURE_* variables win when both are set.
+ */
+function applyAzureAliases(env: Env, raw: NodeJS.ProcessEnv): void {
+  const key = raw.AZ_API_KEY1?.trim() || raw.AZ_API_KEY2?.trim();
+  const region = azureRegionOf(raw.AZ_VOICE_SYNTHESIS) ?? azureRegionOf(raw.AZ_VOICE_RECOGNITION);
+  if (key && !env.AZURE_SPEECH_KEY?.trim()) env.AZURE_SPEECH_KEY = key;
+  if (key && !env.AZURE_TRANSLATOR_KEY?.trim()) env.AZURE_TRANSLATOR_KEY = key;
+  if (region && !raw.AZURE_SPEECH_REGION) env.AZURE_SPEECH_REGION = region;
+  if (region && !raw.AZURE_TRANSLATOR_REGION) env.AZURE_TRANSLATOR_REGION = region;
+  if (raw.AZ_API_TRANSLATE?.trim() && !raw.AZURE_TRANSLATOR_ENDPOINT) env.AZURE_TRANSLATOR_ENDPOINT = raw.AZ_API_TRANSLATE.trim();
+}
+
+/** "https://eastus.tts.speech.microsoft.com" → "eastus". */
+export function azureRegionOf(url: string | undefined): string | undefined {
+  return /^https?:\/\/([a-z0-9]+)\.(?:tts|stt)\.speech\.microsoft\.com/i.exec(url?.trim() ?? "")?.[1]?.toLowerCase();
+}
 
 export function getEnv(): Env {
   if (cached) return cached;
@@ -125,6 +171,7 @@ export function getEnv(): Env {
   }
 
   const env = parsed.data;
+  applyAzureAliases(env, process.env);
 
   // Fail loudly in production for secrets that matter; stay frictionless in dev.
   if (env.NODE_ENV === "production") {
@@ -148,6 +195,11 @@ export function getEnv(): Env {
 
   cached = env;
   return env;
+}
+
+/** Placeholder (mock) transcription may run: in tests, or when ALLOW_MOCK_PROVIDERS=true. */
+export function mockProvidersAllowed(env: Env = getEnv()): boolean {
+  return env.NODE_ENV === "test" || env.ALLOW_MOCK_PROVIDERS;
 }
 
 /** True when the app is running fully offline with deterministic mocks. */

@@ -41,4 +41,6 @@ export interface StorageDriver {
   list(prefix: string): Promise<string[]>;
   /** Server-side copy of one object (content type preserved). */
   copy(fromKey: string, toKey: string): Promise<void>;
+  /** Number and total size of the objects under `prefix/` (admin Database tab). */
+  usage(prefix: string): Promise<{ objects: number; bytes: number }>;
 }

@@ -1,0 +1,167 @@
+import { z } from "zod";
+import { prisma } from "@/lib/db";
+import { getEnv, type Env } from "@/lib/env";
+import type { SourceLanguage } from "@/lib/language";
+
+/**
+ * Translator and text-to-speech choices made at /admin → AI model, stored in
+ * app_settings (keys "translator" and "tts"). Like the generation model: keys
+ * stay in .env, a cloud choice without its key falls back to the local option.
+ */
+
+// ---------------------------------------------------------------- translator
+
+export const TRANSLATOR_PROVIDERS = {
+  local: { label: "Gemma 4 — local (Ollama)", note: "Private and free; slower on long lectures.", cloud: null },
+  azure: { label: "Azure AI Translator — cloud", note: "Fast and consistent; about $10 per 1M characters, free tier available.", cloud: "Microsoft Azure" },
+} as const;
+export type TranslatorProvider = keyof typeof TRANSLATOR_PROVIDERS;
+
+export const translatorChoiceSchema = z.object({ provider: z.enum(["local", "azure"]) });
+export type TranslatorChoice = z.infer<typeof translatorChoiceSchema>;
+
+export function translatorConfigured(provider: TranslatorProvider, env: Env = getEnv()): boolean {
+  return provider === "local" || Boolean(env.AZURE_TRANSLATOR_KEY?.trim());
+}
+
+// ---------------------------------------------------------------------- TTS
+
+type VoiceList = Record<SourceLanguage, readonly string[]>;
+
+export const TTS_PROVIDERS = {
+  kokoro: {
+    label: "Kokoro-82M — local",
+    note: "Most natural local English voices; one French voice. Runs on the Speaches server.",
+    cloud: null,
+    voices: { en: ["af_heart", "af_bella", "am_michael", "bf_emma", "bm_george"], fr: ["ff_siwis"] } as VoiceList,
+    defaults: { en: "af_heart", fr: "ff_siwis" },
+  },
+  piper: {
+    label: "Piper — local",
+    note: "Fastest local option, several French voices. Runs on the Speaches server.",
+    cloud: null,
+    voices: { en: ["lessac", "amy", "ryan"], fr: ["siwis", "tom", "upmc", "gilles"] } as VoiceList,
+    defaults: { en: "lessac", fr: "siwis" },
+  },
+  azure: {
+    label: "Azure Neural TTS — cloud",
+    note: "Studio-quality French and English; $15 per 1M characters, 0.5M free per month.",
+    cloud: "Microsoft Azure",
+    voices: {
+      en: ["en-US-JennyNeural", "en-US-GuyNeural", "en-GB-SoniaNeural"],
+      fr: ["fr-FR-DeniseNeural", "fr-FR-HenriNeural", "fr-FR-VivienneMultilingualNeural"],
+    } as VoiceList,
+    defaults: { en: "en-US-JennyNeural", fr: "fr-FR-DeniseNeural" },
+  },
+  gemini: {
+    label: "Gemini 3.8 Flash-Lite TTS — cloud",
+    note: "Expressive, 100+ languages; about $0.54 per hour of speech.",
+    cloud: "Google",
+    voices: { en: ["Kore", "Puck", "Charon", "Aoede", "Fenrir"], fr: ["Kore", "Puck", "Charon", "Aoede", "Fenrir"] } as VoiceList,
+    defaults: { en: "Kore", fr: "Kore" },
+  },
+} as const;
+export type TtsProvider = keyof typeof TTS_PROVIDERS;
+
+/** Piper has one model per voice (Speaches model ids). */
+export const PIPER_MODELS: Record<string, string> = {
+  lessac: "speaches-ai/piper-en_US-lessac-medium",
+  amy: "speaches-ai/piper-en_US-amy-medium",
+  ryan: "speaches-ai/piper-en_US-ryan-medium",
+  siwis: "speaches-ai/piper-fr_FR-siwis-medium",
+  tom: "speaches-ai/piper-fr_FR-tom-medium",
+  upmc: "speaches-ai/piper-fr_FR-upmc-medium",
+  gilles: "speaches-ai/piper-fr_FR-gilles-low",
+};
+export const KOKORO_MODEL = "speaches-ai/Kokoro-82M-v1.0-ONNX-fp16";
+
+export const ttsChoiceSchema = z
+  .object({
+    provider: z.enum(["kokoro", "piper", "azure", "gemini"]),
+    voices: z.object({ en: z.string().min(1), fr: z.string().min(1) }),
+  })
+  .refine((c) => (["en", "fr"] as const).every((l) => TTS_PROVIDERS[c.provider].voices[l].includes(c.voices[l])), {
+    message: "Unknown voice for this model",
+  });
+export type TtsChoice = z.infer<typeof ttsChoiceSchema>;
+
+export function ttsConfigured(provider: TtsProvider, env: Env = getEnv()): boolean {
+  if (provider === "azure") return Boolean(env.AZURE_SPEECH_KEY?.trim());
+  if (provider === "gemini") return Boolean(env.GEMINI_API_KEY?.trim());
+  return true;
+}
+
+// ------------------------------------------------------------------ storage
+
+const TTL_MS = 30_000;
+const memo = new Map<string, { value: unknown; at: number }>();
+
+async function readSetting<T>(key: string, schema: z.ZodType<T>): Promise<T | null> {
+  const hit = memo.get(key);
+  if (hit && Date.now() - hit.at < TTL_MS) return hit.value as T | null;
+  const row = await prisma.appSetting.findUnique({ where: { key } });
+  const parsed = row ? schema.safeParse(row.value) : null;
+  const value = parsed?.success ? parsed.data : null;
+  memo.set(key, { value, at: Date.now() });
+  return value;
+}
+
+async function writeSetting(key: string, value: object, userId: string): Promise<void> {
+  await prisma.appSetting.upsert({
+    where: { key },
+    create: { key, value, updatedById: userId },
+    update: { value, updatedById: userId },
+  });
+  memo.set(key, { value, at: Date.now() });
+}
+
+export const saveTranslatorChoice = (c: TranslatorChoice, userId: string) => writeSetting("translator", c, userId);
+export const saveTtsChoice = (c: TtsChoice, userId: string) => writeSetting("tts", c, userId);
+
+/** Active translator: the admin's choice when usable, otherwise local Gemma. */
+export async function getActiveTranslator(): Promise<{ provider: TranslatorProvider; source: "admin" | "default" | "fallback" }> {
+  const stored = await readSetting("translator", translatorChoiceSchema);
+  if (!stored) return { provider: "local", source: "default" };
+  if (!translatorConfigured(stored.provider)) return { provider: "local", source: "fallback" };
+  return { provider: stored.provider, source: "admin" };
+}
+
+/** Active read-aloud model and voices: the admin's choice when usable, otherwise Kokoro. */
+export async function getActiveTts(): Promise<TtsChoice & { source: "admin" | "default" | "fallback" }> {
+  const stored = await readSetting("tts", ttsChoiceSchema);
+  const fallback = { provider: "kokoro" as const, voices: { ...TTS_PROVIDERS.kokoro.defaults } };
+  if (!stored) return { ...fallback, source: "default" };
+  if (!ttsConfigured(stored.provider)) return { ...fallback, source: "fallback" };
+  return { ...stored, source: "admin" };
+}
+
+/** What /admin shows. Never any key. */
+export async function speechSettingsView() {
+  const env = getEnv();
+  const [translator, tts] = await Promise.all([getActiveTranslator(), getActiveTts()]);
+  return {
+    translator: {
+      active: translator,
+      options: (Object.keys(TRANSLATOR_PROVIDERS) as TranslatorProvider[]).map((id) => ({
+        id,
+        ...TRANSLATOR_PROVIDERS[id],
+        configured: translatorConfigured(id, env),
+        missingKey: id === "azure" ? "AZURE_TRANSLATOR_KEY" : null,
+      })),
+    },
+    tts: {
+      active: tts,
+      options: (Object.keys(TTS_PROVIDERS) as TtsProvider[]).map((id) => ({
+        id,
+        label: TTS_PROVIDERS[id].label,
+        note: TTS_PROVIDERS[id].note,
+        cloud: TTS_PROVIDERS[id].cloud,
+        voices: TTS_PROVIDERS[id].voices,
+        defaults: TTS_PROVIDERS[id].defaults,
+        configured: ttsConfigured(id, env),
+        missingKey: id === "azure" ? "AZURE_SPEECH_KEY" : id === "gemini" ? "GEMINI_API_KEY" : null,
+      })),
+    },
+  };
+}
+export type SpeechSettingsView = Awaited<ReturnType<typeof speechSettingsView>>;

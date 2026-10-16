@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { ChevronLeft, ExternalLink, Loader2, Plus, RotateCw, Trash2 } from "lucide-react";
@@ -9,8 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { MediaPlayer, SegmentList, useMediaSync } from "@/components/study/source-viewer";
+import { PassageList, ReaderToolbar, useBilingualSource } from "@/components/study/bilingual-reader";
 import { PipelineStatusBar } from "@/components/shared/pipeline-status";
-import { useSource, useStudySet, useDeleteSource, useReprocessSource } from "@/hooks/use-api";
+import { useSource, useSourceReader, useStudySet, useDeleteSource, useReprocessSource } from "@/hooks/use-api";
 import { SourceRowActions, IMPORTING_STATUSES, deleteSourcePrompt, reprocessSourcePrompt } from "@/components/study/source-actions";
 import { useConfirm } from "@/components/shared/confirm-dialog";
 import { ingestJobFor } from "@/lib/pipeline-phases";
@@ -163,7 +164,18 @@ function SourceDetailPage({
   const { timeMs, playing, seek } = useMediaSync(mediaRef);
   const [showFullTranscript, setShowFullTranscript] = useState(false);
 
-  const segments = useMemo(() => data?.source.transcripts[0]?.segments ?? [], [data]);
+  const allSegments = useMemo(() => data?.source.transcripts[0]?.segments ?? [], [data]);
+  const { data: reader } = useSourceReader(studySetId, data?.source.status === "READY" ? sourceId : null);
+  const bilingual = useBilingualSource(studySetId, sourceId, reader, allSegments);
+  const { readAloud, segments } = bilingual;
+  // Reading aloud and playing the recording are exclusive.
+  useEffect(() => {
+    if (playing && readAloud.reading) readAloud.stop();
+  }, [playing, readAloud]);
+  const readFrom = (index: number) => {
+    mediaRef.current?.pause();
+    readAloud.start(index);
+  };
 
   if (isLoading || !data) {
     return <div className="h-64 animate-pulse rounded-lg bg-muted" />;
@@ -219,14 +231,37 @@ function SourceDetailPage({
       {isAv && segments.length > 0 && (
         <Card>
           <CardContent className="py-4">
-            <div className="mb-2 flex items-center justify-between">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-sm font-medium">Transcript</h2>
-              <Button variant="ghost" size="sm" onClick={() => setShowFullTranscript((v) => !v)}>
-                {showFullTranscript ? "Collapse" : "Expand"}
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                <ReaderToolbar
+                  studySetId={studySetId}
+                  sourceId={s.id}
+                  reader={reader}
+                  lang={bilingual.lang}
+                  onLangChange={bilingual.setLang}
+                  readAloud={{
+                    ...readAloud,
+                    start: (i) => {
+                      setShowFullTranscript(true);
+                      readFrom(i);
+                    },
+                  }}
+                  startIndex={bilingual.indexAt(timeMs)}
+                  canTranslate
+                />
+                <Button variant="ghost" size="sm" onClick={() => setShowFullTranscript((v) => !v)}>
+                  {showFullTranscript ? "Collapse" : "Expand"}
+                </Button>
+              </div>
             </div>
             {showFullTranscript ? (
-              <SegmentList segments={segments} currentTimeMs={timeMs} onSeekMs={seek} playing={playing} />
+              <SegmentList
+                segments={segments}
+                currentTimeMs={readAloud.reading ? (bilingual.readingStartMs ?? timeMs) : timeMs}
+                onSeekMs={(ms) => (readAloud.reading ? readFrom(bilingual.indexAt(ms)) : seek(ms))}
+                playing={playing || readAloud.reading}
+              />
             ) : (
               <p className="line-clamp-3 text-sm leading-relaxed text-muted-foreground">
                 {segments.slice(0, 6).map((seg) => seg.text).join(" ")}…{" "}
@@ -235,6 +270,26 @@ function SourceDetailPage({
                 </Link>
               </p>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {!isAv && reader && reader.items.length > 0 && (
+        <Card>
+          <CardContent className="py-4">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-sm font-medium">Text</h2>
+              <ReaderToolbar
+                studySetId={studySetId}
+                sourceId={s.id}
+                reader={reader}
+                lang={bilingual.lang}
+                onLangChange={bilingual.setLang}
+                readAloud={readAloud}
+                canTranslate
+              />
+            </div>
+            <PassageList reader={reader} lang={bilingual.lang} activeIndex={readAloud.index} onReadFrom={readAloud.start} />
           </CardContent>
         </Card>
       )}

@@ -9,6 +9,7 @@
 import { execSync } from "node:child_process";
 import { Client } from "pg";
 import { readFileSync, existsSync } from "node:fs";
+import { ensureVectorIndex } from "./ensure-vector-index.mjs";
 
 function loadEnv() {
   if (!existsSync(".env")) return;
@@ -43,16 +44,8 @@ try {
 execSync("npx prisma db push --accept-data-loss", { stdio: "inherit" });
 console.log("✓ schema pushed");
 
-const client2 = new Client({ connectionString: process.env.DATABASE_URL });
-await client2.connect();
-try {
-  await client2.query(`
-    CREATE INDEX IF NOT EXISTS extracted_chunks_embedding_idx
-    ON "extracted_chunks" USING hnsw ("embedding" vector_cosine_ops)
-  `);
-  console.log("✓ HNSW cosine index on extracted_chunks.embedding");
-} finally {
-  await client2.end();
-}
+// prisma db push drops this index (it cannot be declared in the schema).
+await ensureVectorIndex(process.env.DATABASE_URL);
+console.log("✓ HNSW cosine index on extracted_chunks.embedding");
 
 console.log("\nDone. Next: npm run db:seed");
