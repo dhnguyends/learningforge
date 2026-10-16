@@ -8,6 +8,8 @@ export interface ConfirmOptions {
   title: string;
   description: string;
   confirmLabel?: string;
+  /** Label of the button that declines (default "Cancel"). */
+  cancelLabel?: string;
   /** Red confirm button for irreversible actions. */
   destructive?: boolean;
 }
@@ -51,7 +53,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => settle(false)}>
-              Cancel
+              {options?.cancelLabel ?? "Cancel"}
             </Button>
             <Button variant={options?.destructive ? "destructive" : "default"} onClick={() => settle(true)} autoFocus>
               {options?.confirmLabel ?? "Confirm"}

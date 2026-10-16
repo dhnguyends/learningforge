@@ -133,7 +133,8 @@ describe("bilingual sources", () => {
     const cached = await getStorage().list(`${sourcePrefix(workspaceId, studySetId, frId)}/tts`);
     expect(cached.some((k) => /\/tts\/mock\/en\/passages-0-[0-9a-f]{16}\.wav$/.test(k))).toBe(true);
 
-    expect((await speechRoute(new NextRequest(`${BASE}/speech?lang=de&index=0`), ctx(frId))).status).toBe(400);
+    expect((await speechRoute(new NextRequest(`${BASE}/speech?lang=%3Cscript%3E&index=0`), ctx(frId))).status).toBe(400);
+    expect((await speechRoute(new NextRequest(`${BASE}/speech?lang=de&index=0`), ctx(frId))).status).toBe(404); // no German text yet
     expect((await speechRoute(new NextRequest(`${BASE}/speech?lang=fr&index=0`), ctx(enId))).status).toBe(404);
     expect((await speechRoute(new NextRequest(`${BASE}/speech?lang=en&index=999`), ctx(frId))).status).toBe(404);
   });

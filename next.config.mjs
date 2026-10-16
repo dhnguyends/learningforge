@@ -48,6 +48,11 @@ const nextConfig = {
           { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
         ],
       },
+      {
+        // PolyLingue speaking practice records the learner (this site only).
+        source: "/polylingue/:path*",
+        headers: [{ key: "Permissions-Policy", value: "camera=(), microphone=(self), geolocation=(), payment=()" }],
+      },
     ];
   },
 };

@@ -4,8 +4,8 @@ import { apiHandler, requireSession, notFound, badRequest, rateLimited } from "@
 import { assertStudySetAccess } from "@/lib/access";
 import { getStorage, sourcePrefix } from "@/lib/storage";
 import { rateLimit } from "@/lib/rate-limit";
-import { normalizeLanguage } from "@/lib/language";
-import { getSpeaker } from "@/lib/speech/tts";
+import { speakerForLanguage } from "@/lib/speech/tts";
+import { languageName } from "@/lib/speech/languages";
 import { loadSourceReader, speechCacheKey } from "@/lib/speech/reader";
 
 type Ctx = { params: { studySetId: string; sourceId: string } };
@@ -15,7 +15,7 @@ type Ctx = { params: { studySetId: string; sourceId: string } };
  * requested language, with the TTS model chosen at /admin. Generated on first
  * request and cached under the source's storage prefix (deleted with it).
  *
- *   GET …/speech?lang=en&index=12
+ *   GET …/speech?lang=es&index=12
  */
 export const GET = apiHandler<Ctx>(async (req, { params }) => {
   const session = await requireSession();
@@ -24,16 +24,19 @@ export const GET = apiHandler<Ctx>(async (req, { params }) => {
   if (!source) throw notFound("Source");
 
   const url = new URL(req.url);
-  const lang = normalizeLanguage(url.searchParams.get("lang"));
+  const lang = url.searchParams.get("lang")?.trim() ?? "";
   const index = Number(url.searchParams.get("index"));
-  if (!lang) throw badRequest("lang must be fr or en");
+  if (!/^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/.test(lang)) throw badRequest("lang must be a language code such as fr, en or es");
   if (!Number.isInteger(index) || index < 0) throw badRequest("index must be a non-negative integer");
 
   const reader = await loadSourceReader(source.id);
   const text = reader.items[index]?.text[lang]?.trim();
   if (!text) throw notFound(index >= reader.items.length ? "Item" : `Text in ${lang}`);
 
-  const speaker = await getSpeaker();
+  const speaker = await speakerForLanguage(lang);
+  if (!speaker) {
+    return NextResponse.json({ error: `No voice reads ${languageName(lang)} with the text-to-speech models available.`, code: "no_voice" }, { status: 422 });
+  }
   const storage = getStorage();
   const key = speechCacheKey(sourcePrefix(studySet.workspaceId, studySet.id, source.id), speaker.id, lang, reader.kind, index, text, speaker.ext);
   let audio: Buffer | null = null;
@@ -47,7 +50,7 @@ export const GET = apiHandler<Ctx>(async (req, { params }) => {
     const limit = rateLimit(`tts:${session.user.id}`, 600);
     if (!limit.allowed) throw rateLimited(limit.retryAfterSec);
     try {
-      const speech = await speaker.synthesize(text, lang);
+      const speech = await speaker.synthesize(text);
       audio = speech.audio;
       await storage.put(key, speech.audio, { contentType: speech.contentType });
     } catch (err) {

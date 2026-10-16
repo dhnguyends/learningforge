@@ -2,6 +2,47 @@
 
 All notable changes to LearningForge.
 
+## Unreleased
+
+### New features
+- **PolyLingue, learn a foreign language (Phase 1, MVP)**: a **PolyLingue** button on the Dashboard opens `/polylingue`.
+  - **Onboarding, level first:** choose your CEFR level (A1 to C2, each described), then the language to learn (Spanish, English, French, German, Italian, Portuguese), the language for explanations (English or French) and a daily goal (5, 10, 15 or 20 minutes). Several languages can be followed, each at its own level; the level can be changed later.
+  - **A course per level:** the selected AI model writes the course for each language and level once (6 units of themed lessons with that level's vocabulary, grammar, sentence length and exercise mix), shared by every learner; each lesson is written the first time it is opened, and the next one ahead of time.
+  - **Short lessons with instant correction:** 10–12 exercises of six types (multiple choice, listen and choose, match pairs, word order, fill in the blank, translate). Each answer is checked at once, forgiving case and punctuation; a missing accent or small typo counts as "almost". The correct answer and a one-line explanation follow, and missed exercises come back at the end.
+  - **Audio and slow playback** on every word and sentence, with the per-language voices.
+  - **Spaced review** of the lesson's words (FSRS), with audio and examples.
+  - **XP, daily goal ring, streak** (in your time zone), lesson score, and a **progress page**: XP, best streak, lessons, words learned and mastered, accuracy, a 5-week calendar, and words to strengthen.
+  - **Immersion from B2:** B2, C1 and C2 courses are written entirely in the language learned (titles, instructions, explanations, word definitions); rewriting exercises replace translation, and an answer that is not in the expected list is judged by the AI model. Immersion courses are shared by every learner of the language and level.
+  - **Restart a lesson** from the start (while playing, or "Do it again" at the end).
+  - **Multi-skill practice**, from a panel on the left (Lessons, Reading, Listening, Writing, Speaking, Review, Progress); one practice per skill and unit, on the unit's theme and level:
+    - **Reading:** a text with underlined words (tap for the meaning, add to review), listen to the text, comprehension questions.
+    - **Generate a reading:** choose a source (newspaper, magazine, novel, textbook, research thesis) and a subject (history, news, literature, science fiction, or your own topic); the AI model writes a text in that style at your level, with a glossary and questions. Personal readings are listed under "Your readings" and visible only to you.
+    - **Listening:** dictation (listen, normal or slow, and type), then a dialogue or monologue played sentence by sentence with questions; the transcript appears at the end.
+    - **Writing:** tasks with useful words and a word counter; the AI teacher scores the text, corrects each mistake with an explanation, gives feedback and a model answer.
+    - **Speaking:** repeat sentences after the model (your recording is transcribed by local Whisper and compared word by word, missed words shown), and answer questions aloud (transcribed, then corrected like writing). Recordings are not stored; the microphone is allowed on PolyLingue pages only.
+  - **Adaptive difficulty, always within the level you chose** (the level never changes by itself):
+    - **Support / Standard / Challenge modes** from your last 40 lesson answers: under 60 % right, typed answers get a word bank and listening plays slowly first; 90 % or more, multiple-choice and fill-in answers must be typed. The lesson content stays the same.
+    - **Weak words:** a session on the words you forget or miss most (recognise, hear, write), built from your own words; each answer reschedules the word's review.
+    - **Recommendations** on the course page: redo a lesson scored under 60 %, practise weak words, or review.
+    - **Accuracy by skill** (lessons, reading, listening, writing, speaking, weak words) and the current mode on the progress page.
+  - **Grammar tips and hints:** each lesson starts with its unit's grammar focus; a **Hint** button gives a clue without the answer (written once by the AI model and kept for every learner; a hint halves that exercise's XP); lesson words are underlined in exercises — tap for the meaning — except words that would give the answer away.
+  - **Learn from your own material:** "Make a lesson" turns one of your LearningForge sources (lecture, document, video) available in the language you learn — originally or through its translation — into a personal lesson at your level, part by part; its words go into review when you finish it.
+  - **Placement test** (about 5 minutes, at most 12 questions): adaptive from A2 up and down, mixing grammar, vocabulary, reading and listening; questions written once per language by the AI model and checked by a second review pass. It suggests a level that you confirm, from onboarding ("Not sure? Take the placement test") or from course settings.
+  - **Left panel** on every PolyLingue page: your languages, then Lessons, Reading, Listening, Writing, Speaking, Weak words, Review and Progress of the open language (or of your most recent one on the PolyLingue home). Language badges replace flag emojis, which Windows does not draw.
+- **Translate any source to read and listen to it.** The source page and the Transcript page have a **Translate…** button that lists every language the active translator offers (about 140 with Azure AI Translator, 35 with local Gemma 4). The chosen language appears as a new language pill next to the original.
+  - These reading translations are **not vectorized**: search, citations and generated material are unchanged. (French sources still get their searchable English translation as before.)
+  - **Read aloud** works in every language it can find a voice for: the selected model when it speaks the language, otherwise a local Kokoro (8 languages) or Piper (about 40 languages) voice, otherwise Azure Neural TTS or Gemini TTS when their key is set. The button shows the voice it uses, and is greyed out with an explanation when no voice speaks the language.
+  - **Progress bar** while a translation runs: percentage, items done out of the total, and the estimated time left (from the speed so far, counting down every second). It also shows for the French → English translation.
+- **Edit any transcript or text, original or translation.** An **Edit** button next to the language pills (source page and Transcript page) opens the shown language in an editor, passage by passage, to correct OCR text, a transcription or a machine translation:
+  - **Undo / Redo** (Ctrl+Z, Ctrl+Y), **Find and replace** (Ctrl+F: match case, whole word, next / previous, replace, replace all, only passages with a match).
+  - **Case:** UPPERCASE, lowercase, Sentence case, Title Case, on the selection or the passage.
+  - **Clean up** OCR and transcription artefacts, in a passage or the whole text: join broken words ("remov- ing" → "removing"), join lines broken mid-sentence, remove extra spaces (keeping French spacing before ; : ! ?).
+  - **Special characters** (quotes, dashes, accents, symbols), **spell check** in the text's language (right-click for suggestions), word count, restore a passage, a warning before leaving with unsaved changes. Ctrl+S saves.
+  - Plain text only (no bold or italics), because the text is searched, cited and read aloud.
+  - Saving re-indexes what search uses: a corrected original passage, or the English search translation of a French source, gets a new embedding; a corrected transcript rebuilds the passages covering the changed segments. Reading translations are saved without being vectorized. The text before each correction is kept, and corrected passages are marked "edited". Reprocessing the source (or translating again into that language) replaces the corrections.
+- **Right-click menu on a translation** (its language pill, or the translated transcript or text; Shift+F10 from the keyboard): **Edit** it, **Translate again** into the same language, or **Delete** it. After a deletion the page offers to translate into that language again ("Translate again" / "Not now"). The original is never deleted; the confirmation says when hand corrections would be lost, or when the deleted translation is the English one search uses.
+- **Scan with OCR** on PDF and image sources: re-reads every page as an image, in the source's language (English, French, Spanish, German, Italian, Portuguese), for scans whose text is missing or garbled. A page keeps its text layer when OCR reads it less well (fewer real words, low confidence), so a good layer is never degraded. The source page says how its text was obtained: text layer, OCR on some or all pages, or text layer kept after a scan.
+
 ## 2.1 — 2026-10-16
 
 Courses are now organised in a four-level tree: Discipline › Subject › Course / Module › Topic.

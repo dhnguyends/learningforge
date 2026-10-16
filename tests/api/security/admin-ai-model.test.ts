@@ -36,10 +36,15 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  if (saved) {
-    await prisma.appSetting.update({ where: { key: "ai" }, data: { value: saved.value as object, updatedById: saved.updatedById } });
-  } else {
-    await prisma.appSetting.deleteMany({ where: { key: "ai" } });
+  // Restore only what this test changed: if someone saved a model meanwhile
+  // (the row was last written by another account), keep their choice.
+  const current = await prisma.appSetting.findUnique({ where: { key: "ai" }, select: { updatedById: true } });
+  if (current && current.updatedById === admin.id) {
+    if (saved) {
+      await prisma.appSetting.update({ where: { key: "ai" }, data: { value: saved.value as object, updatedById: saved.updatedById } });
+    } else {
+      await prisma.appSetting.deleteMany({ where: { key: "ai" } });
+    }
   }
   await prisma.auditLog.deleteMany({ where: { userId: admin.id } });
   await disposeTestUser(admin.email);

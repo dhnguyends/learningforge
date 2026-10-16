@@ -142,6 +142,20 @@ read text aloud in either language. Both models are chosen at `/admin` →
   old clip.
 - Sources imported before translation existed: open the source and use
   **Translate to English** (no re-import needed).
+- **Reading translations** (Translate… on the source page) go into any
+  language the translator offers and are stored with the segments
+  (`translations`) or passages (`readingTranslations`), never embedded.
+  Voices per language: `src/lib/speech/languages.ts` (Kokoro and Piper maps;
+  Azure voices come from its voice list). Piper models download on first use.
+
+## PolyLingue (language learning)
+
+Plan and phases: `docs/POLYLINGUE-PLAN.md`. Code: `src/lib/polylingue/` (levels, content schemas, answer checking, XP and streaks, curriculum generation, service), API under `/api/polylingue/`, pages under `/polylingue`.
+
+- **Courses are shared:** one `LangCurriculum` per target language, explanation language and CEFR level. The generation model writes the outline, then each `LangLesson` when it is first opened (the next one is prefetched). Generation is claimed in the database, so two learners never write the same lesson twice; a stuck claim is retried after 10 minutes.
+- **Answers never reach the browser** before they are checked: `/answer` checks on the server (`src/lib/polylingue/check.ts`).
+- **Audio:** `/api/polylingue/speech` uses the per-language voice (`speakerForLanguage`) and caches clips under `polylingue/tts/`; slow playback is the browser's `playbackRate`.
+- **Tests** (`tests/api/polylingue.test.ts`) only use language/level pairs nobody has started, and delete them afterwards, so mock lessons never reach real learners.
 
 ## Database workflow
 

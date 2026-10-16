@@ -3,7 +3,8 @@
 import { Suspense, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { Bot, BookOpen, Cpu, Database, Loader2, Network, Pencil, Plus, ShieldCheck, ShieldPlus, Trash2, UserRound, Users } from "lucide-react";
+import { Bot, BookOpen, Cpu, Database, Languages, Loader2, Network, Pencil, Plus, ShieldCheck, ShieldPlus, Trash2, UserRound, Users } from "lucide-react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -64,11 +65,18 @@ function AdminTabs() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 px-4 py-8 sm:px-6">
-      <div>
-        <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight">
-          <ShieldCheck className="h-5 w-5 text-primary" aria-hidden="true" /> Administration
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">Accounts, the AI model, courses and the vector database of this LearningForge instance.</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight">
+            <ShieldCheck className="h-5 w-5 text-primary" aria-hidden="true" /> Administration
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">Accounts, the AI model, courses and the vector database of this LearningForge instance.</p>
+        </div>
+        <Button asChild variant="outline" className="gap-1.5">
+          <Link href="/polylingue" title="Open PolyLingue, the language-learning app">
+            <Languages className="h-4 w-4" aria-hidden="true" /> PolyLingue
+          </Link>
+        </Button>
       </div>
       <Tabs value={tab} onValueChange={(next) => router.replace(`${pathname}?tab=${next}`, { scroll: false })}>
         <TabsList>

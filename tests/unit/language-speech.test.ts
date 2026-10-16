@@ -74,3 +74,43 @@ describe("speech settings", () => {
     expect(speechCacheKey("p", "azure-x/y", "en", "segments", 3, "Hello", "mp3")).toContain("/tts/azure-x_y/");
   });
 });
+
+describe("reading languages and voices", () => {
+  it("lists a source's languages: original first, then complete translations", async () => {
+    const { languagesOf } = await import("@/lib/speech/reader");
+    const items: { text: Record<string, string> }[] = [
+      { text: { en: "a", es: "a-es", de: "a-de" } },
+      { text: { en: "b", es: "b-es" } },
+    ];
+    expect(languagesOf(items, "en")).toEqual(["en", "es"]);
+    expect(languagesOf([], "fr")).toEqual(["fr"]);
+  });
+
+  it("maps translator codes to Azure locales", async () => {
+    const { azureLocaleCandidates } = await import("@/lib/speech/tts");
+    expect(azureLocaleCandidates("de")).toEqual(["de-de", "de"]);
+    expect(azureLocaleCandidates("zh-Hans")).toEqual(["zh-cn"]);
+    expect(azureLocaleCandidates("zh-Hant")).toEqual(["zh-tw", "zh-hk"]);
+    expect(azureLocaleCandidates("pt-PT")).toEqual(["pt-pt", "pt"]);
+  });
+
+  it("chooses a local voice per language, Kokoro first unless Piper is selected", async () => {
+    const { resolveVoice } = await import("@/lib/speech/tts");
+    const kokoro = { provider: "kokoro" as const, voices: { en: "af_heart", fr: "ff_siwis" } };
+    const piper = { provider: "piper" as const, voices: { en: "lessac", fr: "siwis" } };
+    expect(await resolveVoice("es", kokoro)).toMatchObject({ engine: "kokoro", voice: "ef_dora" });
+    expect(await resolveVoice("de", kokoro)).toMatchObject({ engine: "piper", voice: "thorsten", model: "speaches-ai/piper-de_DE-thorsten-medium" });
+    expect(await resolveVoice("es", piper)).toMatchObject({ engine: "piper", voice: "davefx" });
+    expect(await resolveVoice("ja", piper)).toMatchObject({ engine: "kokoro", voice: "jf_alpha" });
+    expect(await resolveVoice("fr", piper)).toMatchObject({ engine: "piper", voice: "siwis" });
+    expect(await resolveVoice("en", kokoro)).toMatchObject({ engine: "kokoro", voice: "af_heart" });
+  });
+
+  it("names languages and offers a local list when Azure is not used", async () => {
+    const { languageName, translationLanguages } = await import("@/lib/speech/languages");
+    expect(languageName("es")).toBe("Spanish");
+    expect(languageName("zh-Hans")).toMatch(/Chinese/);
+    const local = await translationLanguages("local");
+    expect(local.map((l) => l.code)).toEqual(expect.arrayContaining(["es", "de", "ja"]));
+  });
+});

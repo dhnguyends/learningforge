@@ -211,11 +211,24 @@ async function ingestDocument(source: Source & { assets: SourceAsset[] }, ctx: J
 
   await ctx.updateStage("parsing-document", 25);
   const buffer = await getStorage().read(original.storageKey);
-  const parsed = await parseDocument(buffer, original.filename, original.mimeType);
+  // "Scan with OCR" on the source page asks for every page to be read as an image.
+  const { ocr: requested, ...metadata } = (source.metadata as Record<string, unknown> | null) ?? {};
+  const parsed = await parseDocument(buffer, original.filename, original.mimeType, { forceOcr: requested === "force", language: source.language });
 
   await prisma.source.update({
     where: { id: source.id },
-    data: { metadata: { ...(source.metadata as object), pageCount: parsed.pageCount, format: String(parsed.metadata.format ?? "unknown") } },
+    data: {
+      metadata: {
+        ...metadata,
+        pageCount: parsed.pageCount,
+        format: String(parsed.metadata.format ?? "unknown"),
+        // How the text was obtained, shown on the source page.
+        ocrPages: Number(parsed.metadata.ocrPages ?? 0),
+        ocrForced: parsed.metadata.ocrForced === true,
+        ...(parsed.metadata.ocrForced ? { ocrKeptLayerPages: Number(parsed.metadata.ocrKeptLayerPages ?? 0) } : {}),
+        ...(parsed.metadata.ocrLanguage ? { ocrLanguage: String(parsed.metadata.ocrLanguage) } : {}),
+      },
+    },
   });
 
   await ctx.updateStage("segmenting", 65);

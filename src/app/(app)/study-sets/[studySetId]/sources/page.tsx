@@ -3,15 +3,16 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
-import { ChevronLeft, ExternalLink, Loader2, Plus, RotateCw, Trash2 } from "lucide-react";
+import { ChevronLeft, ExternalLink, Loader2, Plus, RotateCw, ScanText, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { MediaPlayer, SegmentList, useMediaSync } from "@/components/study/source-viewer";
-import { PassageList, ReaderToolbar, useBilingualSource } from "@/components/study/bilingual-reader";
+import { PassageList, ReaderToolbar, useBilingualSource, useTranslationMenu } from "@/components/study/bilingual-reader";
+import { SourceTextEditor } from "@/components/study/source-text-editor";
 import { PipelineStatusBar } from "@/components/shared/pipeline-status";
-import { useSource, useSourceReader, useStudySet, useDeleteSource, useReprocessSource } from "@/hooks/use-api";
+import { useSource, useSourceReader, useStudySet, useDeleteSource, useReprocessSource, useOcrSource } from "@/hooks/use-api";
 import { SourceRowActions, IMPORTING_STATUSES, deleteSourcePrompt, reprocessSourcePrompt } from "@/components/study/source-actions";
 import { useConfirm } from "@/components/shared/confirm-dialog";
 import { ingestJobFor } from "@/lib/pipeline-phases";
@@ -163,11 +164,24 @@ function SourceDetailPage({
   const mediaRef = useRef<HTMLVideoElement | HTMLAudioElement | null>(null);
   const { timeMs, playing, seek } = useMediaSync(mediaRef);
   const [showFullTranscript, setShowFullTranscript] = useState(false);
+  const ocr = useOcrSource(studySetId);
+  const [editing, setEditing] = useState(false);
+  const confirmOcr = useConfirm();
 
   const allSegments = useMemo(() => data?.source.transcripts[0]?.segments ?? [], [data]);
   const { data: reader } = useSourceReader(studySetId, data?.source.status === "READY" ? sourceId : null);
   const bilingual = useBilingualSource(studySetId, sourceId, reader, allSegments);
   const { readAloud, segments } = bilingual;
+  const translationMenu = useTranslationMenu({
+    studySetId,
+    sourceId,
+    reader,
+    lang: bilingual.lang,
+    onLangChange: bilingual.setLang,
+    onEdit: () => setEditing(true),
+  });
+  // Right-click on a translation shown: translate it again or delete it.
+  const onTextMenu = !editing && !bilingual.isOriginal ? (e: React.MouseEvent) => translationMenu.open(e) : undefined;
   // Reading aloud and playing the recording are exclusive.
   useEffect(() => {
     if (playing && readAloud.reading) readAloud.stop();
@@ -191,6 +205,35 @@ function SourceDetailPage({
           <ChevronLeft className="h-4 w-4" aria-hidden="true" /> All sources
         </Button>
         <div className="flex items-center gap-1">
+          {(s.type === "PDF" || s.type === "IMAGE") && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1.5"
+              disabled={ocr.isPending || IMPORTING_STATUSES.includes(s.status)}
+              title="Read every page as an image with OCR: for scans whose text is missing or garbled"
+              onClick={async () => {
+                const ok = await confirmOcr({
+                  title: "Scan this document with OCR?",
+                  description:
+                    `Every page of "${s.title}" is read as an image, in the document's language, and replaces the text extracted so far ` +
+                    "(pages where OCR reads clearly less keep their text). This takes about 5–15 seconds per page. Citations to the old " +
+                    "passages lose their link: regenerate the study material afterwards.",
+                  confirmLabel: "Scan with OCR",
+                });
+                if (!ok) return;
+                try {
+                  await ocr.mutateAsync(s.id);
+                  toast.success("OCR started: the text is replaced when the scan finishes.");
+                } catch (e) {
+                  toast.error(e instanceof Error ? e.message : "Could not start OCR");
+                }
+              }}
+            >
+              {ocr.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : <ScanText className="h-3.5 w-3.5" aria-hidden="true" />}
+              Scan with OCR
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="sm"
@@ -220,8 +263,10 @@ function SourceDetailPage({
           {s.durationSec ? ` · ${formatDuration(s.durationSec)}` : ""}
           {s.error ? ` · ${s.error}` : ""}
         </p>
+        {(s.type === "PDF" || s.type === "IMAGE") && s.status === "READY" && <TextOrigin metadata={s.metadata} type={s.type} />}
       </div>
 
+      {translationMenu.menu}
       <MediaPlayer
         detail={data}
         startAtSec={s.playbackKind === "document" ? page : seekSec}
@@ -249,21 +294,30 @@ function SourceDetailPage({
                   }}
                   startIndex={bilingual.indexAt(timeMs)}
                   canTranslate
+                  onEdit={reader ? () => setEditing(true) : undefined}
+                  editing={editing}
+                  translationMenu={editing ? undefined : translationMenu}
                 />
-                <Button variant="ghost" size="sm" onClick={() => setShowFullTranscript((v) => !v)}>
-                  {showFullTranscript ? "Collapse" : "Expand"}
-                </Button>
+                {!editing && (
+                  <Button variant="ghost" size="sm" onClick={() => setShowFullTranscript((v) => !v)}>
+                    {showFullTranscript ? "Collapse" : "Expand"}
+                  </Button>
+                )}
               </div>
             </div>
-            {showFullTranscript ? (
+            {editing && reader ? (
+              <SourceTextEditor studySetId={studySetId} sourceId={s.id} reader={reader} lang={bilingual.lang} onClose={() => setEditing(false)} />
+            ) : showFullTranscript ? (
+              <div onContextMenu={onTextMenu}>
               <SegmentList
                 segments={segments}
                 currentTimeMs={readAloud.reading ? (bilingual.readingStartMs ?? timeMs) : timeMs}
                 onSeekMs={(ms) => (readAloud.reading ? readFrom(bilingual.indexAt(ms)) : seek(ms))}
                 playing={playing || readAloud.reading}
               />
+              </div>
             ) : (
-              <p className="line-clamp-3 text-sm leading-relaxed text-muted-foreground">
+              <p onContextMenu={onTextMenu} className="line-clamp-3 text-sm leading-relaxed text-muted-foreground">
                 {segments.slice(0, 6).map((seg) => seg.text).join(" ")}…{" "}
                 <Link href={`/study-sets/${studySetId}/transcript?source=${s.id}`} className="text-primary hover:underline">
                   Open full transcript editor
@@ -287,12 +341,40 @@ function SourceDetailPage({
                 onLangChange={bilingual.setLang}
                 readAloud={readAloud}
                 canTranslate
+                onEdit={() => setEditing(true)}
+                editing={editing}
+                translationMenu={editing ? undefined : translationMenu}
               />
             </div>
-            <PassageList reader={reader} lang={bilingual.lang} activeIndex={readAloud.index} onReadFrom={readAloud.start} />
+            {editing ? (
+              <SourceTextEditor studySetId={studySetId} sourceId={s.id} reader={reader} lang={bilingual.lang} onClose={() => setEditing(false)} />
+            ) : (
+              <div onContextMenu={onTextMenu}>
+                <PassageList reader={reader} lang={bilingual.lang} activeIndex={readAloud.index} onReadFrom={readAloud.start} />
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
     </div>
+  );
+}
+
+/** How a document's text was obtained: its text layer, or OCR on some or all pages. */
+function TextOrigin({ metadata, type }: { metadata: Record<string, unknown> | null; type: string }) {
+  const m = metadata ?? {};
+  const pages = Number(m.pageCount ?? 0);
+  const ocrPages = Number(m.ocrPages ?? 0);
+  const language = typeof m.ocrLanguage === "string" ? m.ocrLanguage : null;
+  let text: string;
+  if (type === "IMAGE") text = "Text read from the image with OCR.";
+  else if (ocrPages === 0 && m.ocrForced) text = `OCR did not read any page better than the PDF's text layer, so the text layer was kept (${pages} pages).`;
+  else if (ocrPages === 0) text = `Text read from the PDF's text layer${pages ? ` (${pages} page${pages > 1 ? "s" : ""})` : ""}. If it looks garbled or incomplete, use Scan with OCR.`;
+  else if (ocrPages >= pages) text = `All ${pages} pages read with OCR${language ? ` (${language})` : ""}${m.ocrForced ? ", as requested" : ""}.`;
+  else text = `${ocrPages} of ${pages} pages read with OCR${language ? ` (${language})` : ""}${m.ocrForced ? " (the others kept their better text layer)" : " (pages without a text layer)"}.`;
+  return (
+    <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+      <ScanText className="h-3.5 w-3.5" aria-hidden="true" /> {text}
+    </p>
   );
 }

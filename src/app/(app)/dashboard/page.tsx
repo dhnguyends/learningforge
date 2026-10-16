@@ -8,6 +8,7 @@ import {
   Boxes,
   CalendarClock,
   Compass,
+  Languages,
   FileStack,
   Layers,
   Loader2,
@@ -109,6 +110,11 @@ export default function DashboardPage() {
           <Button asChild variant="outline" className="gap-1.5">
             <Link href="/explore">
               <Compass className="h-4 w-4" aria-hidden="true" /> Explore
+            </Link>
+          </Button>
+          <Button asChild variant="outline" className="gap-1.5">
+            <Link href="/polylingue" title="Learn a foreign language, 10 minutes a day">
+              <Languages className="h-4 w-4" aria-hidden="true" /> PolyLingue
             </Link>
           </Button>
           <Button onClick={() => setQuickOpen(true)} className="gap-1.5">

@@ -510,6 +510,24 @@ export function useReprocessSource(studySetId: string) {
   );
 }
 
+/** Re-import a PDF or image reading every page with OCR (scans whose text layer is poor). */
+export function useOcrSource(studySetId: string) {
+  return useLfMutation(
+    (sourceId: string) =>
+      api<{ jobId: string }>(`/api/study-sets/${studySetId}/sources/${sourceId}/reprocess`, { method: "POST", body: JSON.stringify({ ocr: true }) }),
+    (sourceId) => [qk.studySet(studySetId), qk.studySets, qk.jobs(studySetId), qk.source(studySetId, sourceId)],
+  );
+}
+
+/** Save hand corrections of a source's text in one language (original or translation). */
+export function useSaveSourceText(studySetId: string, sourceId: string) {
+  return useLfMutation(
+    (body: { lang: string; edits: { id: string; text: string }[] }) =>
+      api<{ saved: number; reindexed: number }>(`/api/study-sets/${studySetId}/sources/${sourceId}/text`, { method: "PUT", body: JSON.stringify(body) }),
+    () => [qk.source(studySetId, sourceId)],
+  );
+}
+
 export function usePatchSource(studySetId: string) {
   return useLfMutation(
     (vars: { sourceId: string; title?: string; description?: string | null }) =>
@@ -1042,8 +1060,12 @@ export function useTestTts() {
 
 /* ------------------------ bilingual reader (source) ----------------------- */
 
-export type SourceReader = import("@/lib/speech/reader").SourceReader;
-export type ReaderLanguage = "fr" | "en";
+export type SourceReader = import("@/lib/speech/reader").SourceReader & {
+  /** Voice that reads each of the reader's languages aloud (null: none available). */
+  voices: Record<string, string | null>;
+};
+/** A language code: "fr", "en", "es", "zh-Hans"… */
+export type ReaderLanguage = string;
 
 export function useSourceReader(studySetId: string, sourceId: string | null | undefined) {
   return useQuery({
@@ -1051,20 +1073,51 @@ export function useSourceReader(studySetId: string, sourceId: string | null | un
     queryFn: () => api<SourceReader>(`/api/study-sets/${studySetId}/sources/${sourceId}/reader`),
     enabled: Boolean(sourceId),
     // Follow a translation in progress.
-    refetchInterval: (q) => (q.state.data?.translation?.status === "running" ? 5000 : false),
+    refetchInterval: (q) => {
+      const d = q.state.data;
+      const running = d?.translation?.status === "running" || Object.values(d?.readingTranslations ?? {}).some((t) => t.status === "running");
+      return running ? 2000 : false;
+    },
   });
+}
+
+/** Start a translation: without `to`, French → English for search; with `to`, a reading translation into that language. */
+/** Delete a source's translation into one language (the original stays). */
+export function useDeleteTranslation(studySetId: string, sourceId: string) {
+  return useLfMutation(
+    (lang: string) =>
+      api<{ deleted: string; segments: number; passages: number; search: boolean }>(
+        `/api/study-sets/${studySetId}/sources/${sourceId}/translate?to=${encodeURIComponent(lang)}`,
+        { method: "DELETE" },
+      ),
+    () => [qk.source(studySetId, sourceId)],
+  );
 }
 
 export function useTranslateSource(studySetId: string, sourceId: string) {
   return useLfMutation(
-    () => api<{ started: boolean }>(`/api/study-sets/${studySetId}/sources/${sourceId}/translate`, { method: "POST" }),
+    (to?: string) =>
+      api<{ started: boolean; to: string }>(`/api/study-sets/${studySetId}/sources/${sourceId}/translate`, {
+        method: "POST",
+        body: JSON.stringify(to ? { to } : {}),
+      }),
     () => [[...qk.source(studySetId, sourceId), "reader"]],
   );
 }
 
+/** Languages the active translator offers (code + English name). */
+export function useTranslationLanguages(enabled = true) {
+  return useQuery({
+    queryKey: ["translation", "languages"],
+    queryFn: () => api<{ translator: string; languages: { code: string; name: string }[] }>("/api/translation/languages"),
+    enabled,
+    staleTime: 10 * 60_000,
+  });
+}
+
 /** URL of one item's read-aloud clip (generated on first request, then cached). */
 export function speechUrl(studySetId: string, sourceId: string, lang: ReaderLanguage, index: number): string {
-  return `/api/study-sets/${studySetId}/sources/${sourceId}/speech?lang=${lang}&index=${index}`;
+  return `/api/study-sets/${studySetId}/sources/${sourceId}/speech?lang=${encodeURIComponent(lang)}&index=${index}`;
 }
 
 /** Sanitized HTML of a Word (.docx) source, which browsers cannot display themselves. */

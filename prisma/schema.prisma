@@ -238,6 +238,7 @@ model User {
   edits           ArtifactEdit[]
   auditLogs       AuditLog[]
   workspaces      WorkspaceMember[]
+  languageCourses LanguageCourse[]
   ownedWorkspaces Workspace[]     @relation("WorkspaceOwner")
 
   @@map("users")
@@ -505,6 +506,9 @@ model ExtractedChunk {
   /// Set on an automatic translation (e.g. the English version of a French
   /// passage): it is searchable, but citations always point at the original.
   translationOfId String?
+  /// Reading translations by language code, e.g. { "es": "…" }: shown and read
+  /// aloud on the source page, never embedded or searched.
+  readingTranslations Json @default("{}")
   createdAt  DateTime  @default(now())
 
   source        Source           @relation(fields: [sourceId], references: [id], onDelete: Cascade)
@@ -923,4 +927,264 @@ model AuditLog {
   @@index([userId, createdAt])
   @@index([action, createdAt])
   @@map("audit_logs")
+}
+
+// ============================================================================
+// PolyLingue — language learning (docs/POLYLINGUE-PLAN.md)
+// ============================================================================
+
+/// Common European Framework of Reference level, chosen first by the learner.
+enum CefrLevel {
+  A1
+  A2
+  B1
+  B2
+  C1
+  C2
+}
+
+/// The course for one target language, explanation language and level:
+/// generated once by the AI model and shared by every learner at that level.
+model LangCurriculum {
+  id         String      @id @default(cuid())
+  targetLang String
+  baseLang   String
+  level      CefrLevel
+  status     GuideStatus @default(QUEUED)
+  /// { units: [{ title, theme, grammar, lessons: [{ title, focus }] }] }
+  outline    Json        @default("{}")
+  model      String?
+  error      String?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  lessons   LangLesson[]
+  practices LangPractice[]
+  courses   LanguageCourse[]
+
+  @@unique([targetLang, baseLang, level])
+  @@map("lang_curricula")
+}
+
+/// One 5–10 minute lesson; its words and exercises are generated when first opened.
+/// A learner can also make personal lessons from their own LearningForge
+/// sources (courseId and sourceId set, no place in the course order).
+model LangLesson {
+  id           String      @id @default(cuid())
+  curriculumId String
+  /// Order in the course (unit by unit); null for a personal lesson.
+  ordinal      Int?
+  unitIndex    Int?
+  /// Unit title, or the source's title for a personal lesson.
+  unitTitle    String
+  /// Owner of a personal lesson (null: shared course lesson).
+  courseId     String?
+  /// LearningForge source the personal lesson was made from (kept if the source is deleted).
+  sourceId     String?
+  /// The excerpt of the source the lesson is built on (target language).
+  sourceExcerpt String?
+  title        String
+  focus        String
+  status       GuideStatus @default(QUEUED)
+  /// { intro, words: [...], exercises: [...] } — see src/lib/polylingue/content.ts
+  content      Json?
+  model        String?
+  error        String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  curriculum LangCurriculum       @relation(fields: [curriculumId], references: [id], onDelete: Cascade)
+  owner      LanguageCourse?      @relation("OwnLessons", fields: [courseId], references: [id], onDelete: Cascade)
+  progress   LangLessonProgress[]
+
+  @@unique([curriculumId, ordinal])
+  @@index([courseId])
+  @@map("lang_lessons")
+}
+
+/// A learner following one language at one level (several languages possible).
+model LanguageCourse {
+  id               String    @id @default(cuid())
+  userId           String
+  targetLang       String
+  baseLang         String
+  level            CefrLevel
+  curriculumId     String
+  dailyGoalMinutes Int       @default(10)
+  timeZone         String    @default("UTC")
+  xp               Int       @default(0)
+  streak           Int       @default(0)
+  bestStreak       Int       @default(0)
+  /// YYYY-MM-DD in the learner's time zone.
+  lastActiveDay    String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  user       User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  curriculum LangCurriculum        @relation(fields: [curriculumId], references: [id])
+  lessons    LangLessonProgress[]
+  attempts   LangExerciseAttempt[]
+  cards      LangCard[]
+  days       LangDailyActivity[]
+  practices  LangPracticeProgress[]
+  ownPractices LangPractice[]       @relation("OwnPractices")
+  ownLessons   LangLesson[]         @relation("OwnLessons")
+
+  @@unique([userId, targetLang])
+  @@map("language_courses")
+}
+
+model LangLessonProgress {
+  id          String    @id @default(cuid())
+  courseId    String
+  lessonId    String
+  /// Percent of exercises right on the first try, best run.
+  bestScore   Int       @default(0)
+  runs        Int       @default(0)
+  xp          Int       @default(0)
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  course LanguageCourse @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lesson LangLesson     @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([courseId, lessonId])
+  @@map("lang_lesson_progress")
+}
+
+model LangExerciseAttempt {
+  id            String   @id @default(cuid())
+  courseId      String
+  lessonId      String
+  exerciseIndex Int
+  type          String
+  answer        String
+  /// correct | almost | wrong
+  verdict       String
+  xp            Int      @default(0)
+  createdAt     DateTime @default(now())
+
+  course LanguageCourse @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@index([courseId, createdAt])
+  @@map("lang_exercise_attempts")
+}
+
+/// A word or phrase the learner met in a lesson, reviewed with FSRS.
+model LangCard {
+  id                 String    @id @default(cuid())
+  courseId           String
+  term               String
+  translation        String
+  example            String?
+  exampleTranslation String?
+  partOfSpeech       String?
+  lessonId           String?
+  state              CardState @default(NEW)
+  stability          Float?
+  difficulty         Float?
+  reps               Int       @default(0)
+  lapses             Int       @default(0)
+  dueAt              DateTime  @default(now())
+  lastReviewedAt     DateTime?
+  createdAt          DateTime  @default(now())
+
+  course LanguageCourse @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([courseId, term])
+  @@index([courseId, dueAt])
+  @@map("lang_cards")
+}
+
+/// Minutes, XP, lessons and reviews per day (learner's time zone), for goals and streaks.
+model LangDailyActivity {
+  id      String @id @default(cuid())
+  courseId String
+  day     String
+  seconds Int    @default(0)
+  xp      Int    @default(0)
+  lessons Int    @default(0)
+  reviews Int    @default(0)
+
+  course LanguageCourse @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([courseId, day])
+  @@map("lang_daily_activity")
+}
+
+/// Multi-skill practice: reading, listening, writing, speaking.
+enum LangSkill {
+  READING
+  LISTENING
+  WRITING
+  SPEAKING
+}
+
+/// One practice per skill and unit of a curriculum, on the unit's theme; written
+/// by the AI model when first opened and shared like the lessons. A learner can
+/// also generate personal ones (courseId set, no unit): e.g. a reading in the
+/// style of a newspaper or a novel, on history or science fiction.
+model LangPractice {
+  id           String      @id @default(cuid())
+  curriculumId String
+  skill        LangSkill
+  /// Unit of the course; null for a personal practice.
+  unitIndex    Int?
+  /// Owner of a personal practice (null: shared unit practice).
+  courseId     String?
+  /// Personal reading: kind of source (newspaper, magazine, novel, textbook, thesis) and subject.
+  format       String?
+  topic        String?
+  title        String
+  status       GuideStatus @default(QUEUED)
+  /// Shape depends on the skill — see src/lib/polylingue/practice.ts
+  content      Json?
+  model        String?
+  error        String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  curriculum LangCurriculum         @relation(fields: [curriculumId], references: [id], onDelete: Cascade)
+  owner      LanguageCourse?        @relation("OwnPractices", fields: [courseId], references: [id], onDelete: Cascade)
+  progress   LangPracticeProgress[]
+
+  @@unique([curriculumId, skill, unitIndex])
+  @@index([courseId])
+  @@map("lang_practices")
+}
+
+model LangPracticeProgress {
+  id          String    @id @default(cuid())
+  courseId    String
+  practiceId  String
+  bestScore   Int       @default(0)
+  runs        Int       @default(0)
+  xp          Int       @default(0)
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  course   LanguageCourse @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  practice LangPractice   @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+
+  @@unique([courseId, practiceId])
+  @@map("lang_practice_progress")
+}
+
+/// Placement test questions for one target language and explanation language
+/// (4 per CEFR level), written once by the AI model and shared.
+model LangPlacementBank {
+  id         String      @id @default(cuid())
+  targetLang String
+  baseLang   String
+  status     GuideStatus @default(QUEUED)
+  content    Json?
+  model      String?
+  error      String?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  @@unique([targetLang, baseLang])
+  @@map("lang_placement_banks")
 }

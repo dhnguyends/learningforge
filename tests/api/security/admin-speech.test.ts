@@ -43,6 +43,9 @@ beforeAll(async () => {
 
 afterAll(async () => {
   for (const key of ["translator", "tts"]) {
+    // Restore only what this test changed: keep a choice someone saved meanwhile.
+    const current = await prisma.appSetting.findUnique({ where: { key }, select: { updatedById: true } });
+    if (current && current.updatedById !== admin.id) continue;
     const row = saved.get(key);
     if (row) await prisma.appSetting.update({ where: { key }, data: { value: row.value as object, updatedById: row.updatedById } });
     else await prisma.appSetting.deleteMany({ where: { key } });

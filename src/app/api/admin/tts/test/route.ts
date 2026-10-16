@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { apiHandler, parseJsonBody, requireAdmin, badRequest } from "@/lib/api";
-import { speakerFor } from "@/lib/speech/tts";
+import { speakerForLanguage } from "@/lib/speech/tts";
 import { ttsChoiceSchema, ttsConfigured } from "@/lib/speech/settings";
 
 /**
@@ -21,7 +21,9 @@ export const POST = apiHandler(async (req) => {
   if (!ttsConfigured(choice.provider)) throw badRequest(`${choice.provider === "azure" ? "AZURE_SPEECH_KEY" : "GEMINI_API_KEY"} is not set`);
   const started = Date.now();
   try {
-    const speech = await speakerFor(choice).synthesize(SAMPLES[lang], lang);
+    const speaker = await speakerForLanguage(lang, choice);
+    if (!speaker) throw new Error("No voice for this language");
+    const speech = await speaker.synthesize(SAMPLES[lang]);
     return new NextResponse(new Uint8Array(speech.audio), {
       status: 200,
       headers: {

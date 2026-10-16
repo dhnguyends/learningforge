@@ -1,24 +1,27 @@
 import { getEnv, mockProvidersAllowed } from "@/lib/env";
 import { cpuTimeoutFactor } from "@/lib/gpu";
-import type { SourceLanguage } from "@/lib/language";
+import { languageName } from "@/lib/speech/languages";
 import { getActiveTranslator } from "@/lib/speech/settings";
 
 /**
  * Machine translation of source text (passages, transcript segments), e.g. a
- * French lecture to English. Order and count are preserved: translate(texts)[i]
- * is the translation of texts[i].
+ * French lecture to English, or an English one to Spanish for reading.
+ * Languages are translator codes ("fr", "es", "zh-Hans"). Order and count are
+ * preserved: translate(texts)[i] is the translation of texts[i].
  */
 export interface Translator {
   readonly name: string;
-  translate(texts: string[], from: SourceLanguage, to: SourceLanguage): Promise<string[]>;
+  /** `onProgress(done, total)` is called after each batch, for the progress bar. */
+  translate(texts: string[], from: string, to: string, onProgress?: ProgressCallback): Promise<string[]>;
 }
 
-const LANGUAGE_NAMES: Record<SourceLanguage, string> = { fr: "French", en: "English" };
+export type ProgressCallback = (done: number, total: number) => void | Promise<void>;
 
 /** Offline stand-in for tests and demos: marks the text instead of translating it. */
 class MockTranslator implements Translator {
   readonly name = "mock";
-  async translate(texts: string[], _from: SourceLanguage, to: SourceLanguage): Promise<string[]> {
+  async translate(texts: string[], _from: string, to: string, onProgress?: ProgressCallback): Promise<string[]> {
+    await onProgress?.(texts.length, texts.length);
     return texts.map((t) => `[${to.toUpperCase()}] ${t}`);
   }
 }
@@ -44,15 +47,18 @@ export class LocalTranslator implements Translator {
     this.timeoutMs = env.LOCAL_AI_TIMEOUT_MS;
   }
 
-  async translate(texts: string[], from: SourceLanguage, to: SourceLanguage): Promise<string[]> {
+  async translate(texts: string[], from: string, to: string, onProgress?: ProgressCallback): Promise<string[]> {
     const out: string[] = new Array(texts.length);
     let batch: number[] = [];
     let size = 0;
+    let done = 0;
     const flush = async () => {
       if (!batch.length) return;
       const got = await this.translateBatch(batch.map((i) => texts[i]), from, to).catch(() => null);
       if (got && got.length === batch.length) batch.forEach((i, j) => (out[i] = got[j]));
       else for (const i of batch) out[i] = (await this.translateBatch([texts[i]], from, to))[0] ?? texts[i];
+      done += batch.length;
+      await onProgress?.(done, texts.length);
       batch = [];
       size = 0;
     };
@@ -65,7 +71,7 @@ export class LocalTranslator implements Translator {
     return out;
   }
 
-  private async translateBatch(items: string[], from: SourceLanguage, to: SourceLanguage): Promise<string[]> {
+  private async translateBatch(items: string[], from: string, to: string): Promise<string[]> {
     const timeout = this.timeoutMs * (await cpuTimeoutFactor());
     const res = await fetch(`${this.baseUrl}/api/chat`, {
       method: "POST",
@@ -85,7 +91,7 @@ export class LocalTranslator implements Translator {
           {
             role: "system",
             content:
-              `You are a professional translator. Translate each item from ${LANGUAGE_NAMES[from]} to ${LANGUAGE_NAMES[to]}. ` +
+              `You are a professional translator. Translate each item from ${languageName(from)} to ${languageName(to)}. ` +
               "Keep the meaning, numbers, formulas, LaTeX, tickers, code and proper nouns exactly. Do not add or drop content, do not summarise. " +
               `Return JSON {"translations": [...]} with exactly ${items.length} strings, in the same order.`,
           },
@@ -101,11 +107,16 @@ export class LocalTranslator implements Translator {
   }
 }
 
-/** Azure AI Translator (Text Translation v3). Up to 100 items / 50,000 characters per request. */
+/**
+ * Azure AI Translator (Text Translation v3). It takes up to 100 items / 50,000
+ * characters per request; batches of 25 keep the progress bar moving at the
+ * same cost (billing is per character).
+ */
 export class AzureTranslator implements Translator {
   readonly name = "azure-translator";
+  batchItems = 25;
 
-  async translate(texts: string[], from: SourceLanguage, to: SourceLanguage): Promise<string[]> {
+  async translate(texts: string[], from: string, to: string, onProgress?: ProgressCallback): Promise<string[]> {
     const env = getEnv();
     const key = env.AZURE_TRANSLATOR_KEY?.trim();
     if (!key) throw new Error("Azure Translator is selected but AZURE_TRANSLATOR_KEY is not set");
@@ -114,7 +125,7 @@ export class AzureTranslator implements Translator {
     let chars = 0;
     const flush = async () => {
       if (!batch.length) return;
-      const url = `${env.AZURE_TRANSLATOR_ENDPOINT.replace(/\/$/, "")}/translate?api-version=3.0&from=${from}&to=${to}&textType=plain`;
+      const url = `${env.AZURE_TRANSLATOR_ENDPOINT.replace(/\/$/, "")}/translate?api-version=3.0&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&textType=plain`;
       const res = await fetch(url, {
         method: "POST",
         headers: {
@@ -138,11 +149,12 @@ export class AzureTranslator implements Translator {
       }
       const json = (await res.json()) as { translations?: { text: string }[] }[];
       out.push(...json.map((r) => r.translations?.[0]?.text ?? ""));
+      await onProgress?.(out.length, texts.length);
       batch = [];
       chars = 0;
     };
     for (const t of texts) {
-      if ((batch.length >= 100 || chars + t.length > 45_000) && batch.length) await flush();
+      if ((batch.length >= this.batchItems || chars + t.length > 45_000) && batch.length) await flush();
       batch.push(t);
       chars += t.length;
     }
@@ -156,4 +168,10 @@ export async function getTranslator(): Promise<Translator> {
   if (getEnv().AI_PROVIDER === "mock" && mockProvidersAllowed()) return new MockTranslator();
   const { provider } = await getActiveTranslator();
   return provider === "azure" ? new AzureTranslator() : new LocalTranslator();
+}
+
+/** Which translator getTranslator() returns, for the list of offered languages. */
+export async function activeTranslatorProvider(): Promise<"mock" | "local" | "azure"> {
+  if (getEnv().AI_PROVIDER === "mock" && mockProvidersAllowed()) return "mock";
+  return (await getActiveTranslator()).provider;
 }

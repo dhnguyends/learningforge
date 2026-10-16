@@ -69,6 +69,14 @@ describe("re-submitting a source", () => {
     expect(await prisma.auditLog.count({ where: { entityId: id, action: "source.reprocess" } })).toBe(2);
   });
 
+  it("offers OCR only for PDFs and images", async () => {
+    const id = await noteSource("ocr-note", "Resistance is measured in ohms.");
+    signInAs(me.id);
+    const res = await reprocess(jsonRequest(`${BASE}/x`, "POST", { ocr: true }), ctx(id));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/PDF and image/);
+  });
+
   it("refuses while an import of the source is already running", async () => {
     const id = await noteSource("busy", "Capacitors store energy.");
     await prisma.generationJob.create({ data: { studySetId, sourceId: id, type: "INGEST_SOURCE", status: "RUNNING", payload: {} } });

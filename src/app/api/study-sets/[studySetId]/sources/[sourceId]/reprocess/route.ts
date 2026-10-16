@@ -14,7 +14,7 @@ type Ctx = { params: { studySetId: string; sourceId: string } };
  * Ollama — or to re-index with a new embeddings model. The transcript and the
  * indexed passages are replaced, not duplicated.
  */
-export const POST = apiHandler<Ctx>(async (_req, { params }) => {
+export const POST = apiHandler<Ctx>(async (req, { params }) => {
   const session = await requireSession();
   const studySet = await assertStudySetAccess(session.user.id, params.studySetId, "write");
   const source = await prisma.source.findFirst({
@@ -46,12 +46,23 @@ export const POST = apiHandler<Ctx>(async (_req, { params }) => {
     if (!stored) throw badRequest("The original file is no longer stored — delete this source and add the file again.");
   }
 
-  await prisma.source.update({ where: { id: source.id }, data: { status: "UPLOADED", error: null } });
+  // Optional {"ocr": true}: read every page of a PDF (or the image) with OCR, for scans with a poor text layer.
+  const body = (await req.json().catch(() => null)) as { ocr?: unknown } | null;
+  const forceOcr = body?.ocr === true;
+  if (forceOcr && source.type !== "PDF" && source.type !== "IMAGE") throw badRequest("OCR applies to PDF and image sources only.");
+  await prisma.source.update({
+    where: { id: source.id },
+    data: {
+      status: "UPLOADED",
+      error: null,
+      ...(forceOcr ? { metadata: { ...((source.metadata as object | null) ?? {}), ocr: "force" } } : {}),
+    },
+  });
   const job = await prisma.generationJob.create({
     data: { studySetId: studySet.id, sourceId: source.id, type: "INGEST_SOURCE", payload: { sourceId: source.id } },
   });
   await enqueue("ingest.source", { sourceId: source.id, generationJobId: job.id });
-  await audit({ userId: session.user.id, action: "source.reprocess", entityType: "source", entityId: source.id, metadata: { previousStatus: source.status } });
+  await audit({ userId: session.user.id, action: "source.reprocess", entityType: "source", entityId: source.id, metadata: { previousStatus: source.status, ocr: forceOcr } });
 
   return ok({ jobId: job.id, status: "PROCESSING" }, { status: 202 });
 });

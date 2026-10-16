@@ -57,7 +57,7 @@ export async function transferStudySet(opts: { studySetId: string; toUserId: str
   // 2. Switch the database over, all or nothing.
   const sources = await prisma.source.findMany({ where: { studySetId: set.id }, select: { id: true, metadata: true } });
   const sourceIds = sources.map((s) => s.id);
-  const [assets, guides, jobs, decks, quizzes, exerciseSets, segments] = await Promise.all([
+  const [assets, guides, jobs, decks, quizzes, exerciseSets, segments, passages] = await Promise.all([
     prisma.sourceAsset.findMany({ where: { sourceId: { in: sourceIds } }, select: { id: true, storageKey: true } }),
     prisma.studyGuide.findMany({ where: { studySetId: set.id }, select: { id: true, metadata: true, sections: { select: { id: true } } } }),
     prisma.generationJob.findMany({ where: { studySetId: set.id }, select: { id: true, payload: true, result: true } }),
@@ -65,6 +65,7 @@ export async function transferStudySet(opts: { studySetId: string; toUserId: str
     prisma.quiz.findMany({ where: { studySetId: set.id }, select: { questions: { select: { id: true } } } }),
     prisma.exerciseSet.findMany({ where: { studySetId: set.id }, select: { exercises: { select: { id: true } } } }),
     prisma.transcriptSegment.findMany({ where: { transcript: { sourceId: { in: sourceIds } } }, select: { id: true } }),
+    prisma.extractedChunk.findMany({ where: { sourceId: { in: sourceIds } }, select: { id: true } }),
   ]);
   const cardIds = decks.flatMap((d) => d.cards.map((c) => c.id));
   const editedEntityIds = [
@@ -73,6 +74,7 @@ export async function transferStudySet(opts: { studySetId: string; toUserId: str
     ...quizzes.flatMap((q) => q.questions.map((x) => x.id)),
     ...exerciseSets.flatMap((e) => e.exercises.map((x) => x.id)),
     ...segments.map((s) => s.id),
+    ...passages.map((p) => p.id),
   ];
   const withNewKeys = <T>(value: T): T => JSON.parse(swap(JSON.stringify(value))) as T;
   const mentionsOld = (value: unknown) => value != null && JSON.stringify(value).includes(oldPrefix);
