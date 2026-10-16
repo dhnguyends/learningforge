@@ -10,6 +10,8 @@ import { enqueue } from "@/lib/queue";
 import { ensureRecovered } from "@/lib/queue/recovery";
 import { jsonSafe } from "@/lib/db";
 import { audit } from "@/lib/audit";
+import { TOPIC_SELECT, toClassification } from "@/lib/taxonomy/store";
+import { RELATED_SELECT, toRelated } from "@/lib/taxonomy/related";
 
 const sourceInputSchema = z.discriminatedUnion("kind", [
   z.object({
@@ -63,6 +65,8 @@ export const GET = apiHandler(async (req) => {
     include: {
       _count: { select: { sources: true, decks: true, quizzes: true, exerciseSets: true } },
       sources: { select: { status: true } },
+      topic: TOPIC_SELECT,
+      relatedTopics: RELATED_SELECT,
     },
   });
 
@@ -93,6 +97,8 @@ export const GET = apiHandler(async (req) => {
         title: s.title,
         course: s.course,
         subject: s.subject,
+        classification: toClassification(s.topic),
+        related: toRelated(s.relatedTopics),
         learnerLevel: s.learnerLevel,
         examDate: s.examDate,
         outputTypes: s.outputTypes,

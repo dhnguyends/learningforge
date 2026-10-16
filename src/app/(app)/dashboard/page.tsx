@@ -7,6 +7,7 @@ import {
   BookOpen,
   Boxes,
   CalendarClock,
+  Compass,
   FileStack,
   Layers,
   Loader2,
@@ -28,6 +29,10 @@ import { Skeleton } from "@/components/ui/misc";
 import { JobProgressRow } from "@/components/shared/job-status";
 import { useStudySets, useDeleteStudySet, useCreateStudySet } from "@/hooks/use-api";
 import { useConfirm } from "@/components/shared/confirm-dialog";
+import { RelatedTopicsLine, RelatedTopicsMenu } from "@/components/shared/related-topics";
+import { isMenuKey, menuPoint, type MenuPoint } from "@/components/shared/pointer-menu";
+import type { StudySetSummary } from "@/hooks/use-api";
+import { cn } from "@/lib/utils";
 
 const LEVELS: { value: string; label: string }[] = [
   { value: "INTRODUCTORY", label: "Introductory" },
@@ -42,6 +47,13 @@ export default function DashboardPage() {
   const confirm = useConfirm();
   const createSet = useCreateStudySet();
   const [quickOpen, setQuickOpen] = useState(false);
+  // The selected course card, and its context menu (related topics).
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [menu, setMenu] = useState<{ set: StudySetSummary; at: MenuPoint } | null>(null);
+  const openMenu = (set: StudySetSummary, at: MenuPoint) => {
+    setSelectedId(set.id);
+    setMenu({ set, at });
+  };
   const [title, setTitle] = useState("");
   const [subject, setSubject] = useState("");
   const [level, setLevel] = useState("ADVANCED_UNDERGRAD");
@@ -93,9 +105,16 @@ export default function DashboardPage() {
           <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
           <p className="mt-1 text-sm text-muted-foreground">Your study sets, processing jobs, and what&apos;s due today.</p>
         </div>
-        <Button onClick={() => setQuickOpen(true)} className="gap-1.5">
-          <Plus className="h-4 w-4" aria-hidden="true" /> New study set
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button asChild variant="outline" className="gap-1.5">
+            <Link href="/explore">
+              <Compass className="h-4 w-4" aria-hidden="true" /> Explore
+            </Link>
+          </Button>
+          <Button onClick={() => setQuickOpen(true)} className="gap-1.5">
+            <Plus className="h-4 w-4" aria-hidden="true" /> New study set
+          </Button>
+        </div>
       </div>
 
       {/* Stats row */}
@@ -135,14 +154,49 @@ export default function DashboardPage() {
           ) : (
             <div className="grid gap-4 sm:grid-cols-2">
               {(sets ?? []).map((s) => (
-                <Card key={s.id} className="group relative transition-colors hover:border-primary/40">
+                <Card
+                  key={s.id}
+                  className={cn(
+                    "group relative transition-colors hover:border-primary/40",
+                    selectedId === s.id && "border-primary/60 ring-2 ring-primary/30",
+                  )}
+                  data-selected={selectedId === s.id || undefined}
+                  onClick={(e) => {
+                    // A click on the card itself (not its link or buttons) selects it.
+                    if (!(e.target as Element).closest("a, button")) setSelectedId(s.id);
+                  }}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    openMenu(s, menuPoint(e));
+                  }}
+                >
                   <CardHeader className="pb-2">
                     <div className="flex items-start justify-between gap-2">
-                      <Link href={`/study-sets/${s.id}`} className="min-w-0 flex-1">
+                      <Link
+                        href={`/study-sets/${s.id}`}
+                        className="min-w-0 flex-1"
+                        data-set-link={s.id}
+                        aria-haspopup="menu"
+                        onKeyDown={(e) => {
+                          if (isMenuKey(e)) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            openMenu(s, menuPoint(e));
+                          }
+                        }}
+                      >
                         <CardTitle className="truncate text-base leading-snug hover:text-primary">{s.title}</CardTitle>
                         <p className="mt-0.5 truncate text-xs text-muted-foreground">
                           {[s.course, s.subject].filter(Boolean).join(" · ") || "No course set"}
                         </p>
+                        {s.classification && (
+                          <p
+                            className="mt-0.5 truncate text-xs text-muted-foreground"
+                            title={`${s.classification.discipline.name} › ${s.classification.subject.name} › ${s.classification.module.name} › ${s.classification.topic.name}`}
+                          >
+                            {s.classification.module.name} › <span className="text-foreground">{s.classification.topic.name}</span>
+                          </p>
+                        )}
                       </Link>
                       <Button
                         variant="ghost"
@@ -170,6 +224,7 @@ export default function DashboardPage() {
                         <Badge variant="citation">{s.dueCards} due</Badge>
                       )}
                     </div>
+                    <RelatedTopicsLine related={s.related} className="mt-2" />
                   </CardContent>
                 </Card>
               ))}
@@ -263,6 +318,8 @@ export default function DashboardPage() {
       </div>
 
       {/* Quick-create modal */}
+      <RelatedTopicsMenu target={menu} onClose={() => setMenu(null)} />
+
       <Dialog open={quickOpen} onOpenChange={setQuickOpen}>
         <DialogContent>
           <DialogHeader>
@@ -276,7 +333,7 @@ export default function DashboardPage() {
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label htmlFor="qs-subject">Subject (optional)</Label>
+                <Label htmlFor="qs-subject">Keywords (optional)</Label>
                 <Input id="qs-subject" value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Machine learning" />
               </div>
               <div className="space-y-1.5">

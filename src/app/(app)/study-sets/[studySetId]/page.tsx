@@ -23,6 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { JobProgressRow } from "@/components/shared/job-status";
 import { PipelineStatusBar } from "@/components/shared/pipeline-status";
+import { ClassificationPath } from "@/components/shared/topic-picker";
 import { ingestJobFor } from "@/lib/pipeline-phases";
 import { useStudySet, useGenerateGuide, useGenerateDeck, useGenerateQuiz, useGenerateExercises, usePatchStudySet, useIndexingReadiness } from "@/hooks/use-api";
 
@@ -122,6 +123,10 @@ export default function OverviewTab() {
               {examDays >= 0 ? `exam in ${examDays}d` : "exam passed"}
             </Badge>
           )}
+        </div>
+        {/* Read-only: an administrator files courses in the course tree (Admin → Courses). */}
+        <div className="mt-1 text-sm text-muted-foreground">
+          {set.classification ? <ClassificationPath classification={set.classification} /> : <span>Not filed in the course tree yet</span>}
         </div>
         <p className="mt-1 text-sm text-muted-foreground">
           {set.counts.sourcesReady}/{set.counts.sources} sources indexed

@@ -1,0 +1,610 @@
+1. Science
+   1.1 Physics
+       1.1.1 Classical Mechanics
+             - Kinematics
+             - Newton’s laws
+             - Work, energy, power
+             - Momentum and collisions
+             - Rotational motion
+       1.1.2 Electromagnetism
+             - Electric fields
+             - Magnetic fields
+             - Circuits
+             - Maxwell’s equations
+             - Waves and optics
+       1.1.3 Thermodynamics
+             - Temperature and heat
+             - Laws of thermodynamics
+             - Entropy
+             - Heat engines
+       1.1.4 Quantum Physics
+             - Wave-particle duality
+             - Schrödinger equation
+             - Quantum states
+             - Measurement
+             - Quantum entanglement
+       1.1.5 Relativity
+             - Special relativity
+             - General relativity
+             - Spacetime
+             - Gravitation
+   1.2 Chemistry
+       1.2.1 General Chemistry
+             - Atomic structure
+             - Periodic table
+             - Chemical bonding
+             - Stoichiometry
+             - Chemical reactions
+       1.2.2 Organic Chemistry
+             - Functional groups
+             - Reaction mechanisms
+             - Stereochemistry
+             - Spectroscopy
+       1.2.3 Physical Chemistry
+             - Chemical thermodynamics
+             - Kinetics
+             - Electrochemistry
+             - Quantum chemistry
+   1.3 Biology
+       1.3.1 Cell Biology
+             - Cell structure
+             - Membranes
+             - Organelles
+             - Cell division
+       1.3.2 Genetics
+             - DNA structure
+             - Gene expression
+             - Mendelian inheritance
+             - Mutations
+             - Genomics
+       1.3.3 Evolution
+             - Natural selection
+             - Speciation
+             - Phylogenetics
+             - Population genetics
+       1.3.4 Ecology
+             - Ecosystems
+             - Food webs
+             - Biodiversity
+             - Conservation
+       1.3.5 Animal physiology
+             - Nervous system
+             - Circulatory system
+             - Endocrine system
+             - Immune system
+   1.4 Astronomy
+       1.4.1 Observational Astronomy
+             - Telescopes
+             - Celestial coordinates
+             - Photometry
+             - Astronomical spectroscopy
+       1.4.2 Astrophysics
+             - Stellar evolution
+             - Black holes
+             - Galaxies
+             - Cosmology
+       1.4.3 Planetary Science
+             - Solar system
+             - Exoplanets
+             - Planetary atmospheres
+             - Astrobiology
+   1.5 Earth and Environmental Science
+       1.5.1 Geology
+             - Minerals and rocks
+             - Plate tectonics
+             - Volcanology
+             - Structural geology
+       1.5.2 Climate Science
+             - Atmosphere
+             - Greenhouse effect
+             - Climate models
+             - Climate change
+       1.5.3 Environmental Science
+             - Pollution
+             - Sustainability
+             - Ecosystem management
+             - Renewable energy
+2. Mathematics
+   2.1 Algebra
+       2.1.1 Linear Algebra
+             - Vectors and matrices
+             - Matrix rank
+             - Determinants
+             - Eigenvalues and eigenvectors
+             - Singular value decomposition
+             - Principal component analysis
+       2.1.2 Abstract Algebra
+             - Groups
+             - Rings
+             - Fields
+             - Polynomials
+             - Galois theory
+   2.2 Analysis
+       2.2.1 Calculus
+             - Limits
+             - Derivatives
+             - Integrals
+             - Series
+             - Multivariable calculus
+       2.2.2 Real Analysis
+             - Sequences and convergence
+             - Continuity
+             - Differentiation
+             - Riemann integration
+       2.2.3 Complex Analysis
+             - Complex numbers
+             - Analytic functions
+             - Contour integration
+             - Residue theorem
+   2.3 Probability and Statistics
+       2.3.1 Probability Theory
+             - Sample spaces
+             - Random variables
+             - Distributions
+             - Expectation and variance
+             - Conditional probability
+       2.3.2 Statistics
+             - Descriptive statistics
+             - Estimation
+             - Hypothesis testing
+             - Confidence intervals
+             - Regression
+       2.3.3 Bayesian Statistics
+             - Priors and posteriors
+             - Bayes’ theorem
+             - Markov chain Monte Carlo
+             - Bayesian inference
+   2.4 Discrete Mathematics
+       2.4.1 Logic and Proofs
+             - Propositional logic
+             - Predicate logic
+             - Proof techniques
+             - Set theory
+       2.4.2 Combinatorics
+             - Counting
+             - Permutations
+             - Graph theory
+             - Recurrence relations
+       2.4.3 Number Theory
+             - Divisibility
+             - Modular arithmetic
+             - Prime numbers
+             - Cryptographic applications
+   2.5 Applied Mathematics
+       2.5.1 Differential Equations
+             - First-order ODEs
+             - Linear ODEs
+             - Systems of ODEs
+             - Partial differential equations
+       2.5.2 Numerical Methods
+             - Interpolation
+             - Root finding
+             - Numerical integration
+             - Numerical optimization
+             - Error analysis
+       2.5.3 Optimization
+             - Linear programming
+             - Convex optimization
+             - Gradient descent
+             - Constrained optimization
+3. Computer Science and AI
+   3.1 Programming
+       3.1.1 Programming Fundamentals
+             - Variables and types
+             - Control flow
+             - Functions
+             - Basic data structures
+             - Debugging
+       3.1.2 Object-Oriented Programming
+             - Classes and objects
+             - Inheritance
+             - Polymorphism
+             - Encapsulation
+             - Design patterns
+       3.1.3 Software Engineering
+             - Version control
+             - Testing
+             - Agile methods
+             - Code review
+             - Software architecture
+   3.2 Algorithms and Data Structures
+       3.2.1 Data Structures
+             - Arrays
+             - Linked lists
+             - Stacks and queues
+             - Trees
+             - Hash tables
+             - Graphs
+       3.2.2 Algorithms
+             - Complexity analysis
+             - Sorting
+             - Searching
+             - Dynamic programming
+             - Greedy algorithms
+             - Graph algorithms
+   3.3 Computer Systems
+       3.3.1 Computer Architecture
+             - CPUs
+             - Memory hierarchy
+             - Instruction sets
+             - Pipelining
+       3.3.2 Operating Systems
+             - Processes
+             - Threads
+             - Memory management
+             - File systems
+             - Concurrency
+       3.3.3 Networks
+             - OSI model
+             - TCP/IP
+             - Routing
+             - Network security
+   3.4 Artificial Intelligence
+       3.4.1 Machine Learning
+             - Supervised learning
+             - Unsupervised learning
+             - Model evaluation
+             - Regularization
+             - Feature engineering
+       3.4.2 Deep Learning
+             - Neural networks
+             - Backpropagation
+             - CNNs
+             - RNNs
+             - Transformers
+       3.4.3 Reinforcement Learning
+             - Markov decision processes
+             - Dynamic programming (RL)
+             - Q-learning
+             - Policy gradients
+             - Model-based RL
+             - World models
+       3.4.4 Natural Language Processing
+             - Tokenization
+             - Word embeddings
+             - Language models
+             - Sequence labeling
+             - Large language models
+       3.4.5 Computer Vision
+             - Image representation
+             - Convolutional networks
+             - Object detection
+             - Image segmentation
+             - Generative vision models
+       3.4.6 AI Ethics and Safety
+             - Bias and fairness
+             - Explainability
+             - Privacy
+             - Alignment
+             - Responsible deployment
+4. Engineering
+   4.1 Mechanical Engineering
+       4.1.1 Statics and Dynamics
+             - Force systems
+             - Equilibrium
+             - Machine kinematics
+             - Vibrations
+       4.1.2 Materials Science
+             - Material properties
+             - Stress and strain
+             - Fatigue
+             - Failure analysis
+       4.1.3 Thermofluids
+             - Fluid mechanics
+             - Heat transfer
+             - HVAC
+             - Turbomachinery
+       4.1.4 Automotive Engineering
+             - Engine systems
+             - Transmission
+             - Braking systems
+             - Vehicle dynamics
+             - Diagnostics
+   4.2 Electrical and Electronic Engineering
+       4.2.1 Circuit Theory
+             - Ohm’s law
+             - AC/DC circuits
+             - Filters
+             - Circuit analysis
+       4.2.2 Electronics
+             - Diodes
+             - Transistors
+             - Amplifiers
+             - Digital logic
+       4.2.3 Control Systems
+             - Feedback
+             - Transfer functions
+             - Stability
+             - PID control
+       4.2.4 Embedded Systems
+             - Microcontrollers
+             - Embedded sensors
+             - Actuators
+             - Real-time programming
+   4.3 Civil Engineering
+       4.3.1 Structural Engineering
+             - Beam theory
+             - Structural analysis
+             - Concrete design
+             - Steel design
+       4.3.2 Transportation Engineering
+             - Road design
+             - Traffic flow
+             - Public transport
+             - Safety
+       4.3.3 Environmental Engineering
+             - Water treatment
+             - Waste management
+             - Air quality
+             - Sustainable infrastructure
+   4.4 Chemical Engineering
+       4.4.1 Process Engineering
+             - Mass balance
+             - Energy balance
+             - Reactor design
+             - Separation processes
+       4.4.2 Process Control
+             - Process sensors
+             - Control loops
+             - Process optimization
+             - Safety systems
+5. Medicine and Health Sciences
+   5.1 Basic Medical Sciences
+       5.1.1 Anatomy
+             - Gross anatomy
+             - Histology
+             - Neuroanatomy
+             - Imaging anatomy
+       5.1.2 Human physiology
+             - Cardiovascular physiology
+             - Respiratory physiology
+             - Renal physiology
+             - Neurophysiology
+       5.1.3 Biochemistry
+             - Metabolism
+             - Enzymes
+             - Molecular biology
+             - Clinical biochemistry
+       5.1.4 Pharmacology
+             - Pharmacokinetics
+             - Pharmacodynamics
+             - Drug receptors
+             - Toxicology
+             - Psychopharmacology
+   5.2 Clinical Medicine
+       5.2.1 Internal Medicine
+             - Cardiology
+             - Pulmonology
+             - Endocrinology
+             - Gastroenterology
+       5.2.2 Surgery
+             - Surgical anatomy
+             - Preoperative care
+             - Wound healing
+             - Postoperative care
+       5.2.3 Neurology
+             - Stroke
+             - Epilepsy
+             - Neurodegenerative diseases
+             - Neuromuscular disorders
+       5.2.4 Psychiatry
+             - Mood disorders
+             - Anxiety disorders
+             - Psychosis
+             - Psychotherapy
+   5.3 Public Health
+       5.3.1 Epidemiology
+             - Study design
+             - Disease surveillance
+             - Outbreak investigation
+             - Causal inference
+       5.3.2 Health Systems
+             - Health policy
+             - Healthcare economics
+             - Quality improvement
+             - Global health
+6. Business Administration
+   6.1 Finance
+       6.1.1 Corporate Finance
+             - Time value of money
+             - Capital budgeting
+             - Cost of capital
+             - Capital structure
+       6.1.2 Financial Accounting
+             - Balance sheet
+             - Income statement
+             - Cash flow statement
+             - Financial ratios
+       6.1.3 Investments
+             - Portfolio theory
+             - Asset pricing
+             - Risk and return
+             - Financial derivatives
+             - Technical analysis
+       6.1.4 Quantitative Finance
+             - Stochastic processes
+             - Option pricing
+             - Risk management
+             - Algorithmic trading
+   6.2 Marketing
+       6.2.1 Marketing Fundamentals
+             - Market research
+             - Market segmentation
+             - Positioning
+             - Marketing mix
+       6.2.2 Digital Marketing
+             - SEO
+             - Social media
+             - Content marketing
+             - Analytics
+       6.2.3 Consumer Behaviour
+             - Decision-making
+             - Branding
+             - Pricing psychology
+             - Customer loyalty
+   6.3 Management and Strategy
+       6.3.1 Organizational Behaviour
+             - Motivation
+             - Leadership
+             - Team dynamics
+             - Organizational culture
+       6.3.2 Strategic Management
+             - Competitive analysis
+             - Business models
+             - Corporate strategy
+             - Innovation strategy
+       6.3.3 Operations Management
+             - Process design
+             - Supply chain
+             - Quality management
+             - Project management
+   6.4 Communication
+       6.4.1 Business Communication
+             - Professional writing
+             - Presentations
+             - Negotiation
+             - Intercultural communication
+       6.4.2 Corporate Communication
+             - Public relations
+             - Internal communication
+             - Crisis communication
+             - Stakeholder engagement
+7. Social Sciences and Humanities
+   7.1 Psychology
+       7.1.1 Cognitive Psychology
+             - Perception
+             - Memory
+             - Attention
+             - Language
+       7.1.2 Developmental Psychology
+             - Child development
+             - Adolescence
+             - Aging
+       7.1.3 Social Psychology
+             - Attitudes
+             - Group behaviour
+             - Persuasion
+             - Prejudice
+       7.1.4 Neuroscience
+             - Neurons and synapses
+             - Brain anatomy
+             - Neurotransmission
+             - Learning and memory
+   7.2 Economics
+       7.2.1 Microeconomics
+             - Supply and demand
+             - Consumer theory
+             - Market structures
+             - Game theory
+       7.2.2 Macroeconomics
+             - GDP
+             - Inflation
+             - Unemployment
+             - Monetary policy
+             - Fiscal policy
+       7.2.3 Econometrics
+             - Regression analysis
+             - Time series
+             - Panel data
+             - Causal identification
+   7.3 Philosophy
+       7.3.1 Logic
+             - Deductive reasoning
+             - Fallacies
+             - Formal logic
+       7.3.2 Ethics
+             - Moral theories
+             - Applied ethics
+             - AI ethics
+             - Bioethics
+       7.3.3 Epistemology
+             - Knowledge
+             - Justification
+             - Skepticism
+             - Philosophy of science
+   7.4 Languages and Linguistics
+       7.4.1 Linguistics
+             - Phonetics
+             - Syntax
+             - Semantics
+             - Pragmatics
+       7.4.2 Language Learning
+             - Grammar
+             - Vocabulary
+             - Listening
+             - Speaking
+             - Academic writing practice
+8. Arts, Design, and Music
+   8.1 Music
+       8.1.1 Music Theory
+             - Notation
+             - Scales and keys
+             - Intervals
+             - Chords
+             - Harmony
+             - Chord progressions
+       8.1.2 Music History
+             - Classical period
+             - Romantic period
+             - Jazz
+             - Contemporary music
+       8.1.3 Performance
+             - Vocal technique
+             - Choral singing
+             - Instrumental performance
+             - Ensemble skills
+       8.1.4 Composition and Arrangement
+             - Melody writing
+             - Counterpoint
+             - Orchestration
+             - SSA arrangement
+   8.2 Visual Arts
+       8.2.1 Drawing
+             - Line and form
+             - Perspective
+             - Shading
+             - Composition
+       8.2.2 Design
+             - Typography
+             - Colour theory
+             - User interface design
+             - Visual hierarchy
+       8.2.3 Digital Media
+             - Image editing
+             - Video editing
+             - Animation
+             - 3D modelling
+9. Interdisciplinary and Professional Skills
+   9.1 Data Science
+       9.1.1 Data Analysis
+             - Data cleaning
+             - Exploratory analysis
+             - Visualization
+             - Statistical modelling
+       9.1.2 Data Engineering
+             - Databases
+             - SQL
+             - ETL pipelines
+             - Cloud computing
+   9.2 Research Methods
+       9.2.1 Scientific Method
+             - Research questions
+             - Hypotheses
+             - Experimental design
+             - Reproducibility
+       9.2.2 Academic Writing
+             - Literature review
+             - Citations
+             - Argumentation
+             - Thesis writing
+   9.3 Personal and Professional Development
+       9.3.1 Learning Skills
+             - Metacognition
+             - Spaced repetition
+             - Note-taking
+             - Problem-solving
+       9.3.2 Career Skills
+             - CV writing
+             - Interviewing
+             - Teamwork
+             - Leadership skills

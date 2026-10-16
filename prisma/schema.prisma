@@ -328,11 +328,16 @@ model StudySet {
   outputTypes  OutputType[] @default([])
   settings     Json         @default("{}")
   archivedAt   DateTime?
+  /// Level-4 node (Topic) of the course taxonomy; Discipline, Subject and
+  /// Course / Module are its ancestors, so they are never stored separately.
+  topicId      String?
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
   workspace    Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   createdBy    User               @relation("StudySetCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  topic        TaxonomyNode?      @relation(fields: [topicId], references: [id], onDelete: SetNull)
+  relatedTopics StudySetRelatedTopic[]
   sources      Source[]
   guides       StudyGuide[]
   decks        FlashcardDeck[]
@@ -346,7 +351,48 @@ model StudySet {
   attempts     Attempt[]
 
   @@index([workspaceId])
+  @@index([topicId])
   @@map("study_sets")
+}
+
+/// Course taxonomy (docs/COURSE-TAXONOMY.txt, loaded by `npm run taxonomy:import`):
+/// level 1 Discipline › 2 Subject › 3 Course / Module › 4 Topic.
+model TaxonomyNode {
+  id        String   @id @default(cuid())
+  parentId  String?
+  level     Int
+  /// Display number: "3.4.2" from the file; topics are numbered by position ("3.4.2.2").
+  code      String
+  name      String
+  position  Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  parent    TaxonomyNode?  @relation("TaxonomyTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children  TaxonomyNode[] @relation("TaxonomyTree")
+  studySets StudySet[]
+  relatedStudySets StudySetRelatedTopic[]
+
+  @@unique([parentId, name])
+  @@index([code])
+  @@map("taxonomy_nodes")
+}
+
+/// Up to 3 related ("connexe") topics of a course, besides its main topic
+/// (StudySet.topicId). Set by the course owner or an administrator.
+model StudySetRelatedTopic {
+  studySetId String
+  topicId    String
+  /// 0..2: the order they were added in.
+  position   Int
+  createdAt  DateTime @default(now())
+
+  studySet StudySet     @relation(fields: [studySetId], references: [id], onDelete: Cascade)
+  topic    TaxonomyNode @relation(fields: [topicId], references: [id], onDelete: Cascade)
+
+  @@id([studySetId, topicId])
+  @@index([topicId])
+  @@map("study_set_related_topics")
 }
 
 model Source {

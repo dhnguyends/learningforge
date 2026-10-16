@@ -298,11 +298,11 @@ function CreateWizard() {
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label htmlFor="course">Course</Label>
+                <Label htmlFor="course">Course code</Label>
                 <Input id="course" value={course} onChange={(e) => setCourse(e.target.value)} placeholder="CS 584 — Deep Learning" />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="subject">Subject</Label>
+                <Label htmlFor="subject">Keywords</Label>
                 <Input id="subject" value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Machine learning" />
               </div>
               <div className="space-y-1.5">

@@ -82,6 +82,10 @@ export interface StudySetSummary {
   title: string;
   course: string | null;
   subject: string | null;
+  /** Discipline › Subject › Course / Module › Topic, or null when not filed in the course tree. */
+  classification: Classification | null;
+  /** Up to 3 related ("connexe") topics besides the main one. */
+  related: Classification[];
   learnerLevel: string;
   examDate: string | null;
   outputTypes: string[];
@@ -773,6 +777,7 @@ export interface AdminStudySetRow {
   title: string;
   subject: string | null;
   course: string | null;
+  classification: Classification | null;
   createdAt: string;
   updatedAt: string;
   owner: { id: string; name: string | null; email: string; nature: "HUMAN" | "BOT" };
@@ -801,6 +806,80 @@ export function useTransferStudySet() {
     ({ studySetId, userId }: { studySetId: string; userId: string }) =>
       api<{ filesMoved: number }>(`/api/admin/study-sets/${studySetId}/owner`, { method: "PUT", body: JSON.stringify({ userId }) }),
     () => [adminStudySetsKey, adminUsersKey, qk.studySets],
+  );
+}
+
+/* ----------------------------- course taxonomy ---------------------------- */
+
+export type Classification = import("@/lib/taxonomy/store").Classification;
+export type TaxonomyNodeRow = import("@/lib/taxonomy/store").TaxonomyNodeRow;
+
+export interface TaxonomyCourse {
+  id: string;
+  title: string;
+  topicId: string | null;
+  /** Related ("connexe") topics: the course is also listed under them, marked "related". */
+  relatedTopicIds: string[];
+  /** Only with scope "all" (administrators). */
+  owner?: { id: string; name: string | null; email: string; nature: "HUMAN" | "BOT" };
+}
+
+export type TaxonomyScope = "mine" | "all";
+
+export interface TaxonomyPayload {
+  scope: TaxonomyScope;
+  nodes: TaxonomyNodeRow[];
+  courses: TaxonomyCourse[];
+}
+
+const taxonomyKey = ["taxonomy"] as const;
+
+/** The course tree with the caller's courses ("mine") or every course ("all", administrators). */
+export function useTaxonomy(scope: TaxonomyScope = "mine", enabled = true) {
+  return useQuery({
+    queryKey: [...taxonomyKey, scope],
+    queryFn: () => api<TaxonomyPayload>(`/api/taxonomy?scope=${scope}`),
+    enabled,
+    staleTime: 60_000,
+  });
+}
+
+/** File a course under a topic (null removes it). Administrators only; owners see the topic read-only. */
+export function useClassifyStudySet() {
+  return useLfMutation(
+    ({ studySetId, topicId }: { studySetId: string; topicId: string | null }) =>
+      api<unknown>(`/api/admin/study-sets/${studySetId}`, { method: "PATCH", body: JSON.stringify({ topicId }) }),
+    ({ studySetId }) => [taxonomyKey, qk.studySets, qk.studySet(studySetId), adminStudySetsKey],
+  );
+}
+
+/** Replace a course's related ("connexe") topics (max 3; owner or administrator). */
+export function useSetRelatedTopics() {
+  return useLfMutation(
+    ({ studySetId, topicIds }: { studySetId: string; topicIds: string[] }) =>
+      api<{ related: Classification[] }>(`/api/study-sets/${studySetId}/related-topics`, {
+        method: "PUT",
+        body: JSON.stringify({ topicIds }),
+      }),
+    ({ studySetId }) => [taxonomyKey, qk.studySets, qk.studySet(studySetId), adminStudySetsKey],
+  );
+}
+
+/* --------------------- admin: course tree maintenance --------------------- */
+
+/** Names, numbers and places of nodes change what every course shows as its classification. */
+const treeChanged = () => [taxonomyKey, adminStudySetsKey, qk.studySets, ["study-set"]] as const;
+
+/**
+ * Insert a node next to the selected one: its first child (not under a
+ * topic) or its next neighbour. Refused (409) when the name is already used
+ * anywhere in the tree.
+ */
+export function useInsertTaxonomyNode() {
+  return useLfMutation(
+    (body: { nodeId: string | null; insert: "child" | "neighbour"; name: string }) =>
+      api<{ node: TaxonomyNodeRow }>("/api/admin/taxonomy/nodes", { method: "POST", body: JSON.stringify(body) }),
+    treeChanged,
   );
 }
 

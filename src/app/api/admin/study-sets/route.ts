@@ -1,5 +1,6 @@
 import { prisma, jsonSafe } from "@/lib/db";
 import { apiHandler, ok, requireAdmin } from "@/lib/api";
+import { TOPIC_SELECT, toClassification } from "@/lib/taxonomy/store";
 
 /** Every study set ("course") with its owner, for administrators (grouped by owner in the UI). */
 export const GET = apiHandler(async () => {
@@ -11,6 +12,7 @@ export const GET = apiHandler(async () => {
       title: true,
       subject: true,
       course: true,
+      topic: TOPIC_SELECT,
       createdAt: true,
       updatedAt: true,
       workspace: { select: { owner: { select: { id: true, name: true, email: true, nature: true } } } },
@@ -20,7 +22,12 @@ export const GET = apiHandler(async () => {
   });
   return ok(
     jsonSafe({
-      studySets: sets.map(({ workspace, jobs, ...s }) => ({ ...s, owner: workspace.owner, busy: jobs.length > 0 })),
+      studySets: sets.map(({ workspace, jobs, topic, ...s }) => ({
+        ...s,
+        classification: toClassification(topic),
+        owner: workspace.owner,
+        busy: jobs.length > 0,
+      })),
     }),
   );
 });

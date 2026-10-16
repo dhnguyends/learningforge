@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
-import { Cloud, Cpu, LogOut, MemoryStick, Plus, Settings, ShieldCheck } from "lucide-react";
+import { Cloud, Compass, Cpu, GraduationCap, LogOut, MemoryStick, Plus, Settings, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -17,10 +17,11 @@ import { LogoWordmark } from "@/components/shared/brand";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { useActiveAi } from "@/hooks/use-api";
 
-/** Top bar for the authenticated app: brand, quick-create, account menu. */
+/** Top bar for the authenticated app: brand, Back to Dashboard, Explore, quick-create, account menu. */
 export function AppShell({ children, breadcrumb }: { children: React.ReactNode; breadcrumb?: React.ReactNode }) {
   const { data: session } = useSession();
   const router = useRouter();
+  const pathname = usePathname();
   const user = session?.user;
 
   return (
@@ -37,6 +38,18 @@ export function AppShell({ children, breadcrumb }: { children: React.ReactNode; 
             <ActiveModelBadge isAdmin={user?.role === "ADMIN"} />
           </div>
           <div className="flex items-center gap-1.5">
+            {pathname !== "/dashboard" && (
+              <Button asChild variant="ghost" size="sm" className="gap-1.5">
+                <Link href="/dashboard" aria-label="Back to Dashboard" title="Back to Dashboard">
+                  <GraduationCap className="h-4 w-4" aria-hidden="true" /> <span className="hidden lg:inline">Back to Dashboard</span>
+                </Link>
+              </Button>
+            )}
+            <Button asChild variant="ghost" size="sm" className="gap-1.5">
+              <Link href="/explore" aria-label="Explore the course tree">
+                <Compass className="h-3.5 w-3.5" aria-hidden="true" /> <span className="hidden sm:inline">Explore</span>
+              </Link>
+            </Button>
             <Button asChild variant="outline" size="sm" className="gap-1.5">
               <Link href="/create">
                 <Plus className="h-3.5 w-3.5" aria-hidden="true" /> New study set

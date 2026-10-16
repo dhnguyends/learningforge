@@ -48,7 +48,7 @@ export function signInAs(userId: string | null) {
   );
 }
 
-export function jsonRequest(url: string, method: "GET" | "POST" | "PATCH" | "DELETE", body?: unknown): NextRequest {
+export function jsonRequest(url: string, method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE", body?: unknown): NextRequest {
   return new NextRequest(url, {
     method,
     ...(body === undefined ? {} : { body: JSON.stringify(body), headers: { "content-type": "application/json" } }),

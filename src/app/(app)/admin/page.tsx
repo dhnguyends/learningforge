@@ -3,7 +3,7 @@
 import { Suspense, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { Bot, BookOpen, Cpu, Database, Loader2, Pencil, Plus, ShieldCheck, ShieldPlus, Trash2, UserRound, Users } from "lucide-react";
+import { Bot, BookOpen, Cpu, Database, Loader2, Network, Pencil, Plus, ShieldCheck, ShieldPlus, Trash2, UserRound, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -16,6 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AiModelCard } from "@/components/shared/ai-model-card";
 import { TranslatorCard, TtsCard } from "@/components/shared/speech-model-cards";
 import { AdminCourses } from "@/components/shared/admin-courses";
+import { AdminCourseTree } from "@/components/shared/admin-course-tree";
 import { AdminDatabase } from "@/components/shared/admin-database";
 import { useConfirm } from "@/components/shared/confirm-dialog";
 
@@ -36,12 +37,13 @@ function lastUsed(iso: string | null): string {
 }
 type EditorState = { mode: "create" } | { mode: "edit"; user: AdminUserRow } | null;
 
-const TABS = ["users", "ai", "courses", "database"] as const;
+const TABS = ["users", "ai", "courses", "tree", "database"] as const;
 type Tab = (typeof TABS)[number];
 
 /**
- * Administration, in three tabs: user accounts, the AI model used for
- * generation, and courses (every study set and its owner). Every action is
+ * Administration, in tabs: user accounts, the AI model used for generation,
+ * courses (every study set and its owner), the courses tree (maintain
+ * Discipline › Subject › Course / Module › Topic) and the vector database. Every action is
  * re-authorised server-side against the database role. The open tab is kept
  * in the URL (?tab=) so it survives reloads and can be linked to.
  */
@@ -79,6 +81,9 @@ function AdminTabs() {
           <TabsTrigger value="courses" className="gap-1.5">
             <BookOpen className="h-3.5 w-3.5" aria-hidden="true" /> Courses
           </TabsTrigger>
+          <TabsTrigger value="tree" className="gap-1.5">
+            <Network className="h-3.5 w-3.5" aria-hidden="true" /> Courses Tree
+          </TabsTrigger>
           <TabsTrigger value="database" className="gap-1.5">
             <Database className="h-3.5 w-3.5" aria-hidden="true" /> Database
           </TabsTrigger>
@@ -95,6 +100,9 @@ function AdminTabs() {
         </TabsContent>
         <TabsContent value="courses" className="mt-4">
           <AdminCourses />
+        </TabsContent>
+        <TabsContent value="tree" className="mt-4">
+          <AdminCourseTree />
         </TabsContent>
         <TabsContent value="database" className="mt-4">
           <AdminDatabase />

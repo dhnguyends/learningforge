@@ -20,6 +20,8 @@
     "db:setup": "node scripts/db-setup.mjs",
     "db:push": "prisma db push && node scripts/ensure-vector-index.mjs",
     "db:seed": "tsx prisma/seed.ts",
+    "taxonomy:import": "tsx scripts/import-taxonomy.ts",
+    "taxonomy:export": "tsx scripts/export-taxonomy.ts",
     "db:studio": "prisma studio",
     "test": "vitest run tests/unit",
     "test:api": "vitest run tests/api",

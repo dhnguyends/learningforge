@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowRightLeft, Bot, Loader2, Search, Trash2, TriangleAlert, UserRound } from "lucide-react";
+import { ArrowRightLeft, Bot, Compass, Loader2, Search, Trash2, TriangleAlert, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useAdminDeleteStudySet, useAdminStudySets, useAdminUsers, useTransferStudySet, type AdminStudySetRow } from "@/hooks/use-api";
 import { useConfirm } from "@/components/shared/confirm-dialog";
+import { ClassificationPath, ClassifyButton } from "@/components/shared/topic-picker";
 
 const who = (u: { name: string | null; email: string }) => u.name || u.email;
 
@@ -94,7 +95,14 @@ export function AdminCourses() {
     const all = data?.studySets ?? [];
     if (!q) return all;
     return all.filter((s) =>
-      [s.title, s.subject, s.course, s.owner.name, s.owner.email].some((v) => v?.toLowerCase().includes(q)),
+      [
+        s.title,
+        s.subject,
+        s.course,
+        s.owner.name,
+        s.owner.email,
+        ...(s.classification ? [s.classification.discipline, s.classification.subject, s.classification.module, s.classification.topic].map((l) => l.name) : []),
+      ].some((v) => v?.toLowerCase().includes(q)),
     );
   }, [data, query]);
   const groups = useMemo(() => groupByOwner(rows), [rows]);
@@ -108,6 +116,12 @@ export function AdminCourses() {
             Every study set and the account it belongs to. A study set belongs to exactly one account.
           </p>
         </div>
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+        <Button asChild variant="outline" size="sm" className="gap-1.5">
+          <Link href="/explore?scope=all">
+            <Compass className="h-3.5 w-3.5" aria-hidden="true" /> Explore
+          </Link>
+        </Button>
         <div className="relative w-full sm:w-64">
           <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" aria-hidden="true" />
           <Input
@@ -117,6 +131,7 @@ export function AdminCourses() {
             aria-label="Search courses or owners"
             className="pl-8"
           />
+        </div>
         </div>
       </div>
 
@@ -196,6 +211,9 @@ export function AdminCourses() {
                         {(s.subject || s.course) && (
                           <p className="text-xs text-muted-foreground">{[s.course, s.subject].filter(Boolean).join(" · ")}</p>
                         )}
+                        <p className="text-xs text-muted-foreground">
+                          {s.classification ? <ClassificationPath classification={s.classification} /> : <span className="italic">No topic</span>}
+                        </p>
                       </td>
                       <td className="px-4 py-3">
                         <p className="font-medium">{who(s.owner)}</p>
@@ -217,6 +235,7 @@ export function AdminCourses() {
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">{new Date(s.createdAt).toLocaleDateString()}</td>
                       <td className="whitespace-nowrap px-2 py-3 text-right">
+                        <ClassifyButton studySetId={s.id} title={s.title} topicId={s.classification?.topicId ?? null} label="Topic" />
                         <Button
                           variant="ghost"
                           size="sm"

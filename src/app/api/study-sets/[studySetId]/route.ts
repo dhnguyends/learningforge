@@ -1,11 +1,13 @@
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
 import { prisma, jsonSafe } from "@/lib/db";
-import { apiHandler, ok, parseJsonBody, requireSession } from "@/lib/api";
+import { ApiError, apiHandler, ok, parseJsonBody, requireSession } from "@/lib/api";
 import { assertStudySetAccess } from "@/lib/access";
 import { deleteStudySetCompletely } from "@/lib/deletion";
 import { audit } from "@/lib/audit";
 import { ensureRecovered } from "@/lib/queue/recovery";
+import { TOPIC_SELECT, toClassification } from "@/lib/taxonomy/store";
+import { RELATED_SELECT, toRelated } from "@/lib/taxonomy/related";
 
 type Ctx = { params: { studySetId: string } };
 
@@ -16,7 +18,7 @@ export const GET = apiHandler<Ctx>(async (_req, { params }) => {
   const session = await requireSession();
   const studySet = await assertStudySetAccess(session.user.id, params.studySetId);
 
-  const [sources, guides, decks, quizzes, exerciseSets, jobs, conversations] = await Promise.all([
+  const [sources, guides, decks, quizzes, exerciseSets, jobs, conversations, topic, related] = await Promise.all([
     prisma.source.findMany({
       where: { studySetId: studySet.id },
       orderBy: { createdAt: "asc" },
@@ -35,6 +37,8 @@ export const GET = apiHandler<Ctx>(async (_req, { params }) => {
       take: 12,
     }),
     prisma.tutorConversation.findMany({ where: { studySetId: studySet.id }, orderBy: { updatedAt: "desc" }, take: 5, select: { id: true, title: true, updatedAt: true } }),
+    studySet.topicId ? prisma.taxonomyNode.findUnique({ where: { id: studySet.topicId }, ...TOPIC_SELECT }) : null,
+    prisma.studySetRelatedTopic.findMany({ where: { studySetId: studySet.id }, ...RELATED_SELECT }),
   ]);
 
   return ok(
@@ -43,6 +47,8 @@ export const GET = apiHandler<Ctx>(async (_req, { params }) => {
       // (a raw Prisma row has no counts and crashes the client).
       studySet: {
         ...studySet,
+        classification: toClassification(topic),
+        related: toRelated(related),
         counts: {
           sources: sources.length,
           sourcesReady: sources.filter((s) => s.status === "READY").length,
@@ -79,6 +85,8 @@ const patchSchema = z.object({
   title: z.string().min(3).max(160).optional(),
   course: z.string().max(120).nullable().optional(),
   subject: z.string().max(120).nullable().optional(),
+  /** Refused: only administrators file courses in the course tree (PATCH /api/admin/study-sets/[id]). */
+  topicId: z.unknown().optional(),
   learnerLevel: z.enum(["INTRODUCTORY", "ADVANCED_UNDERGRAD", "GRADUATE"]).optional(),
   examDate: z.string().datetime().nullable().optional(),
   outputTypes: z.array(z.enum(["GUIDE", "FLASHCARDS", "QUIZ", "EXERCISES", "AUDIO_RECAP", "TUTOR"])).optional(),
@@ -90,6 +98,9 @@ export const PATCH = apiHandler<Ctx>(async (req, { params }) => {
   const session = await requireSession();
   const studySet = await assertStudySetAccess(session.user.id, params.studySetId, "write");
   const body = await parseJsonBody(req, patchSchema);
+  if (body.topicId !== undefined) {
+    throw new ApiError(403, "Only an administrator can choose a course's topic (Admin → Courses)", "forbidden");
+  }
 
   const updated = await prisma.studySet.update({
     where: { id: studySet.id },

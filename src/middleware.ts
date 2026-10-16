@@ -3,7 +3,7 @@ import { getToken } from "next-auth/jwt";
 import { ACCESS_COOKIE, DEV_SECRET, accessKey, browserOrigin, isGateExempt, verifyAccessToken } from "@/lib/access-gate";
 
 /** App pages that need a signed-in user (/create was missing before). */
-const SIGNED_IN_PAGES = ["/dashboard", "/study-sets", "/settings", "/create", "/admin"];
+const SIGNED_IN_PAGES = ["/dashboard", "/study-sets", "/settings", "/create", "/admin", "/explore"];
 
 export default async function middleware(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
