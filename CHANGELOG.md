@@ -2,6 +2,14 @@
 
 All notable changes to LearningForge.
 
+## Unreleased
+
+### Documentation
+- **User Guide** (`docs/USER-GUIDE.md`) and **Administrator and Teacher Guide** (`docs/ADMIN-GUIDE.md`), with screenshots of every page. `npm run guides:screenshots` takes them again from the running server (`scripts/guides/`), with temporary accounts that are deleted afterwards and other people's names replaced.
+
+### Fixes
+- **Study set Analytics** stayed on its loading placeholder for any learner with quiz results: the server computed the topic trends before reading the quiz history (an error since the first version).
+
 ## 3.0 — 2026-10-17
 
 PolyLingue quality and scale (Phase 5): administrators review the AI-written lessons, learners report problems, analytics, and lesson audio ready ahead of time. Learners can change level, and speaking practice keeps their recorded answers. DeepSeek-R1 joins the local AI models, one model at a time on the GPU. A developer guide and an optional PyTorch container for GPU notebooks.

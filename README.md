@@ -77,6 +77,12 @@ cards, an 8-question quiz, exercises, and tutor history.
 
 ## Documentation
 
+- [docs/USER-GUIDE.md](docs/USER-GUIDE.md) — **for learners**, with screenshots:
+  study sets, sources and transcripts, study guide, flashcards, quizzes,
+  exercises, the tutor, and PolyLingue (lessons, practice, classes)
+- [docs/ADMIN-GUIDE.md](docs/ADMIN-GUIDE.md) — **for administrators and
+  teachers**, with screenshots: accounts and roles, AI models and GPU memory,
+  courses and the course tree, PolyLingue review and analytics, classes
 - [docs/SOFTWARE-DEV-GUIDE.md](docs/SOFTWARE-DEV-GUIDE.md) — **start here to maintain or extend
   the code**: libraries and versions, system services, the AI model behind each
   feature and how to change it, modules, conventions, recipes

@@ -46,12 +46,6 @@ export const GET = apiHandler<Ctx>(async (_req, { params }) => {
     if (delta < -0.1) return "down";
     return "flat";
   };
-  const topics = metrics.map((m) => ({
-    topic: m.topic,
-    mastery: Math.round(m.mastery * 100) / 100,
-    attempts: m.attempts,
-    trend: trendOf(objectiveTimeline.get(m.topic)),
-  }));
 
   // --- Flashcard retention (mean predicted retrievability, FSRS) ---
   const scheduler = getScheduler(DEFAULT_ALGORITHM);
@@ -90,6 +84,13 @@ export const GET = apiHandler<Ctx>(async (_req, { params }) => {
     diff.score += attempt.score ?? 0;
     byDifficulty.set(q.difficulty, diff);
   }
+  // After the timeline above: the trend reads it.
+  const topics = metrics.map((m) => ({
+    topic: m.topic,
+    mastery: Math.round(m.mastery * 100) / 100,
+    attempts: m.attempts,
+    trend: trendOf(objectiveTimeline.get(m.topic)),
+  }));
 
   // --- Time studied ---
   const totalMs = sessions.reduce((sum, s) => sum + ((s.endedAt ?? new Date()).getTime() - s.startedAt.getTime()), 0);

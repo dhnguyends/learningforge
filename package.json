@@ -30,7 +30,8 @@
     "test:e2e": "playwright test",
     "polylingue:backup": "tsx scripts/polylingue-data.ts backup",
     "polylingue:restore": "tsx scripts/polylingue-data.ts restore",
-    "load:check": "node scripts/load-check.mjs"
+    "load:check": "node scripts/load-check.mjs",
+    "guides:screenshots": "playwright test -c scripts/guides/playwright.config.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
