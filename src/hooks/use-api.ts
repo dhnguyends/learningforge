@@ -927,7 +927,7 @@ export function useRebuildVectorIndex() {
 
 /* ---------------------------- admin: AI model ---------------------------- */
 
-export type AiChoiceInput = { provider: "local" } | { provider: "gemini"; model: string } | { provider: "zai" };
+export type AiChoiceInput = { provider: "local"; model?: string } | { provider: "gemini"; model: string } | { provider: "zai" };
 export type AdminAiSettings = import("@/lib/ai/settings").AiSettingsView;
 export interface AiTestResult {
   ok: boolean;
@@ -943,11 +943,33 @@ export function useAdminAiSettings() {
   return useQuery({ queryKey: adminAiKey, queryFn: () => api<AdminAiSettings>("/api/admin/ai") });
 }
 
+export type LocalSwitchReport = import("@/lib/ai/ollama").LocalSwitchReport;
+export type GpuClearReport = import("@/lib/ai/ollama").GpuClearReport;
+export interface AdminGpuStatus {
+  ollamaReachable: boolean;
+  loaded: import("@/lib/ai/ollama").LoadedModel[];
+  usedMiB: number | null;
+  totalMiB: number | null;
+}
+
 export function useSaveAiChoice() {
   return useLfMutation(
-    (choice: AiChoiceInput) => api<AdminAiSettings>("/api/admin/ai", { method: "PUT", body: JSON.stringify(choice) }),
-    () => [adminAiKey, activeAiKey],
+    (choice: AiChoiceInput) =>
+      api<AdminAiSettings & { gpu: LocalSwitchReport | null }>("/api/admin/ai", { method: "PUT", body: JSON.stringify(choice) }),
+    () => [adminAiKey, activeAiKey, adminGpuKey],
   );
+}
+
+const adminGpuKey = ["admin", "ai", "gpu"] as const;
+
+/** Ollama models in GPU memory and the card's memory use, refreshed while the admin page is open. */
+export function useAdminGpu() {
+  return useQuery({ queryKey: adminGpuKey, queryFn: () => api<AdminGpuStatus>("/api/admin/ai/gpu"), refetchInterval: 10_000 });
+}
+
+/** Unloads every Ollama model from the GPU. */
+export function useFreeGpu() {
+  return useLfMutation(() => api<GpuClearReport>("/api/admin/ai/gpu", { method: "POST" }), () => [adminGpuKey]);
 }
 
 export interface ActiveAi {
@@ -969,7 +991,8 @@ export function useActiveAi() {
 export function useTestAiChoice() {
   return useLfMutation(
     (choice: AiChoiceInput) => api<AiTestResult>("/api/admin/ai/test", { method: "POST", body: JSON.stringify(choice) }),
-    () => [],
+    // A local test loads the model (and unloads the others).
+    () => [adminGpuKey],
   );
 }
 

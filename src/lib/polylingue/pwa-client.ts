@@ -218,7 +218,7 @@ export function offlineRun(courseId: string, lessonId: string, exercises: Exerci
 
 /** Sends the results of lessons played offline; returns how many were applied. */
 export async function flushOutbox(): Promise<number> {
-  if (typeof navigator !== "undefined" && !navigator.onLine) return 0;
+  if (browserOffline()) return 0;
   let applied = 0;
   for (const entry of readOutbox()) {
     if (entry.answers.length === 0 && !entry.complete) {
@@ -248,4 +248,13 @@ export async function flushOutbox(): Promise<number> {
 /** A request that never reached the server (offline, server down), as opposed to an error it returned. */
 export function isNetworkError(error: unknown): boolean {
   return error instanceof TypeError || (error instanceof Error && /failed to fetch|networkerror|load failed|network request failed/i.test(error.message));
+}
+
+/**
+ * True only in a browser that says it is offline. Node 21+ has a global
+ * `navigator` without `onLine`, so a bare `!navigator.onLine` is true while a
+ * page renders on the server (and its HTML then differs from the browser's).
+ */
+export function browserOffline(): boolean {
+  return typeof window !== "undefined" && navigator.onLine === false;
 }

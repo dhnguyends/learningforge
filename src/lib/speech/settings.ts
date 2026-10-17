@@ -165,3 +165,13 @@ export async function speechSettingsView() {
   };
 }
 export type SpeechSettingsView = Awaited<ReturnType<typeof speechSettingsView>>;
+
+/**
+ * PolyLingue voices chosen by an admin, per target language: "kokoro:<voice>"
+ * or "piper:<model>" (local voices only). A language without a choice uses the
+ * read-aloud model as before.
+ */
+const polylingueVoicesSchema = z.record(z.string().min(2).max(12), z.string().min(3).max(120));
+export type PolylingueVoices = z.infer<typeof polylingueVoicesSchema>;
+export const readPolylingueVoices = async (): Promise<PolylingueVoices> => (await readSetting("polylingue_voices", polylingueVoicesSchema)) ?? {};
+export const savePolylingueVoices = (v: PolylingueVoices, userId: string) => writeSetting("polylingue_voices", v, userId);

@@ -78,3 +78,23 @@ export async function cpuTimeoutFactor(): Promise<number> {
 export function resetGpuCache(): void {
   cache = null;
 }
+
+/** Parses `nvidia-smi --query-gpu=memory.used,memory.total --format=csv,noheader,nounits` (first GPU). */
+export function parseGpuMemory(output: string): { usedMiB: number; totalMiB: number } | null {
+  const first = output.split(/\r?\n/).map((l) => l.trim()).find(Boolean);
+  const [used, total] = (first ?? "").split(",").map((s) => Number.parseInt(s.trim(), 10));
+  return Number.isFinite(used) && Number.isFinite(total) ? { usedMiB: used, totalMiB: total } : null;
+}
+
+/** GPU memory in use right now (all processes: Ollama, Whisper, the desktop); null without a GPU. Not cached. */
+export async function gpuMemoryUse(): Promise<{ usedMiB: number; totalMiB: number } | null> {
+  if (getEnv().GPU_DETECTION === "off") return null;
+  return new Promise((resolve) => {
+    execFile(
+      "nvidia-smi",
+      ["--query-gpu=memory.used,memory.total", "--format=csv,noheader,nounits"],
+      { timeout: 5_000, windowsHide: true },
+      (err, stdout) => resolve(err ? null : parseGpuMemory(stdout)),
+    );
+  });
+}

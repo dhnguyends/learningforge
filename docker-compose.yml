@@ -1,6 +1,7 @@
 # Local development infrastructure for LearningForge.
 # `docker compose up -d` starts Postgres (with pgvector) and Redis.
 # `docker compose --profile storage up -d` also starts MinIO (S3-compatible).
+# `docker compose --profile pytorch up -d pytorch` starts PyTorch + JupyterLab on the GPU.
 services:
   db:
     image: pgvector/pgvector:pg16
@@ -55,6 +56,32 @@ services:
       mc anonymous set none lf/lectureforge;
       exit 0"
 
+  # PyTorch on the NVIDIA GPU with JupyterLab, for notebooks and experiments
+  # (LearningForge itself does not use PyTorch). Open http://127.0.0.1:8888 with
+  # the token from `docker compose logs pytorch`. The project folder is
+  # /workspace; downloaded models (Hugging Face, torch hub) persist in a volume.
+  # It shares the 11 GB GPU with Ollama and Speaches: free Ollama's memory first
+  # (Admin > AI model > Free GPU memory) for large models.
+  pytorch:
+    build: ./deploy/pytorch
+    image: learningforge-pytorch:2.14.1-cu126
+    profiles: ["pytorch"]
+    ports:
+      - "127.0.0.1:8888:8888"
+    volumes:
+      - .:/workspace
+      - lf_torchcache:/root/.cache
+    # DataLoader workers share tensors through /dev/shm (64 MB by default).
+    shm_size: "2gb"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
 volumes:
   lf_pgdata:
   lf_miniodata:
+  lf_torchcache:

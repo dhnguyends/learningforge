@@ -1,9 +1,14 @@
 import { apiHandler, ok, parseJsonBody, requireAdmin, badRequest } from "@/lib/api";
 import { audit } from "@/lib/audit";
 import { getEnv } from "@/lib/env";
-import { aiChoiceSchema, aiSettingsView, geminiConfigured, getStoredAiChoice, saveAiChoice, zaiConfigured } from "@/lib/ai/settings";
+import { aiChoiceSchema, aiSettingsView, geminiConfigured, getStoredAiChoice, localModelProblem, saveAiChoice, zaiConfigured } from "@/lib/ai/settings";
+import { switchLocalModel } from "@/lib/ai/ollama";
 
-/** The generation model used by every pipeline, chosen by an administrator. */
+/**
+ * The generation model used by every pipeline, chosen by an administrator.
+ * Choosing a local model clears the GPU of every other Ollama model first
+ * (checked), then loads the chosen one; the answer reports what was freed.
+ */
 
 export const GET = apiHandler(async () => {
   await requireAdmin();
@@ -21,14 +26,20 @@ export const PUT = apiHandler(async (req) => {
   if (choice.provider === "zai" && !zaiConfigured(env)) {
     throw badRequest("Set ZAI_API_KEY in the server environment before selecting GLM (Z.ai)");
   }
+  const localModel = choice.provider === "local" ? (choice.model ?? env.LOCAL_AI_MODEL) : null;
+  if (localModel) {
+    const problem = await localModelProblem(localModel, env);
+    if (problem) throw badRequest(problem);
+  }
   const previous = await getStoredAiChoice();
   await saveAiChoice(choice, admin.user.id);
+  const gpu = localModel ? await switchLocalModel(localModel, env) : null;
   await audit({
     userId: admin.user.id,
     action: "admin.ai_model",
     entityType: "app_setting",
     entityId: "ai",
-    metadata: { from: previous, to: choice },
+    metadata: { from: previous, to: choice, ...(gpu ? { unloaded: gpu.unloaded.map((m) => m.name), loaded: gpu.loaded } : {}) },
   });
-  return ok(await aiSettingsView());
+  return ok({ ...(await aiSettingsView()), gpu });
 });

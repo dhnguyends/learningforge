@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { prepareLesson } from "@/lib/polylingue/curriculum";
 import type { LessonContent } from "@/lib/polylingue/content";
+import { lessonAudioTexts, speechPath } from "@/lib/polylingue/voices";
 import { answerExercise, completeLesson, lessonForPlayer, ownCourse } from "@/lib/polylingue/service";
 
 /**
@@ -10,25 +11,10 @@ import { answerExercise, completeLesson, lessonForPlayer, ownCourse } from "@/li
  */
 export const OFFLINE_LESSONS = 3;
 
-export function speechPath(lang: string, text: string): string {
-  return `/api/polylingue/speech?lang=${encodeURIComponent(lang)}&text=${encodeURIComponent(text)}`;
-}
-
-/** Every text a lesson can play: its words, exercise audio and the words to match. */
-export function lessonAudioTexts(content: LessonContent): string[] {
-  const texts = new Set<string>();
-  for (const w of content.words) if (w.term.trim()) texts.add(w.term.trim());
-  for (const e of content.exercises) {
-    if (e.audio?.trim()) texts.add(e.audio.trim());
-    for (const p of e.pairs ?? []) if (p.left.trim()) texts.add(p.left.trim());
-  }
-  return [...texts];
-}
-
 export async function offlinePackage(userId: string, courseId: string) {
   const course = await ownCourse(userId, courseId);
   const candidates = await prisma.langLesson.findMany({
-    where: { curriculumId: course.curriculumId, courseId: null, progress: { none: { courseId, completedAt: { not: null } } } },
+    where: { curriculumId: course.curriculumId, courseId: null, retiredAt: null, progress: { none: { courseId, completedAt: { not: null } } } },
     orderBy: { ordinal: "asc" },
     take: OFFLINE_LESSONS,
     select: { id: true, status: true, content: true },

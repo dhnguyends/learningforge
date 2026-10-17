@@ -116,6 +116,35 @@ WHISPER_TIMEOUT_MS="3600000"
 - Existing sources keep their old transcript until you use **Import again** on
   them (Sources page), then regenerate the study material.
 
+## PyTorch on the GPU (optional, for notebooks)
+
+LearningForge does not use PyTorch: Ollama and Speaches bring their own CUDA
+libraries. For notebooks and experiments, an optional container runs PyTorch
+2.14.1 (CUDA 12.6) with JupyterLab on the GPU:
+
+```bash
+docker compose --profile pytorch up -d pytorch
+docker compose logs pytorch          # the URL with its login token
+docker compose exec pytorch python deploy/pytorch/gpu-check.py
+docker compose stop pytorch
+```
+
+- JupyterLab: http://127.0.0.1:8888 (localhost only). The project folder is
+  `/workspace`; models downloaded from Hugging Face or torch hub stay in the
+  `lf_torchcache` volume.
+- CUDA 12.6 on purpose: the GTX 1080 Ti (Pascal, sm_61) is not supported by
+  CUDA 13 builds. `gpu-check.py` runs a real kernel and fails clearly if a
+  build has no kernels the card can run (sm_60/sm_61).
+- `pip install` (in a notebook or with `docker compose exec`) goes into
+  `/opt/venv`, which still sees the image's PyTorch (the image's own Python
+  refuses installs, PEP 668). Packages installed there last until the
+  container is recreated; add lasting ones to `deploy/pytorch/Dockerfile`.
+- The container shares the 11 GB GPU with Ollama and Speaches. For a large
+  model, free Ollama's memory first (Admin › AI model › **Free GPU memory**).
+- Another version: change the `FROM` tag in `deploy/pytorch/Dockerfile` (and
+  the `image:` tag in `docker-compose.yml`), then
+  `docker compose --profile pytorch build pytorch`.
+
 ## Bilingual sources and read-aloud
 
 French sources are translated to English after import, and the source page can
@@ -158,6 +187,7 @@ Plan and phases: `docs/POLYLINGUE-PLAN.md`. Code: `src/lib/polylingue/` (levels,
 - **Tests** (`tests/api/polylingue.test.ts`) only use language/level pairs nobody has started, and delete them afterwards, so mock lessons never reach real learners.
 - **Habit and motivation (Phase 3):** pure rules in `src/lib/polylingue/habits.ts` (streak freezes, badges, weeks, league codes, reminder timing), services in `habits-service.ts`, push in `push.ts`, offline lessons in `offline.ts`; the browser side is `pwa-client.ts` and `public/sw.js`.
 - **Browser notifications** need a VAPID key pair in `.env` (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`; generate with `npx web-push generate-vapid-keys`). `src/instrumentation.ts` then starts a once-a-minute reminder pass in the server process. Without keys, reminders show in the app only.
+- **Quality (Phase 5):** `review.ts` (learner reports, hide after 3, edit / regenerate / retire / restore with versions kept as ArtifactEdit `lang_lesson`), `analytics.ts` (retention, completion, time per lesson, hardest exercises) and `voices.ts` (local voice per language, shared clip keys, audio generated ahead of time one lesson at a time, never with a cloud voice). Admin API under `/api/admin/polylingue/` (`requireAdmin`); learners report through `/lessons/<id>/report`. Retired lessons are left out of course outlines, next lessons, offline packages and class assignments.
 - **Classes (Phase 4):** `src/lib/polylingue/classes.ts` (assignment state, falling behind, CSV) and `classes-service.ts`; teacher API under `/api/polylingue/teach/` (`requireTeacher`: role TEACHER or ADMIN, Human accounts only), student API under `/api/polylingue/classes` and `/assignments`. A class pins one curriculum; joining moves the student's course in that language to it, so assignment lesson ids match for everyone.
 - **Installable app and offline:** `public/polylingue.webmanifest` and `public/sw.js` (scope `/`, it only handles PolyLingue pages, Next.js static files and lesson audio). "Available offline" on a course page saves the next 3 lessons (with their answers, corrected in the browser) and their audio; results played offline are sent once back online through `/offline/sync`, applied once per sync id.
 

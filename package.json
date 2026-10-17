@@ -27,7 +27,10 @@
     "test:api": "vitest run tests/api",
     "test:unit": "vitest run tests/unit",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "polylingue:backup": "tsx scripts/polylingue-data.ts backup",
+    "polylingue:restore": "tsx scripts/polylingue-data.ts restore",
+    "load:check": "node scripts/load-check.mjs"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

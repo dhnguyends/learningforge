@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { getEnv, type Env } from "@/lib/env";
+import { installedModels, localModelLabel, sameModel } from "@/lib/ai/ollama";
 
 /**
  * Which generation model the app uses, chosen by an administrator at /admin
@@ -21,7 +22,16 @@ export type GeminiModelId = (typeof GEMINI_MODELS)[number]["id"];
 const GEMINI_MODEL_IDS = GEMINI_MODELS.map((m) => m.id) as [GeminiModelId, ...GeminiModelId[]];
 
 export const aiChoiceSchema = z.discriminatedUnion("provider", [
-  z.object({ provider: z.literal("local") }),
+  // An installed Ollama model (checked when saved); LOCAL_AI_MODEL when absent.
+  z.object({
+    provider: z.literal("local"),
+    model: z
+      .string()
+      .trim()
+      .regex(/^[\w.\-/]+(:[\w.\-]+)?$/, "Not an Ollama model name")
+      .max(100)
+      .optional(),
+  }),
   z.object({ provider: z.literal("gemini"), model: z.enum(GEMINI_MODEL_IDS) }),
   // GLM served by Z.ai; the model is GLM_AI_MODEL.
   z.object({ provider: z.literal("zai") }),
@@ -106,7 +116,7 @@ export function invalidateAiChoice(): void {
 export function resolveAi(choice: AiChoice | null, env: Env = getEnv()): ResolvedAi {
   const fallback = envDefault(env);
   if (env.AI_PROVIDER === "mock" || !choice) return fallback;
-  if (choice.provider === "local") return { provider: "local", model: env.LOCAL_AI_MODEL, source: "admin" };
+  if (choice.provider === "local") return { provider: "local", model: choice.model ?? env.LOCAL_AI_MODEL, source: "admin" };
   if (choice.provider === "zai") {
     if (!zaiConfigured(env)) return { ...fallback, source: "fallback" };
     return { provider: "zai", model: zaiModel(env), source: "admin" };
@@ -121,6 +131,36 @@ export async function getActiveAi(): Promise<ResolvedAi> {
   return resolveAi(await getStoredAiChoice(), env);
 }
 
+/**
+ * The local models an administrator can pick: those installed in Ollama that
+ * write text (embeddings-only models excluded). Without Ollama, just
+ * LOCAL_AI_MODEL, marked not installed.
+ */
+export async function localModelOptions(env: Env = getEnv()) {
+  const fallback = [{ name: env.LOCAL_AI_MODEL, label: localModelLabel(env.LOCAL_AI_MODEL), parameterSize: null, sizeBytes: 0, thinking: false, installed: false }];
+  try {
+    const models = (await installedModels(env)).filter((m) => m.generation);
+    if (!models.length) return fallback;
+    return models.map((m) => ({ name: m.name, label: m.label, parameterSize: m.parameterSize, sizeBytes: m.sizeBytes, thinking: m.capabilities.includes("thinking"), installed: true }));
+  } catch {
+    return fallback;
+  }
+}
+
+/** Why `model` cannot be used as the local model (not installed, embeddings only, Ollama down), or null. */
+export async function localModelProblem(model: string, env: Env = getEnv()): Promise<string | null> {
+  let models;
+  try {
+    models = await installedModels(env);
+  } catch {
+    return `Ollama is not reachable at ${env.LOCAL_AI_BASE_URL}: start it before choosing a local model`;
+  }
+  const hit = models.find((m) => sameModel(m.name, model));
+  if (!hit) return `${model} is not installed in Ollama (run: ollama pull ${model})`;
+  if (!hit.generation) return `${model} is an embeddings model: it cannot write text`;
+  return null;
+}
+
 /** What /admin shows: the active model, the stored choice and what can be picked. Never the API key. */
 export async function aiSettingsView() {
   const env = getEnv();
@@ -131,6 +171,7 @@ export async function aiSettingsView() {
     envDefault: envDefault(env),
     mockMode: env.AI_PROVIDER === "mock",
     localModel: env.LOCAL_AI_MODEL,
+    localModels: env.AI_PROVIDER === "mock" ? [] : await localModelOptions(env),
     geminiConfigured: geminiConfigured(env),
     geminiModels: GEMINI_MODELS,
     zai: {
@@ -145,7 +186,7 @@ export type AiSettingsView = Awaited<ReturnType<typeof aiSettingsView>>;
 /** Human label for the top bar ("Gemini 3.8 Flash", "GLM-5.3", "Gemma 4 · local"). */
 export function aiLabel(ai: Pick<ResolvedAi, "provider" | "model">): string {
   if (ai.provider === "gemini") return GEMINI_MODELS.find((m) => m.id === ai.model)?.label ?? ai.model;
-  if (ai.provider === "local") return /gemma-?4/i.test(ai.model) ? "Gemma 4 · local" : `${ai.model} · local`;
+  if (ai.provider === "local") return `${localModelLabel(ai.model)} · local`;
   if (ai.provider === "zai") return glmLabel(ai.model);
   if (ai.provider === "mock") return "Offline demo";
   return ai.model;

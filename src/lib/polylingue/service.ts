@@ -1,5 +1,6 @@
 import type { CefrLevel, LanguageCourse } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import { getStorage } from "@/lib/storage";
 import { ApiError, notFound } from "@/lib/api";
 import { DEFAULT_ALGORITHM, getScheduler, type Grade } from "@/lib/srs/fsrs";
 import { ensureCurriculum, prefetchNext, prepareLesson } from "@/lib/polylingue/curriculum";
@@ -118,7 +119,7 @@ export type CourseSummary = Awaited<ReturnType<typeof summary>>;
 
 async function nextLesson(course: LanguageCourse) {
   const lesson = await prisma.langLesson.findFirst({
-    where: { curriculumId: course.curriculumId, courseId: null, progress: { none: { courseId: course.id, completedAt: { not: null } } } },
+    where: { curriculumId: course.curriculumId, courseId: null, retiredAt: null, progress: { none: { courseId: course.id, completedAt: { not: null } } } },
     orderBy: { ordinal: "asc" },
     select: { id: true, title: true, unitTitle: true },
   });
@@ -178,6 +179,10 @@ export async function updateCourse(
 export async function deleteCourse(userId: string, courseId: string): Promise<void> {
   await ownCourse(userId, courseId);
   await prisma.languageCourse.delete({ where: { id: courseId } });
+  // The spoken answers kept for this course (speaking practice).
+  await getStorage()
+    .deletePrefix(`polylingue/recordings/${userId}/${courseId}`)
+    .catch((err) => console.error("[polylingue] recordings purge", courseId, err));
 }
 
 /** Course page: summary, units and lessons with the learner's progress. */
@@ -186,7 +191,7 @@ export async function courseDetail(userId: string, courseId: string) {
   if (!course || course.userId !== userId) throw notFound("Course");
   const [lessons, progress, own] = await Promise.all([
     prisma.langLesson.findMany({
-      where: { curriculumId: course.curriculumId, courseId: null },
+      where: { curriculumId: course.curriculumId, courseId: null, retiredAt: null },
       orderBy: { ordinal: "asc" },
       select: { id: true, unitIndex: true, unitTitle: true, title: true, focus: true, status: true },
     }),
@@ -249,6 +254,7 @@ export async function lessonForPlayer(userId: string, courseId: string, lessonId
   const course = await ownCourse(userId, courseId);
   const lesson = await prisma.langLesson.findFirst({ where: { id: lessonId, curriculumId: course.curriculumId, OR: [{ courseId: null }, { courseId: course.id }] } });
   if (!lesson) throw notFound("Lesson");
+  if (lesson.retiredAt) throw new ApiError(404, "This lesson was withdrawn from the course", "retired");
   if (lesson.status !== "READY" || !lesson.content) {
     void prepareLesson(lesson.id).catch(() => undefined);
     return { id: lesson.id, title: lesson.title, unitTitle: lesson.unitTitle, status: lesson.status, error: lesson.error, mode: "normal" as Mode, content: null };
@@ -269,6 +275,8 @@ export async function lessonForPlayer(userId: string, courseId: string, lessonId
       exercises: content.exercises.map((e, i) => ({
         ...adaptExercise(exerciseForPlayer(e), e, mode, content.exercises, i + 1),
         glossable: glossableWords(e, content.words),
+        // Reported by 3 learners: skipped until an admin reviews it.
+        hidden: lesson.hiddenExercises.includes(i),
       })),
     },
   };
@@ -317,8 +325,14 @@ export async function completeLesson(userId: string, courseId: string, lessonId:
   const previous = await prisma.langLessonProgress.findUnique({ where: { courseId_lessonId: { courseId, lessonId } } });
   await prisma.langLessonProgress.upsert({
     where: { courseId_lessonId: { courseId, lessonId } },
-    create: { courseId, lessonId, bestScore: score, runs: 1, xp: bonus, completedAt: new Date() },
-    update: { bestScore: Math.max(previous?.bestScore ?? 0, score), runs: { increment: 1 }, xp: { increment: bonus }, completedAt: previous?.completedAt ?? new Date() },
+    create: { courseId, lessonId, bestScore: score, runs: 1, xp: bonus, seconds, completedAt: new Date() },
+    update: {
+      bestScore: Math.max(previous?.bestScore ?? 0, score),
+      runs: { increment: 1 },
+      xp: { increment: bonus },
+      seconds: { increment: seconds },
+      completedAt: previous?.completedAt ?? new Date(),
+    },
   });
   const added = await prisma.langCard.createMany({
     data: content.words.map((w) => ({
@@ -523,4 +537,30 @@ export function glossableWords(e: { answer: string; accepted: string[] }, words:
     return v.length > 0 && answers.some((a) => a.includes(v) || v.includes(a));
   };
   return words.filter((w) => !overlaps(w.term) && !overlaps(w.translation)).map((w) => w.term);
+}
+
+/**
+ * The levels a learner can switch their course to (same language): whether
+ * each level's shared course is ready, being written, or still to write, and
+ * whether the course follows a class (the class keeps its own level).
+ */
+export async function levelOptions(userId: string, courseId: string) {
+  const course = await ownCourse(userId, courseId);
+  const curricula = await prisma.langCurriculum.findMany({ where: { targetLang: course.targetLang }, select: { baseLang: true, level: true, status: true } });
+  const classes = await prisma.langClassMember.findMany({
+    where: { userId, class: { targetLang: course.targetLang } },
+    select: { class: { select: { name: true, level: true, curriculumId: true } } },
+  });
+  const levels = (["A1", "A2", "B1", "B2", "C1", "C2"] as const).map((level) => {
+    const base = isImmersion(level) ? course.targetLang : course.baseLang === course.targetLang ? null : course.baseLang;
+    const hit = base ? curricula.find((c) => c.level === level && c.baseLang === base) : undefined;
+    return { level, status: hit ? hit.status : ("NEW" as const), current: level === course.level };
+  });
+  return {
+    level: course.level,
+    baseLang: course.baseLang,
+    targetLang: course.targetLang,
+    levels,
+    classes: classes.map((m) => ({ name: m.class.name, level: m.class.level, current: m.class.curriculumId === course.curriculumId })),
+  };
 }

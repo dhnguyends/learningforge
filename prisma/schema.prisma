@@ -248,6 +248,7 @@ model User {
   createdLeagues    LangLeague[]        @relation("LeagueCreator")
   taughtClasses     LangClass[]         @relation("ClassTeacher")
   langClasses       LangClassMember[]
+  langReports       LangReport[]
 
   @@map("users")
 }
@@ -979,32 +980,41 @@ model LangCurriculum {
 /// A learner can also make personal lessons from their own LearningForge
 /// sources (courseId and sourceId set, no place in the course order).
 model LangLesson {
-  id            String      @id @default(cuid())
-  curriculumId  String
+  id              String      @id @default(cuid())
+  curriculumId    String
   /// Order in the course (unit by unit); null for a personal lesson.
-  ordinal       Int?
-  unitIndex     Int?
+  ordinal         Int?
+  unitIndex       Int?
   /// Unit title, or the source's title for a personal lesson.
-  unitTitle     String
+  unitTitle       String
   /// Owner of a personal lesson (null: shared course lesson).
-  courseId      String?
+  courseId        String?
   /// LearningForge source the personal lesson was made from (kept if the source is deleted).
-  sourceId      String?
+  sourceId        String?
   /// The excerpt of the source the lesson is built on (target language).
-  sourceExcerpt String?
-  title         String
-  focus         String
-  status        GuideStatus @default(QUEUED)
+  sourceExcerpt   String?
+  title           String
+  focus           String
+  status          GuideStatus @default(QUEUED)
   /// { intro, words: [...], exercises: [...] } — see src/lib/polylingue/content.ts
-  content       Json?
-  model         String?
-  error         String?
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  content         Json?
+  model           String?
+  error           String?
+  /// Retired by an admin: no longer offered (progress made on it stays).
+  retiredAt       DateTime?
+  /// Exercise indexes skipped after 3 learners reported them, until an admin reviews them.
+  hiddenExercises Int[]       @default([])
+  /// When the lesson's audio was last generated ahead of time (local voices).
+  audioAt         DateTime?
+  /// Last hand edit by an admin (earlier versions are kept as ArtifactEdit "lang_lesson").
+  editedAt        DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
 
   curriculum LangCurriculum       @relation(fields: [curriculumId], references: [id], onDelete: Cascade)
   owner      LanguageCourse?      @relation("OwnLessons", fields: [courseId], references: [id], onDelete: Cascade)
   progress   LangLessonProgress[]
+  reports    LangReport[]
 
   @@unique([curriculumId, ordinal])
   @@index([courseId])
@@ -1044,6 +1054,7 @@ model LanguageCourse {
   ownLessons   LangLesson[]           @relation("OwnLessons")
   achievements LangAchievement[]
   offlineSyncs LangOfflineSync[]
+  recordings   LangRecording[]
 
   @@unique([userId, targetLang])
   @@map("language_courses")
@@ -1057,6 +1068,8 @@ model LangLessonProgress {
   bestScore   Int       @default(0)
   runs        Int       @default(0)
   xp          Int       @default(0)
+  /// Seconds spent over all runs (for time per lesson).
+  seconds     Int       @default(0)
   completedAt DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -1367,4 +1380,51 @@ model LangAssignment {
 
   @@index([classId, dueAt])
   @@map("lang_assignments")
+}
+
+/// A learner's report of a problem with one exercise ("report a problem").
+model LangReport {
+  id            String    @id @default(cuid())
+  lessonId      String
+  exerciseIndex Int
+  userId        String
+  /// wrong_answer | unclear | audio | typo | other
+  reason        String
+  comment       String?
+  createdAt     DateTime  @default(now())
+  resolvedAt    DateTime?
+  /// fixed | dismissed | regenerated | retired
+  resolution    String?
+
+  lesson LangLesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  user   User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([lessonId, exerciseIndex, userId])
+  @@index([resolvedAt])
+  @@map("lang_reports")
+}
+
+/// A learner's spoken answer in speaking practice, kept to play back: per item
+/// ("sentence-0", "question-1"…) the latest one and the best one (highest
+/// score). Both rows may point to the same file. Audio is WAV in storage.
+model LangRecording {
+  id         String   @id @default(cuid())
+  courseId   String
+  practiceId String
+  item       String
+  /// latest | best
+  slot       String
+  storageKey String
+  mimeType   String   @default("audio/wav")
+  sizeBytes  Int
+  score      Int?
+  /// What the transcription heard.
+  heard      String?
+  createdAt  DateTime @default(now())
+
+  course LanguageCourse @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([courseId, practiceId, item, slot])
+  @@index([courseId, practiceId])
+  @@map("lang_recordings")
 }

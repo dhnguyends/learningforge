@@ -30,7 +30,11 @@ export interface PlayerLesson {
   error: string | null;
   /** Adaptive mode, within the chosen level: support, normal or challenge. */
   mode: import("@/lib/polylingue/adapt").Mode;
-  content: { intro: string; words: LessonWord[]; exercises: (PlayerExercise & import("@/lib/polylingue/adapt").AdaptedFields & { glossable: string[] })[] } | null;
+  content: {
+    intro: string;
+    words: LessonWord[];
+    exercises: (PlayerExercise & import("@/lib/polylingue/adapt").AdaptedFields & { glossable: string[]; hidden?: boolean })[];
+  } | null;
 }
 
 export interface AnswerResult {
@@ -654,5 +658,50 @@ export function useClassLeague(classId: string) {
     mutationFn: (input: { inLeague: boolean; nickname?: string }) =>
       api<{ inLeague: boolean; nickname: string | null }>(`/api/polylingue/classes/${classId}`, { method: "PATCH", body: JSON.stringify(input) }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: classKeys.mine }),
+  });
+}
+
+export type LevelOptions = Awaited<ReturnType<typeof import("@/lib/polylingue/service").levelOptions>>;
+
+/** The levels the course can switch to (the dialog opens it). */
+export function useLevelOptions(courseId: string | null) {
+  return useQuery({
+    queryKey: ["polylingue", "levels", courseId ?? ""],
+    queryFn: () => api<LevelOptions>(`/api/polylingue/courses/${courseId}/levels`),
+    enabled: Boolean(courseId),
+  });
+}
+
+export type KeptRecordings = Awaited<ReturnType<typeof import("@/lib/polylingue/recordings").practiceRecordings>>;
+const recordingsKey = (practiceId: string) => ["polylingue", "recordings", practiceId] as const;
+
+/** The learner's kept spoken answers of a speaking practice (latest and best per item). */
+export function useRecordings(courseId: string, practiceId: string) {
+  return useQuery({
+    queryKey: recordingsKey(practiceId),
+    queryFn: () => api<KeptRecordings>(`/api/polylingue/courses/${courseId}/practices/${practiceId}/recordings`),
+  });
+}
+
+export function useDeleteRecordings(courseId: string, practiceId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api<{ deleted: number }>(`/api/polylingue/courses/${courseId}/practices/${practiceId}/recordings`, { method: "DELETE" }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: recordingsKey(practiceId) }),
+  });
+}
+
+export function invalidateRecordings(qc: ReturnType<typeof useQueryClient>, practiceId: string) {
+  void qc.invalidateQueries({ queryKey: recordingsKey(practiceId) });
+}
+
+/** Deletes kept recordings by id (e.g. the latest and the best when they are one take). */
+export function useDeleteRecording(practiceId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (ids: string[]) => {
+      for (const id of ids) await api<{ fileDeleted: boolean }>(`/api/polylingue/recordings/${id}`, { method: "DELETE" });
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["polylingue", "recordings", practiceId] }),
   });
 }

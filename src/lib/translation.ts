@@ -1,5 +1,6 @@
 import { getEnv, mockProvidersAllowed } from "@/lib/env";
 import { cpuTimeoutFactor } from "@/lib/gpu";
+import { loadAloneOnGpu } from "@/lib/ai/ollama";
 import { languageName } from "@/lib/speech/languages";
 import { getActiveTranslator } from "@/lib/speech/settings";
 
@@ -48,6 +49,8 @@ export class LocalTranslator implements Translator {
   }
 
   async translate(texts: string[], from: string, to: string, onProgress?: ProgressCallback): Promise<string[]> {
+    // One language model on the GPU at a time (e.g. DeepSeek-R1 chosen for generation).
+    await loadAloneOnGpu(this.model);
     const out: string[] = new Array(texts.length);
     let batch: number[] = [];
     let size = 0;

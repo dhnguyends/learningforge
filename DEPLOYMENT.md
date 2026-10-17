@@ -118,6 +118,15 @@ Notes:
   dashboards without schema changes; `NEXTAUTH_SECRET` rotation
   invalidates sessions (users just sign in again).
 
+## PolyLingue (2.2 and later)
+
+- **Schema:** `npm run db:push` (the pod's `setup.sh` runs it) adds the PolyLingue tables, the `TEACHER` role and Phase 5's reports and lesson fields.
+- **Browser notifications:** set `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT` (`npx web-push generate-vapid-keys`). On a packet.ai pod, `setup.sh` generates them once into `secrets.env`. The reminder pass starts with the server (`src/instrumentation.ts`); without keys, reminders stay in the app.
+- **Installable app:** `/sw.js`, `/polylingue.webmanifest` and `/icons/` are served from `public/` and are exempt from the access key. Push and installation need HTTPS (the pod's Caddy front gives it).
+- **Voices and audio:** choose a local voice per language in Admin › PolyLingue › Voices & audio; lessons get their audio as soon as they are written, and the audio button of a course generates it for lessons that already exist. Clips live in storage under `polylingue/tts/` (included in the pod's `storage.tar.gz` backup).
+- **Back up PolyLingue only:** `npm run polylingue:backup` writes `backups/polylingue-<stamp>.json.gz` (courses, lessons, progress, badges, leagues, classes, reminders, reports, versions, voices; keep it private: it holds browser push keys). `npm run polylingue:restore -- <file>` adds what is missing and never overwrites; rows whose account, course or lesson does not exist there are skipped and counted. The full pod backup (`deploy/packet/backup.sh`) still covers everything.
+- **Load check:** `npm run load:check` signs in as a test account and sends read-only requests from many virtual learners (`BASE_URL`, `LOAD_EMAIL`, `LOAD_PASSWORD`, `CONCURRENCY`, `DURATION`, `P95_LIMIT_MS`; `ALLOW_SELF_SIGNED=1` for a pod's private certificate). It prints p50 / p95 / p99 per endpoint and fails above 1 % errors or the p95 limit. Run it on a production build: the dev server compiles each route on its first request.
+
 ## Alternative: single GPU pod on packet.ai (trial)
 
 > **GPU check.** After deploying, the top bar shows the GPU next to the AI model,

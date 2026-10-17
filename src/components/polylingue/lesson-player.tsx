@@ -13,6 +13,7 @@ import { SpeakButtons, useSpeak } from "@/components/polylingue/speak";
 import { useAnswer, useCompleteLesson, useHint, type AnswerResult, type PlayerLesson } from "@/hooks/use-polylingue";
 import type { Exercise, LessonWord } from "@/lib/polylingue/content";
 import { flushOutbox, offlineRun } from "@/lib/polylingue/pwa-client";
+import { ReportProblem } from "@/components/polylingue/report-problem";
 import type { PlayerExercise } from "@/lib/polylingue/content";
 import { MODE_LABELS, type AdaptedFields } from "@/lib/polylingue/adapt";
 
@@ -56,13 +57,15 @@ export function LessonPlayer({
   offlineExercises?: Exercise[];
 }) {
   const content = lesson.content!;
-  const total = content.exercises.length;
+  // Exercises reported by 3 learners are skipped until an admin reviews them.
+  const firstPass = () => content.exercises.map((e, index) => ({ index, retry: false, hidden: Boolean(e.hidden) })).filter((q) => !q.hidden).map(({ index, retry }) => ({ index, retry }));
+  const total = firstPass().length;
   const answer = useAnswer(courseId, lesson.id);
   const hintQuery = useHint(courseId, lesson.id);
   const [hint, setHint] = useState<string | null>(null);
   const complete = useCompleteLesson(courseId, lesson.id);
   const [started, setStarted] = useState(false);
-  const [queue, setQueue] = useState<QueueItem[]>(() => content.exercises.map((_, index) => ({ index, retry: false })));
+  const [queue, setQueue] = useState<QueueItem[]>(firstPass);
   const [pos, setPos] = useState(0);
   const [result, setResult] = useState<AnswerResult | null>(null);
   const [firstTryCorrect, setFirstTryCorrect] = useState(0);
@@ -78,7 +81,7 @@ export function LessonPlayer({
 
   /** Back to the start of the lesson (its intro); XP already earned is kept. */
   function restart() {
-    setQueue(content.exercises.map((_, index) => ({ index, retry: false })));
+    setQueue(firstPass());
     setPos(0);
     setResult(null);
     setFirstTryCorrect(0);
@@ -284,7 +287,16 @@ export function LessonPlayer({
         </CardContent>
       </Card>
 
-      {result && <Feedback result={result} lang={lang} onNext={() => void next()} last={pos + 1 >= queue.length} saving={complete.isPending} />}
+      {result && (
+        <Feedback
+          result={result}
+          lang={lang}
+          onNext={() => void next()}
+          last={pos + 1 >= queue.length}
+          saving={complete.isPending}
+          report={offlineExercises || !item ? undefined : <ReportProblem key={item.index} courseId={courseId} lessonId={lesson.id} index={item.index} />}
+        />
+      )}
     </div>
   );
 }
@@ -298,7 +310,21 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Feedback({ result, lang, onNext, last, saving }: { result: AnswerResult; lang: string; onNext: () => void; last: boolean; saving: boolean }) {
+function Feedback({
+  result,
+  lang,
+  onNext,
+  last,
+  saving,
+  report,
+}: {
+  result: AnswerResult;
+  lang: string;
+  onNext: () => void;
+  last: boolean;
+  saving: boolean;
+  report?: React.ReactNode;
+}) {
   const tone =
     result.verdict === "correct"
       ? "border-emerald-500/50 bg-emerald-500/10"
@@ -325,7 +351,10 @@ function Feedback({ result, lang, onNext, last, saving }: { result: AnswerResult
       )}
       {result.explanation && <p className="text-sm text-muted-foreground">{result.explanation}</p>}
       <div className="flex items-center justify-between gap-2 pt-1">
-        {result.audio ? <SpeakButtons lang={lang} text={result.audio} size="sm" /> : <span />}
+        <span className="flex items-center gap-3">
+          {result.audio ? <SpeakButtons lang={lang} text={result.audio} size="sm" /> : null}
+          {report}
+        </span>
         <Button onClick={onNext} disabled={saving} className="gap-1.5" autoFocus>
           {saving && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
           {last ? "Finish" : "Continue"} <ArrowRight className="h-4 w-4" aria-hidden="true" />

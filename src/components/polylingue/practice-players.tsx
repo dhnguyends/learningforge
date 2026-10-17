@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, Loader2, Mic, Plus, Snail, Square, Trophy, Volume2, XCircle } from "lucide-react";
+import { CheckCircle2, Download, Loader2, Mic, Play, Plus, Snail, Square, Trash2, Trophy, Volume2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -15,15 +15,23 @@ import {
   practiceAudioSrc,
   useAddWord,
   useCompletePractice,
+  useDeleteRecording,
+  useDeleteRecordings,
+  invalidateRecordings,
   usePracticeAnswer,
+  useRecordings,
   useSpeakingCheck,
   useWritingCorrection,
   type Correction,
   type PlayerPracticeContent,
   type SkillSlug,
   type SpeakingResult,
+  type KeptRecordings,
 } from "@/hooks/use-polylingue";
+import { useQueryClient } from "@tanstack/react-query";
+import { useConfirm } from "@/components/shared/confirm-dialog";
 import type { Verdict } from "@/lib/polylingue/check";
+import { MicSettingsButton, microphoneProblem, openMicrophone } from "@/components/polylingue/mic-settings";
 
 type Reading = Extract<PlayerPracticeContent, { skill: "READING" }>;
 type Listening = Extract<PlayerPracticeContent, { skill: "LISTENING" }>;
@@ -567,7 +575,8 @@ function useRecorder(maxSeconds: number) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   async function start(onDone: (audio: Blob) => void) {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // The microphone and options chosen in Micro settings.
+      const stream = await openMicrophone();
       const mime = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/mp4"].find((m) => MediaRecorder.isTypeSupported(m)) ?? "";
       const r = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
       const chunks: BlobPart[] = [];
@@ -582,8 +591,8 @@ function useRecorder(maxSeconds: number) {
       r.start();
       setRecording(true);
       timer.current = setTimeout(() => r.state === "recording" && r.stop(), maxSeconds * 1000);
-    } catch {
-      toast.error("Microphone unavailable: allow microphone access for this site.");
+    } catch (err) {
+      toast.error(microphoneProblem(err), { duration: 8000 });
     }
   }
   function stop() {
@@ -609,6 +618,96 @@ function RecordButton({ maxSeconds, busy, onAudio }: { maxSeconds: number; busy:
   );
 }
 
+// One recording plays at a time on the page.
+let playingNow: HTMLAudioElement | null = null;
+
+/** Play back (or save as .wav) the learner's latest recording of an item, and the best one when it differs. */
+function MyRecordings({ slot, practiceId }: { slot: KeptRecordings["items"][string]; practiceId: string }) {
+  const { latest, best } = slot;
+  if (!latest && !best) return null;
+  const same = latest && best && latest.sameFileAsOther;
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+      {latest && (
+        <RecordingButton
+          id={latest.id}
+          score={latest.score}
+          label={same ? "My best = latest" : "My latest"}
+          practiceId={practiceId}
+          // One take kept as both: deleting it removes both.
+          deleteIds={same && best ? [latest.id, best.id] : [latest.id]}
+        />
+      )}
+      {best && !same && <RecordingButton id={best.id} score={best.score} label="My best" practiceId={practiceId} deleteIds={[best.id]} />}
+    </div>
+  );
+}
+
+function RecordingButton({ id, score, label, practiceId, deleteIds }: { id: string; score: number | null; label: string; practiceId: string; deleteIds: string[] }) {
+  const remove = useDeleteRecording(practiceId);
+  const confirm = useConfirm();
+  const url = `/api/polylingue/recordings/${id}`;
+  const [playing, setPlaying] = useState(false);
+  const audio = useRef<HTMLAudioElement | null>(null);
+  useEffect(() => () => audio.current?.pause(), []);
+
+  function toggle() {
+    if (playing && audio.current) {
+      audio.current.pause();
+      setPlaying(false);
+      return;
+    }
+    playingNow?.pause();
+    const a = new Audio(url);
+    a.onended = () => setPlaying(false);
+    a.onpause = () => setPlaying(false);
+    audio.current = a;
+    playingNow = a;
+    void a.play().then(
+      () => setPlaying(true),
+      () => toast.error("This recording cannot be played here."),
+    );
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1 text-xs">
+      <Button variant="outline" size="sm" className="h-7 gap-1 px-2 text-xs" onClick={toggle} aria-label={`${playing ? "Stop" : "Play"} ${label.toLowerCase()} recording`}>
+        {playing ? <Square className="h-3 w-3" aria-hidden="true" /> : <Play className="h-3 w-3" aria-hidden="true" />}
+        {label}
+        {score !== null && <span className="tabular-nums text-muted-foreground">· {score}%</span>}
+      </Button>
+      <a href={`${url}?download=1`} className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground" title="Save as .wav" aria-label={`Save ${label.toLowerCase()} recording as .wav`}>
+        <Download className="h-3.5 w-3.5" aria-hidden="true" />
+      </a>
+      <button
+        type="button"
+        className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive disabled:opacity-50"
+        title="Delete this recording"
+        aria-label={`Delete ${label.toLowerCase()} recording`}
+        disabled={remove.isPending}
+        onClick={async () => {
+          const ok = await confirm({
+            title: "Delete this recording?",
+            description: `"${label}" is deleted from LearningForge (the database and its .wav file). Your score and XP stay.`,
+            confirmLabel: "Delete",
+            destructive: true,
+          });
+          if (!ok) return;
+          audio.current?.pause();
+          try {
+            await remove.mutateAsync(deleteIds);
+            toast.success("Recording deleted.");
+          } catch (e) {
+            toast.error(e instanceof Error ? e.message : "Could not delete the recording");
+          }
+        }}
+      >
+        <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+      </button>
+    </span>
+  );
+}
+
 export function SpeakingPlayer({ courseId, practiceId, lang, content }: Common & { content: Speaking }) {
   const check = useSpeakingCheck(courseId, practiceId);
   const { finish, done, saving } = useFinish(courseId, practiceId, "speaking");
@@ -617,12 +716,20 @@ export function SpeakingPlayer({ courseId, practiceId, lang, content }: Common &
   const total = content.sentences.length + content.questions.length;
   const xp = Object.values(results).reduce((n, r) => n + r.xp, 0);
 
+  // The learner's spoken answers kept on the server: the latest and the best of each item.
+  const qc = useQueryClient();
+  const { data: recordings } = useRecordings(courseId, practiceId);
+  const forget = useDeleteRecordings(courseId, practiceId);
+  const kept = recordings?.items ?? {};
+
   async function send(kind: "sentence" | "question", index: number, audio: Blob) {
     const key = `${kind}-${index}`;
     setBusy(key);
     try {
       const r = await check.mutateAsync({ kind, index, audio });
       setResults((x) => ({ ...x, [key]: r }));
+      // The server kept it (latest, and best when it scored at least as well).
+      invalidateRecordings(qc, practiceId);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not check your speech");
     } finally {
@@ -636,7 +743,10 @@ export function SpeakingPlayer({ courseId, practiceId, lang, content }: Common &
     <div className="space-y-4">
       <Card>
         <CardContent className="space-y-4 p-5">
-          <h3 className="text-sm font-semibold">1. Listen, then say the sentence</h3>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold">1. Listen, then say the sentence</h3>
+            <MicSettingsButton />
+          </div>
           <ol className="space-y-4">
             {content.sentences.map((s, i) => {
               const r = results[`sentence-${i}`];
@@ -648,6 +758,7 @@ export function SpeakingPlayer({ courseId, practiceId, lang, content }: Common &
                     <RecordButton maxSeconds={20} busy={busy === `sentence-${i}`} onAudio={(a) => void send("sentence", i, a)} />
                   </div>
                   <p className="text-xs text-muted-foreground">{s.meaning}</p>
+                  {kept[`sentence-${i}`] && <MyRecordings slot={kept[`sentence-${i}`]} practiceId={practiceId} />}
                   {r && r.kind === "sentence" && (
                     <div className={cn("rounded-md border p-2 text-sm", r.score >= 85 ? "border-emerald-500/50 bg-emerald-500/10" : r.score >= 50 ? "border-amber-500/50 bg-amber-500/10" : "border-red-500/50 bg-red-500/10")} role="status">
                       <p>
@@ -675,6 +786,7 @@ export function SpeakingPlayer({ courseId, practiceId, lang, content }: Common &
                   <p className="flex-1 text-sm font-medium">{q.prompt}</p>
                   <RecordButton maxSeconds={60} busy={busy === `question-${i}`} onAudio={(a) => void send("question", i, a)} />
                 </div>
+                {kept[`question-${i}`] && <MyRecordings slot={kept[`question-${i}`]} practiceId={practiceId} />}
                 {r && r.kind === "question" && (
                   <div className="space-y-2">
                     <p className="text-sm">
@@ -688,6 +800,22 @@ export function SpeakingPlayer({ courseId, practiceId, lang, content }: Common &
           })}
         </CardContent>
       </Card>
+
+      {Object.keys(kept).length > 0 && (
+        <p className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          Your latest and best recording of each item are kept for you to play back; only you can hear them.
+          <button
+            type="button"
+            className="inline-flex items-center gap-1 text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+            onClick={async () => {
+              await forget.mutateAsync();
+              toast.success("Your recordings of this practice were deleted.");
+            }}
+          >
+            <Trash2 className="h-3 w-3" aria-hidden="true" /> Delete them
+          </button>
+        </p>
+      )}
 
       {Object.keys(results).length >= total && (
         <Button

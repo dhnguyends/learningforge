@@ -8,7 +8,8 @@ const MAX_BYTES = 5 * 1024 * 1024;
 /**
  * Speaking: multipart form with `kind` (sentence | question), `index` and the
  * `audio` recording (webm / ogg / mp4 / wav, up to 5 MB). The recording is
- * transcribed locally by Whisper and not stored.
+ * transcribed locally by Whisper, then kept as WAV for the learner to play
+ * back (the item's latest and best recordings).
  */
 export const POST = apiHandler<Ctx>(async (req, { params }) => {
   const session = await requireSession();

@@ -19,6 +19,7 @@ import { TranslatorCard, TtsCard } from "@/components/shared/speech-model-cards"
 import { AdminCourses } from "@/components/shared/admin-courses";
 import { AdminCourseTree } from "@/components/shared/admin-course-tree";
 import { AdminDatabase } from "@/components/shared/admin-database";
+import { PolylingueAdmin } from "@/components/admin/polylingue-admin";
 import { useConfirm } from "@/components/shared/confirm-dialog";
 
 type Role = "USER" | "TEACHER" | "ADMIN";
@@ -38,7 +39,7 @@ function lastUsed(iso: string | null): string {
 }
 type EditorState = { mode: "create" } | { mode: "edit"; user: AdminUserRow } | null;
 
-const TABS = ["users", "ai", "courses", "tree", "database"] as const;
+const TABS = ["users", "ai", "courses", "tree", "polylingue", "database"] as const;
 type Tab = (typeof TABS)[number];
 
 /**
@@ -92,6 +93,9 @@ function AdminTabs() {
           <TabsTrigger value="tree" className="gap-1.5">
             <Network className="h-3.5 w-3.5" aria-hidden="true" /> Courses Tree
           </TabsTrigger>
+          <TabsTrigger value="polylingue" className="gap-1.5">
+            <Languages className="h-3.5 w-3.5" aria-hidden="true" /> PolyLingue
+          </TabsTrigger>
           <TabsTrigger value="database" className="gap-1.5">
             <Database className="h-3.5 w-3.5" aria-hidden="true" /> Database
           </TabsTrigger>
@@ -111,6 +115,9 @@ function AdminTabs() {
         </TabsContent>
         <TabsContent value="tree" className="mt-4">
           <AdminCourseTree />
+        </TabsContent>
+        <TabsContent value="polylingue" className="mt-4">
+          <PolylingueAdmin />
         </TabsContent>
         <TabsContent value="database" className="mt-4">
           <AdminDatabase />

@@ -112,7 +112,7 @@ export async function classOutline(teacherId: string, classId: string) {
 async function outlineOf(curriculumId: string) {
   const curriculum = await prisma.langCurriculum.findUniqueOrThrow({ where: { id: curriculumId }, select: { status: true, error: true, outline: true } });
   const lessons = await prisma.langLesson.findMany({
-    where: { curriculumId, courseId: null },
+    where: { curriculumId, courseId: null, retiredAt: null },
     orderBy: { ordinal: "asc" },
     select: { id: true, unitIndex: true, title: true, focus: true },
   });
@@ -161,7 +161,7 @@ export async function deleteAssignment(teacherId: string, classId: string, assig
 async function assignedLessons(curriculumId: string, assignments: { id: string; unitIndex: number | null; lessonId: string | null }[]) {
   const units = [...new Set(assignments.filter((a) => a.unitIndex !== null).map((a) => a.unitIndex!))];
   const lessons = units.length
-    ? await prisma.langLesson.findMany({ where: { curriculumId, courseId: null, unitIndex: { in: units } }, select: { id: true, unitIndex: true }, orderBy: { ordinal: "asc" } })
+    ? await prisma.langLesson.findMany({ where: { curriculumId, courseId: null, retiredAt: null, unitIndex: { in: units } }, select: { id: true, unitIndex: true }, orderBy: { ordinal: "asc" } })
     : [];
   return new Map(assignments.map((a) => [a.id, a.lessonId ? [a.lessonId] : lessons.filter((l) => l.unitIndex === a.unitIndex).map((l) => l.id)]));
 }

@@ -5,6 +5,12 @@ import { AIProviderError, JSON_CONTRACT_INSTRUCTION } from "@/lib/ai/types";
 import { parseWithRepair, type RawCompletion } from "@/lib/ai/shared";
 import { zodToJsonSchema } from "@/lib/ai/zod-to-json-schema";
 import { cpuTimeoutFactor } from "@/lib/gpu";
+import { alwaysThinks, loadAloneOnGpu } from "@/lib/ai/ollama";
+
+/** Drops a `<think>…</think>` block a reasoning model may leave in its answer. */
+export function stripThinking(text: string): string {
+  return text.replace(/^\s*<think>[\s\S]*?<\/think>\s*/i, "");
+}
 
 interface OllamaChatResponse {
   message: { content: string };
@@ -36,10 +42,16 @@ export class LocalGenerator implements StructuredGenerator {
   private maxTokens: number;
   private numCtx?: number;
 
-  constructor(env: Env) {
-    this.model = env.LOCAL_AI_MODEL;
+  /** Tokens allowed for the reasoning of a model that always thinks (DeepSeek-R1), on top of the answer. */
+  static readonly THINKING_BUDGET = 4096;
+
+  /** `model`: an installed Ollama model chosen at /admin; LOCAL_AI_MODEL by default. */
+  constructor(env: Env, model: string = env.LOCAL_AI_MODEL) {
+    this.model = model;
     this.baseUrl = env.LOCAL_AI_BASE_URL.replace(/\/$/, "");
-    this.think = env.LOCAL_AI_THINK;
+    // DeepSeek-R1 reasons whatever `think` says; asking for it explicitly keeps
+    // the reasoning in its own field, out of the JSON answer.
+    this.think = env.LOCAL_AI_THINK || alwaysThinks(model);
     this.timeoutMs = env.LOCAL_AI_TIMEOUT_MS;
     this.maxTokens = env.LOCAL_AI_MAX_TOKENS;
     this.numCtx = env.LOCAL_AI_NUM_CTX;
@@ -53,7 +65,8 @@ export class LocalGenerator implements StructuredGenerator {
     const format = zodToJsonSchema(opts.schema);
     const options = {
       ...(opts.temperature != null ? { temperature: opts.temperature } : { temperature: 0.3 }),
-      num_predict: opts.maxTokens ?? this.maxTokens,
+      // Reasoning tokens count against num_predict.
+      num_predict: (opts.maxTokens ?? this.maxTokens) + (alwaysThinks(this.model) ? LocalGenerator.THINKING_BUDGET : 0),
       ...(this.numCtx ? { num_ctx: this.numCtx } : {}),
     };
 
@@ -62,6 +75,8 @@ export class LocalGenerator implements StructuredGenerator {
     // Ollama runs on the CPU when there is no GPU: allow for it.
     const timeoutMs = this.timeoutMs * (await cpuTimeoutFactor());
     const call = async (): Promise<RawCompletion> => {
+      // One language model on the GPU at a time.
+      await loadAloneOnGpu(this.model);
       let res: Response;
       try {
         res = await fetch(`${this.baseUrl}/api/chat`, {
@@ -79,7 +94,7 @@ export class LocalGenerator implements StructuredGenerator {
       }
       if (!res.ok) throw new AIProviderError(`Local model error ${res.status}: ${(await res.text()).slice(0, 300)}`);
       const json = (await res.json()) as OllamaChatResponse;
-      lastText = json.message?.content ?? "";
+      lastText = stripThinking(json.message?.content ?? "");
       truncated = json.done_reason === "length";
       return {
         text: lastText,

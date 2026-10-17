@@ -25,7 +25,7 @@ export function generatorFor(ai: Pick<ResolvedAi, "provider" | "model">): Struct
       generator = new AnthropicGenerator(env);
       break;
     case "local":
-      generator = new LocalGenerator(env);
+      generator = new LocalGenerator(env, ai.model);
       break;
     case "gemini":
       generator = new GeminiGenerator(env, ai.model);

@@ -1,4 +1,5 @@
 import type { CefrLevel } from "@prisma/client";
+import { pregenerateLessonAudio } from "@/lib/polylingue/voices";
 import { prisma } from "@/lib/db";
 import { getGenerator } from "@/lib/ai";
 import { LEVELS, EXERCISE_TYPES, curriculumBaseLang, languageEnglishName, type Cefr } from "@/lib/polylingue/levels";
@@ -155,6 +156,8 @@ export async function prepareLesson(lessonId: string): Promise<void> {
     });
     const content = normalizeLesson(result.data);
     await prisma.langLesson.update({ where: { id: lessonId }, data: { status: "READY", content: content as object, model: `${result.provider}:${result.model}` } });
+    // Its audio, ahead of time, with the language's local voice.
+    if (!process.env.VITEST) void pregenerateLessonAudio(lessonId).catch((err) => console.warn("[polylingue] audio", lessonId, err instanceof Error ? err.message : err));
   } catch (err) {
     await prisma.langLesson.update({ where: { id: lessonId }, data: { status: "FAILED", error: err instanceof Error ? err.message.slice(0, 500) : String(err) } });
   }
@@ -165,7 +168,7 @@ export async function prefetchNext(lessonId: string): Promise<void> {
   const lesson = await prisma.langLesson.findUnique({ where: { id: lessonId }, select: { curriculumId: true, ordinal: true } });
   if (!lesson || lesson.ordinal == null) return; // personal lessons have no "next"
   const next = await prisma.langLesson.findFirst({
-    where: { curriculumId: lesson.curriculumId, courseId: null, ordinal: { gt: lesson.ordinal } },
+    where: { curriculumId: lesson.curriculumId, courseId: null, retiredAt: null, ordinal: { gt: lesson.ordinal } },
     orderBy: { ordinal: "asc" },
     select: { id: true, status: true },
   });

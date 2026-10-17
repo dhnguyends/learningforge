@@ -1,7 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { useParams, usePathname } from "next/navigation";
+import { useParams, usePathname, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { BarChart3, Bell, BookOpen, CalendarRange, GraduationCap, Headphones, Languages, Mic, PenLine, Plus, Repeat, School, Target, Trophy, Users } from "lucide-react";
 import { canTeach } from "@/lib/admin";
@@ -10,6 +11,9 @@ import { targetLanguage } from "@/lib/polylingue/levels";
 import { LangBadge } from "@/components/polylingue/lang-badge";
 import { usePolyCourses } from "@/hooks/use-polylingue";
 import { HabitNotices, InstallButton, usePwaSetup } from "@/components/polylingue/habit-notices";
+import { ChangeLevelDialog } from "@/components/polylingue/change-level";
+import { PointerMenu, isMenuKey, menuPoint, type MenuPoint } from "@/components/shared/pointer-menu";
+import { DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 
 /**
  * PolyLingue frame: a practice panel on the left (a scrolling bar on phones)
@@ -22,6 +26,10 @@ export function PolyLingueShell({ children }: { children: React.ReactNode }) {
   usePwaSetup();
   const { data: session } = useSession();
   const teacher = canTeach(session?.user?.role);
+  const router = useRouter();
+  // Right-click (or Shift+F10) on a language: change its level, open it.
+  const [menu, setMenu] = useState<(MenuPoint & { courseId: string; label: string }) | null>(null);
+  const [changing, setChanging] = useState<string | null>(null);
   const params = useParams<{ courseId?: string }>();
   const pathname = usePathname();
   const { data } = usePolyCourses();
@@ -61,7 +69,16 @@ export function PolyLingueShell({ children }: { children: React.ReactNode }) {
               key={c.id}
               href={`/polylingue/${c.id}`}
               className={cn(linkClass(false), c.id === courseId && "font-medium text-foreground", "lg:pl-4")}
-              title={`${targetLanguage(c.targetLang)?.name ?? c.targetLang} ${c.level}`}
+              title={`${targetLanguage(c.targetLang)?.name ?? c.targetLang} ${c.level} (right-click to change the level)`}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setMenu({ ...menuPoint(e), courseId: c.id, label: `${targetLanguage(c.targetLang)?.name ?? c.targetLang} · ${c.level}` });
+              }}
+              onKeyDown={(e) => {
+                if (!isMenuKey(e)) return;
+                e.preventDefault();
+                setMenu({ ...menuPoint(e), courseId: c.id, label: `${targetLanguage(c.targetLang)?.name ?? c.targetLang} · ${c.level}` });
+              }}
             >
               <LangBadge code={c.targetLang} size="sm" /> {targetLanguage(c.targetLang)?.name ?? c.targetLang} · {c.level}
             </Link>
@@ -106,6 +123,18 @@ export function PolyLingueShell({ children }: { children: React.ReactNode }) {
           )}
         </nav>
       </aside>
+      <PointerMenu at={menu} onClose={() => setMenu(null)}>
+        {menu && (
+          <>
+            <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">{menu.label}</DropdownMenuLabel>
+            <DropdownMenuItem onSelect={() => setChanging(menu.courseId)}>Change level…</DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => router.push(`/polylingue/${menu.courseId}`)}>Open the course</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => router.push(`/polylingue/${menu.courseId}/progress`)}>Progress</DropdownMenuItem>
+          </>
+        )}
+      </PointerMenu>
+      {changing && <ChangeLevelDialog courseId={changing} open onOpenChange={(o) => !o && setChanging(null)} />}
       <div className="min-w-0 flex-1">
         <HabitNotices />
         {children}

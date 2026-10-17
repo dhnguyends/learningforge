@@ -272,6 +272,12 @@ export async function resolveVoice(lang: string, choice: TtsChoice): Promise<Voi
   return local() ?? (await azure()) ?? gemini();
 }
 
+/** A speaker for one given voice (PolyLingue's per-language choice). */
+export function speakerForVoice(v: Voice): Speaker {
+  if (getEnv().AI_PROVIDER === "mock" && mockProvidersAllowed()) return new MockSpeaker();
+  return speakerOf(v);
+}
+
 function speakerOf(v: Voice): Speaker {
   if (v.engine === "azure") return new AzureSpeaker(v as Voice & { model: string });
   if (v.engine === "gemini") return new GeminiSpeaker(v);

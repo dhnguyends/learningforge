@@ -16,7 +16,7 @@ import { LangBadge } from "@/components/polylingue/lang-badge";
 import { SourceLessons } from "@/components/polylingue/source-lessons";
 import { OfflineCard, OfflineCourse } from "@/components/polylingue/offline-lessons";
 import { AssignmentsCard } from "@/components/polylingue/assignments-card";
-import { isNetworkError } from "@/lib/polylingue/pwa-client";
+import { browserOffline, isNetworkError } from "@/lib/polylingue/pwa-client";
 import { cn } from "@/lib/utils";
 import { BASE_LANGUAGES, CEFR_LEVELS, DAILY_GOALS, LEVELS, isImmersion, targetLanguage, type Cefr } from "@/lib/polylingue/levels";
 import { useDeleteCourse, usePolyCourse, useStartCourse, useUpdateCourse, type CourseDetail } from "@/hooks/use-polylingue";
@@ -33,7 +33,7 @@ export default function PolyCoursePage() {
 
   if (isLoading) return <div className="mx-auto mt-6 h-64 max-w-3xl animate-pulse rounded-lg bg-muted" />;
   // Without a connection, the lessons saved on this device.
-  if (error && (isNetworkError(error) || (typeof navigator !== "undefined" && !navigator.onLine))) return <OfflineCourse courseId={courseId} />;
+  if (error && (isNetworkError(error) || browserOffline())) return <OfflineCourse courseId={courseId} />;
   if (error || !course) return <p className="mx-auto mt-6 max-w-3xl px-4 text-sm text-destructive">{error?.message ?? "Course not found"}</p>;
 
   const lang = targetLanguage(course.targetLang);

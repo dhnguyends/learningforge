@@ -1,6 +1,6 @@
 # PolyLingue — build plan
 
-_Date: 2026-10-16 · Status: Phase 1 (MVP) built, with immersion from B2; Phase 2 complete (skills, adaptive difficulty within the chosen level, placement test, hints, lessons from your own material); Phase 3 built (reminders in the app and as browser notifications, installable app with offline lessons, badges and streak freezes, friends' leagues by invite code, weekly summary); Phase 4 built (Teacher role, classes joined with a code, assignments, class dashboard, common difficulties with suggested activities and CSV export, class leagues, privacy rules); Phase 5 planned_
+_Date: 2026-10-16 · Status: Phase 1 (MVP) built, with immersion from B2; Phase 2 complete (skills, adaptive difficulty within the chosen level, placement test, hints, lessons from your own material); Phase 3 built (reminders in the app and as browser notifications, installable app with offline lessons, badges and streak freezes, friends' leagues by invite code, weekly summary); Phase 4 built (Teacher role, classes joined with a code, assignments, class dashboard, common difficulties with suggested activities and CSV export, class leagues, privacy rules); Phase 5 built (content review with reports and versions, voices and lesson audio ahead of time, analytics; deployment prepared: PolyLingue backup / restore, load check, pod VAPID keys)_
 
 ## What we are building (my understanding)
 
@@ -136,12 +136,12 @@ Goal: a learner can start a language, take short lessons with instant feedback a
     - Students see what is shared with the class.
     - Deleting an account removes its PolyLingue data.
 
-## Phase 5 — Quality and scale
+## Phase 5 — Quality and scale ✅ built
 
-32. **Content review.** Admins can preview, edit, regenerate or retire generated lessons, and see error reports from learners ("report a problem").
-33. **Better audio.** Pre-generate the audio of each lesson when it is created, and offer a voice choice per language.
-34. **Analytics.** Retention (day 1, day 7, day 30), lesson completion, time per lesson, and the hardest exercises.
-35. **Deployment.** Pod setup for the new services, a backup of PolyLingue data, and a load check.
+32. **Content review. ✅ built** (admins only; 3 learners' reports hide an exercise until it is reviewed; every edit keeps the version before). Admins can preview, edit, regenerate or retire generated lessons, and see error reports from learners ("report a problem").
+33. **Better audio. ✅ built** (local voices only). Pre-generate the audio of each lesson when it is created, and offer a voice choice per language.
+34. **Analytics. ✅ built** (Admin › PolyLingue › Analytics). Retention (day 1, day 7, day 30), lesson completion, time per lesson, and the hardest exercises.
+35. **Deployment. ✅ prepared, pod not started:** `polylingue:backup` / `polylingue:restore`, `load:check`, VAPID keys in the pod's `setup.sh`, and a PolyLingue section in `DEPLOYMENT.md`. Pod setup for the new services, a backup of PolyLingue data, and a load check.
 
 ## Decisions (answered 2026-10-16)
 

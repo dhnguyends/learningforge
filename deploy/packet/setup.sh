@@ -212,6 +212,21 @@ fi
 log "Installing dependencies and building"
 cd "$APP_DIR"
 npm ci --no-audit --no-fund
+# PolyLingue browser notifications: a VAPID key pair made once, kept with the secrets.
+if ! grep -q '^VAPID_PUBLIC_KEY=' "$SECRETS"; then
+  log "Generating the VAPID keys for browser notifications"
+  umask 077
+  node -e 'const k = require("web-push").generateVAPIDKeys(); console.log(`VAPID_PUBLIC_KEY="${k.publicKey}"\nVAPID_PRIVATE_KEY="${k.privateKey}"`)' >> "$SECRETS"
+fi
+# shellcheck disable=SC1090
+. "$SECRETS"
+{
+  echo
+  echo "# PolyLingue browser notifications (keys from $SECRETS)"
+  echo "VAPID_PUBLIC_KEY=\"$VAPID_PUBLIC_KEY\""
+  echo "VAPID_PRIVATE_KEY=\"$VAPID_PRIVATE_KEY\""
+  echo "VAPID_SUBJECT=\"${VAPID_SUBJECT:-mailto:admin@learningforge.local}\""
+} >> "$APP_DIR/.env.production.local"
 npm run db:setup
 # Bring every chunk's vector onto the configured embeddings model (no-op when current).
 npx tsx scripts/reembed.ts

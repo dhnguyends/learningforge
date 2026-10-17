@@ -77,6 +77,9 @@ cards, an 8-question quiz, exercises, and tutor history.
 
 ## Documentation
 
+- [docs/SOFTWARE-DEV-GUIDE.md](docs/SOFTWARE-DEV-GUIDE.md) — **start here to maintain or extend
+  the code**: libraries and versions, system services, the AI model behind each
+  feature and how to change it, modules, conventions, recipes
 - [ARCHITECTURE.md](ARCHITECTURE.md) — system design, data model, pipelines,
   jobs, grounding & citation machinery
 - [DEVELOPMENT.md](DEVELOPMENT.md) — local setup deep dive, environment

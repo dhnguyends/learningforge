@@ -9,7 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { LessonPlayer } from "@/components/polylingue/lesson-player";
 import { OfflineCourse } from "@/components/polylingue/offline-lessons";
 import { usePlayerLesson, usePolyCourse } from "@/hooks/use-polylingue";
-import { isNetworkError, savedPackage, type OfflinePackage } from "@/lib/polylingue/pwa-client";
+import { browserOffline, isNetworkError, savedPackage, type OfflinePackage } from "@/lib/polylingue/pwa-client";
 
 /** A PolyLingue lesson: written by the AI model the first time it is opened, then played. */
 export default function PolyLessonPage() {
@@ -32,8 +32,8 @@ export default function PolyLessonPage() {
     return () => clearTimeout(t);
   }, [lesson]);
   const savedLesson = saved?.lessons.find((l) => l.player.id === lessonId);
-  const browserOffline = typeof navigator !== "undefined" && !navigator.onLine;
-  const unreachable = !lesson && (isNetworkError(error) || browserOffline || (slow && Boolean(savedLesson)));
+  const offline = browserOffline();
+  const unreachable = !lesson && (isNetworkError(error) || offline || (slow && Boolean(savedLesson)));
   if (unreachable) {
     if (saved === undefined) return <div className="mx-auto mt-6 h-64 max-w-2xl animate-pulse rounded-lg bg-muted" />;
     if (!savedLesson || !saved) return <OfflineCourse courseId={courseId} message="This lesson is not saved on this device." />;

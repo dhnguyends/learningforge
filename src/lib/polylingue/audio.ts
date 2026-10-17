@@ -1,21 +1,20 @@
-import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { rateLimited } from "@/lib/api";
 import { getStorage } from "@/lib/storage";
 import { rateLimit } from "@/lib/rate-limit";
-import { speakerForLanguage } from "@/lib/speech/tts";
+import { clipKey, polylingueSpeaker } from "@/lib/polylingue/voices";
 
 /**
  * A PolyLingue audio clip: `text` read aloud in `lang` with that language's
- * voice, cached for every learner (polylingue/tts/<voice>/<lang>/<hash>).
+ * voice (the admin's choice, else the read-aloud model), cached for every
+ * learner (polylingue/tts/<voice>/<lang>/<hash>); most clips were generated
+ * ahead of time with the lesson.
  * Only new clips count against the learner's hourly limit.
  */
 export async function speechClipResponse(lang: string, text: string, userId: string): Promise<NextResponse> {
-  const speaker = await speakerForLanguage(lang);
+  const speaker = await polylingueSpeaker(lang);
   if (!speaker) return NextResponse.json({ error: "No voice for this language", code: "no_voice" }, { status: 422 });
-  const hash = createHash("sha256").update(text).digest("hex").slice(0, 24);
-  const safe = (s: string) => s.replace(/[^a-zA-Z0-9._-]/g, "_");
-  const key = `polylingue/tts/${safe(speaker.id)}/${lang}/${hash}.${speaker.ext}`;
+  const key = clipKey(speaker, lang, text);
   const storage = getStorage();
   let audio: Buffer | null = null;
   try {

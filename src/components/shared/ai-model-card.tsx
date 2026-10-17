@@ -1,18 +1,24 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, CheckCircle2, Cloud, Cpu, Loader2, PlugZap, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Cloud, Cpu, Eraser, Loader2, MemoryStick, PlugZap, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import {
   useAdminAiSettings,
+  useAdminGpu,
+  useFreeGpu,
   useSaveAiChoice,
   useTestAiChoice,
+  type AdminAiSettings,
   type AiChoiceInput,
   type AiTestResult,
+  type GpuClearReport,
+  type LocalSwitchReport,
 } from "@/hooks/use-api";
 
 type Option = {
@@ -27,7 +33,39 @@ type Option = {
   missingKey?: string;
 };
 
-const optionValue = (c: AiChoiceInput) => (c.provider === "gemini" ? `gemini:${c.model}` : c.provider);
+/** "gemma4" and "gemma4:latest" are the same Ollama model. */
+const norm = (m: string) => (m.includes(":") ? m : `${m}:latest`).toLowerCase();
+const localValue = (model: string) => `local:${norm(model)}`;
+const optionValue = (c: AiChoiceInput, defaultLocal: string) =>
+  c.provider === "gemini" ? `gemini:${c.model}` : c.provider === "local" ? localValue(c.model ?? defaultLocal) : c.provider;
+
+const gb = (bytes: number) => `${(bytes / 1024 ** 3).toFixed(1)} GB`;
+const gbMiB = (mib: number) => `${(mib / 1024).toFixed(1)} GB`;
+
+function localNote(m: AdminAiSettings["localModels"][number]): string {
+  const size = m.sizeBytes ? ` ${gb(m.sizeBytes)} on disk.` : "";
+  if (/deepseek-r1/i.test(m.name)) {
+    return `Reasoning model${m.parameterSize ? ` (${m.parameterSize})` : ""}: thinks before answering, stronger on hard questions but slower. Runs on this computer through Ollama.${size}`;
+  }
+  if (/gemma-?4/i.test(m.name)) return `Runs on this computer through Ollama. Private, works offline, no cost; slower on long outputs.${size}`;
+  return `Runs on this computer through Ollama${m.parameterSize ? ` (${m.parameterSize} parameters)` : ""}. Private, works offline, no cost.${size}`;
+}
+
+/** "Unloaded gemma4:latest (6.1 GB). GPU memory 10.3 GB -> 1.2 GB." */
+function clearSummary(r: GpuClearReport): string {
+  const parts: string[] = [];
+  parts.push(r.unloaded.length ? `Unloaded ${r.unloaded.map((m) => `${m.name} (${gb(m.vramBytes)})`).join(", ")}.` : "No other model was in GPU memory.");
+  if (r.stillLoaded.length) parts.push(`Still loaded: ${r.stillLoaded.join(", ")}.`);
+  if (r.unloaded.length && r.usedBeforeMiB != null && r.usedAfterMiB != null) parts.push(`GPU memory ${gbMiB(r.usedBeforeMiB)} \u2192 ${gbMiB(r.usedAfterMiB)}.`);
+  return parts.join(" ");
+}
+
+function switchSummary(r: LocalSwitchReport): string {
+  const loaded = r.loaded
+    ? `${r.model} loaded${r.vramBytes != null ? `: ${gb(r.vramBytes)} in GPU memory` : ""}${r.usedLoadedMiB != null ? ` (card: ${gbMiB(r.usedLoadedMiB)} used)` : ""}.`
+    : `${r.model} could not be loaded yet${r.error ? ` (${r.error})` : ""}; the first job will load it.`;
+  return `${clearSummary(r)} ${loaded}`;
+}
 
 /**
  * Administrator choice of the generation model (study guides, flashcards,
@@ -42,6 +80,7 @@ export function AiModelCard() {
   const test = useTestAiChoice();
   const [selected, setSelected] = useState<string | null>(null);
   const [result, setResult] = useState<AiTestResult | null>(null);
+  const [gpuReport, setGpuReport] = useState<{ text: string; warn: boolean } | null>(null);
 
   if (isLoading) return <div className="h-48 animate-pulse rounded-lg bg-muted" />;
   if (error || !data) {
@@ -55,18 +94,25 @@ export function AiModelCard() {
   const activeValue =
     data.active.provider === "gemini"
       ? `gemini:${data.active.model}`
-      : data.active.provider === "local" || data.active.provider === "zai"
-        ? data.active.provider
-        : null;
+      : data.active.provider === "local"
+        ? localValue(data.active.model)
+        : data.active.provider === "zai"
+          ? "zai"
+          : null;
+  const localModels = data.localModels.length
+    ? data.localModels
+    : [{ name: data.localModel, label: data.localModel, parameterSize: null, sizeBytes: 0, thinking: false, installed: false }];
   const options: Option[] = [
-    {
-      value: "local",
-      choice: { provider: "local" },
-      label: `Gemma 4 — local (${data.localModel})`,
-      note: "Runs on this computer through Ollama. Private, works offline, no cost; slower on long outputs.",
+    // One option per model installed in Ollama (Gemma 4, DeepSeek-R1...).
+    ...localModels.map((m) => ({
+      value: localValue(m.name),
+      choice: { provider: "local" as const, model: m.name },
+      label: m.label === m.name ? `${m.name} \u2014 local` : `${m.label} \u2014 local (${m.name})`,
+      note: localNote(m),
       cloud: null,
-      disabled: data.mockMode,
-    },
+      disabled: data.mockMode || !m.installed,
+      missingKey: m.installed || data.mockMode ? undefined : "Ollama is not reachable: start it to list and use the installed models.",
+    })),
     ...data.geminiModels.map((m) => ({
       value: `gemini:${m.id}`,
       choice: { provider: "gemini" as const, model: m.id },
@@ -86,7 +132,7 @@ export function AiModelCard() {
       missingKey: data.zai.configured ? undefined : "Set ZAI_API_KEY in the server .env to enable.",
     },
   ];
-  const current = selected ?? activeValue ?? (data.stored ? optionValue(data.stored) : "local");
+  const current = selected ?? activeValue ?? (data.stored ? optionValue(data.stored, data.localModel) : localValue(data.localModel));
   const chosen = options.find((o) => o.value === current) ?? options[0];
   const dirty = chosen.value !== activeValue;
   const activeOption = options.find((o) => o.value === activeValue);
@@ -102,11 +148,13 @@ export function AiModelCard() {
   }
 
   async function onSave() {
+    setGpuReport(null);
     try {
-      await save.mutateAsync(chosen.choice);
+      const saved = await save.mutateAsync(chosen.choice);
       setSelected(null);
       setResult(null);
-      toast.success(`AI model set to ${chosen.label}`);
+      if (saved.gpu) setGpuReport({ text: switchSummary(saved.gpu), warn: saved.gpu.stillLoaded.length > 0 || !saved.gpu.loaded });
+      toast.success(`AI model set to ${chosen.label}`, saved.gpu ? { description: switchSummary(saved.gpu) } : undefined);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not save");
     }
@@ -174,6 +222,8 @@ export function AiModelCard() {
           ))}
         </fieldset>
 
+        {!data.mockMode && <GpuMemoryPanel report={gpuReport} onReport={setGpuReport} />}
+
         {cloudProvider && (
           <p className="flex gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden="true" />
@@ -203,10 +253,73 @@ export function AiModelCard() {
           </Button>
           <Button onClick={onSave} disabled={data.mockMode || chosen.disabled || !dirty || save.isPending}>
             {save.isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden="true" />}
-            Use this model
+            {save.isPending && chosen.choice.provider === "local" ? "Freeing GPU memory and loading\u2026" : "Use this model"}
           </Button>
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * GPU memory: what Ollama has loaded now and the card's use. Choosing a local
+ * model unloads the others first; "Free GPU memory" unloads everything (the
+ * next job loads what it needs).
+ */
+function GpuMemoryPanel({
+  report,
+  onReport,
+}: {
+  report: { text: string; warn: boolean } | null;
+  onReport: (r: { text: string; warn: boolean } | null) => void;
+}) {
+  const { data } = useAdminGpu();
+  const free = useFreeGpu();
+  if (!data) return null;
+  const pct = data.usedMiB != null && data.totalMiB ? Math.round((data.usedMiB / data.totalMiB) * 100) : null;
+
+  async function onFree() {
+    onReport(null);
+    try {
+      const r = await free.mutateAsync();
+      onReport({ text: clearSummary(r), warn: r.stillLoaded.length > 0 });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not free GPU memory");
+    }
+  }
+
+  return (
+    <section aria-label="GPU memory" className="space-y-2 rounded-md border border-border p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="flex items-center gap-2 text-sm font-medium">
+          <MemoryStick className="h-4 w-4 text-primary" aria-hidden="true" /> GPU memory
+        </h3>
+        <Button size="sm" variant="outline" onClick={onFree} disabled={free.isPending || !data.ollamaReachable || !data.loaded.length}>
+          {free.isPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden="true" /> : <Eraser className="mr-1.5 h-4 w-4" aria-hidden="true" />}
+          Free GPU memory
+        </Button>
+      </div>
+      {pct != null && data.usedMiB != null && data.totalMiB != null && (
+        <div className="space-y-1">
+          <Progress value={pct} aria-label={`GPU memory ${pct}% used`} indicatorClassName={pct > 90 ? "bg-amber-500" : undefined} />
+          <p className="text-xs text-muted-foreground">
+            {gbMiB(data.usedMiB)} of {gbMiB(data.totalMiB)} used (all programs, including speech recognition).
+          </p>
+        </div>
+      )}
+      <p className="text-xs text-muted-foreground">
+        {!data.ollamaReachable
+          ? "Ollama is not reachable."
+          : data.loaded.length
+            ? `In Ollama now: ${data.loaded.map((m) => `${m.name} (${gb(m.vramBytes)})`).join(", ")}.`
+            : "No Ollama model in memory: the next job loads its model."}{" "}
+        Choosing a local model unloads the others first, so only one runs on the GPU.
+      </p>
+      {report && (
+        <p role="status" className={cn("text-xs", report.warn ? "text-amber-700 dark:text-amber-400" : "text-emerald-700 dark:text-emerald-400")}>
+          {report.text}
+        </p>
+      )}
+    </section>
   );
 }

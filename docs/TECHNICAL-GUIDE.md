@@ -3,6 +3,8 @@
 _Audience: software engineers (human or AI coding assistants) who maintain, operate and extend LearningForge._
 _Last verified against the code: 2026-10-14 (branch `fix/storage-tenant-isolation`, commit `509147e`)._
 
+> **Newer guide:** [SOFTWARE-DEV-GUIDE.md](SOFTWARE-DEV-GUIDE.md) (2026-10-17) covers libraries and versions, system services, the AI models of each feature, PolyLingue and everything added since 2.0. This guide remains useful for the study-set core design.
+
 This guide explains:
 - what the system is made of;
 - how the code is split into modules ("packages") and what depends on what;

@@ -51,7 +51,7 @@ export async function deleteAccountCompletely(userId: string): Promise<DeletionS
     prisma.user.delete({ where: { id: userId } }), // cascades workspaces, memberships, history
   ]);
   await purge(
-    [...ownedIds.map((id) => `workspaces/${id}`), ...elsewhere.map((s) => studySetPrefix(s.workspaceId, s.id))],
+    [...ownedIds.map((id) => `workspaces/${id}`), ...elsewhere.map((s) => studySetPrefix(s.workspaceId, s.id)), `polylingue/recordings/${userId}`],
     "account.delete",
   );
   return { studySets: sets.length, sources: sets.reduce((n, s) => n + s._count.sources, 0) };

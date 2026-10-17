@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { keepSpokenAnswer } from "@/lib/polylingue/recordings";
 import { ApiError, notFound, rateLimited } from "@/lib/api";
 import { rateLimit } from "@/lib/rate-limit";
 import { getTranscriber } from "@/lib/transcription";
@@ -187,7 +188,8 @@ export async function submitWriting(userId: string, courseId: string, practiceId
 /**
  * Speaking: the learner's recording is transcribed by Whisper. A read-aloud
  * sentence is scored word by word; an answer to an open question is
- * corrected like a writing task. The recording is not stored.
+ * corrected like a writing task. The recording is kept for the learner to
+ * play back: the item's latest one and its best one (recordings.ts).
  */
 export async function submitSpeaking(
   userId: string,
@@ -203,6 +205,11 @@ export async function submitSpeaking(
   const limit = rateLimit(`polylingue-speak:${userId}`, 120);
   if (!limit.allowed) throw rateLimited(limit.retryAfterSec);
   const transcript = await getTranscriber().transcribe(input.audio, input.filename, { language: course.targetLang });
+  // Kept to play back; a storage problem never costs the learner their answer.
+  const keep = (item: string, score: number | null, heard: string) =>
+    keepSpokenAnswer(userId, courseId, practiceId, item, input.audio, input.filename, score, heard).catch((err) =>
+      console.error("[polylingue] keep recording", practiceId, item, err instanceof Error ? err.message : err),
+    );
   const heard = transcript.segments.map((s) => s.text).join(" ").replace(/\s+/g, " ").trim();
 
   if (input.kind === "sentence") {
@@ -212,11 +219,15 @@ export async function submitSpeaking(
     const xp = answerXp(verdict, false);
     await prisma.langExerciseAttempt.create({ data: { courseId, lessonId: practiceId, exerciseIndex: input.index, type: "speaking-sentence", answer: heard.slice(0, 500), verdict, xp } });
     if (xp > 0) await addActivity(course, { xp });
+    await keep(`sentence-${input.index}`, score, heard);
     return { kind: "sentence" as const, heard, score, missed, verdict, xp, expected: sentence.text };
   }
 
   const question = speaking.questions[input.index];
-  if (!heard) return { kind: "question" as const, heard, score: 0, corrected: "", corrections: [], feedback: "", xp: 0, model: question.model };
+  if (!heard) {
+    await keep(`question-${input.index}`, 0, heard);
+    return { kind: "question" as const, heard, score: 0, corrected: "", corrections: [], feedback: "", xp: 0, model: question.model };
+  }
   const correction = await correctText({
     target: practice.curriculum.targetLang,
     base: practice.curriculum.baseLang,
@@ -230,6 +241,7 @@ export async function submitSpeaking(
     data: { courseId, lessonId: practiceId, exerciseIndex: input.index, type: "speaking-question", answer: heard.slice(0, 500), verdict: correctionVerdict(correction.score), xp },
   });
   if (xp > 0) await addActivity(course, { xp });
+  await keep(`question-${input.index}`, correction.score, heard);
   return { kind: "question" as const, heard, ...correction, xp, model: question.model };
 }
 

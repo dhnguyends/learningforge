@@ -36,7 +36,10 @@ const nextConfig = {
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "X-Frame-Options", value: "DENY" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=()" },
+          // Microphone for this site only (PolyLingue speaking practice). It must be
+          // allowed on every page: the policy of the first page loaded stays in force
+          // when the app moves to PolyLingue without a full reload.
+          { key: "Permissions-Policy", value: "camera=(), microphone=(self), geolocation=(), payment=()" },
           { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
         ],
       },
@@ -50,11 +53,6 @@ const nextConfig = {
           { key: "X-Frame-Options", value: "SAMEORIGIN" },
           { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
         ],
-      },
-      {
-        // PolyLingue speaking practice records the learner (this site only).
-        source: "/polylingue/:path*",
-        headers: [{ key: "Permissions-Policy", value: "camera=(), microphone=(self), geolocation=(), payment=()" }],
       },
     ];
   },

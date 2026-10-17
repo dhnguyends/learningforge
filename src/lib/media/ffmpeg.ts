@@ -200,3 +200,28 @@ function sanitize(name: string): string {
 export function ffmpegEnvNote(): Env {
   return getEnv();
 }
+
+/** A short recording as WAV (mono, 24 kHz, 16-bit), e.g. a learner's spoken answer. */
+export async function toWav(input: Buffer, filename: string): Promise<Buffer> {
+  const tmpIn = tmpPath(filename);
+  const tmpOut = tmpPath(`${sanitize(filename)}.wav`);
+  const fs = await import("node:fs/promises");
+  await fs.writeFile(tmpIn, input);
+  try {
+    await new Promise<void>((resolve, reject) => {
+      ffmpeg(tmpIn)
+        .noVideo()
+        .audioChannels(1)
+        .audioFrequency(24000)
+        .audioCodec("pcm_s16le")
+        .format("wav")
+        .on("error", (err) => reject(err))
+        .on("end", () => resolve())
+        .save(tmpOut);
+    });
+    return await fs.readFile(tmpOut);
+  } finally {
+    await fs.rm(tmpIn, { force: true });
+    await fs.rm(tmpOut, { force: true });
+  }
+}
