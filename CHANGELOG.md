@@ -2,6 +2,56 @@
 
 All notable changes to LearningForge.
 
+## 3.0 — 2026-10-17
+
+PolyLingue quality and scale (Phase 5): administrators review the AI-written lessons, learners report problems, analytics, and lesson audio ready ahead of time. Learners can change level, and speaking practice keeps their recorded answers. DeepSeek-R1 joins the local AI models, one model at a time on the GPU. A developer guide and an optional PyTorch container for GPU notebooks.
+
+### New features
+
+**Local AI models (Admin › AI model)**
+- **DeepSeek-R1 8B** can be chosen as the generation model, next to Gemma 4: every chat model installed in Ollama is listed (embeddings-only models are not). DeepSeek-R1 always reasons before answering; the app keeps the reasoning out of the answer and gives it its own token budget.
+- **One model at a time on the GPU:** choosing a local model unloads every other Ollama model first (Gemma 4, the embeddings model…), checks that they are gone, then loads the chosen one; the card reports what was unloaded and the GPU memory before and after. Jobs and local translation do the same when their model is not loaded yet (the small embeddings model stays).
+- **GPU memory panel:** the card shows the GPU memory in use and the models Ollama holds, refreshed every 10 seconds, with a **Free GPU memory** button.
+
+**Development**
+- **Software developer guide** (`docs/SOFTWARE-DEV-GUIDE.md`): the libraries and versions in use, system packages and services, the AI models available for each feature (generation, tutor, translation, speech-to-text, text-to-speech, embeddings, OCR), the architecture, and recipes for common changes.
+- **Optional PyTorch container** for notebooks and experiments on the GPU: PyTorch 2.14.1 with CUDA 12.6 (still supported on the GTX 1080 Ti) and JupyterLab, started with `docker compose --profile pytorch up -d pytorch`; `deploy/pytorch/gpu-check.py` checks that it really runs on the GPU. The app itself does not use PyTorch.
+
+**Change level**
+- **Right-click a language** in PolyLingue's left panel (or Shift+F10 on it) for **Change level…**: choose another level of the same language. Each level shows whether its shared course is ready, being written, or will be written; switching to a level nobody started has the AI model write that course first. XP, words, streak and badges are kept; below B2 the explanation language can be chosen, and a learner in a class is told the class stays on its own level.
+
+**Speaking practice**
+- **Your spoken answers are kept:** for each sentence and question, the **latest** recording and the **best** one (highest score) are saved as WAV on the server (`lang_recordings` table, files under `polylingue/recordings/<user>/<course>/`). Play them back under the item ("My latest", "My best", or "My best = latest"), or save them as `.wav`. Only the learner can hear them. The bin icon next to a recording deletes it (database row and `.wav` file, after a confirmation; a take kept as both latest and best is deleted as one), "Delete them" removes all of a practice's recordings, and they are deleted with the course or the account.
+- **Micro settings** (top right of the speaking card): choose the microphone, turn noise suppression, echo cancellation and automatic volume on or off, watch the input level, and record a 3-second test to play back. Saved in this browser and used by every Record button.
+
+**Content review (Admin › PolyLingue)**
+- **Content:** every shared course (language, level, explanation language) with its learners and classes, lessons ready or retired, lessons with audio, open reports and hidden exercises; open a course to see its lessons unit by unit, marked edited, retired, reported, hidden or with audio ready.
+- **Lesson review** (`/admin/polylingue/<lesson>`): correct the title, introduction, words and each exercise in place (prompt, text, answer, options, other correct answers, pairs, explanation, audio). Exercises keep their number and type, and each correction is checked (the answer must be one of the options, a fill-in sentence needs its blank…). **Regenerate** has the AI model write the lesson again; **Retire** stops offering it (progress on it stays) and **Bring back** undoes it. Every change keeps the version before, and **Restore** brings back any earlier version.
+- **Reports:** the open reports, grouped by exercise, with their reasons and comments; **Review** opens the exercise, **Dismiss** closes its reports without changing it. Correcting an exercise closes its reports and shows it again.
+- **Report a problem** (learners): after each answer, report a wrong answer, an unclear question, a mistake, wrong audio or something else, with an optional comment. An exercise reported by **3 different learners** is skipped until an administrator reviews it.
+
+**Analytics (Admin › PolyLingue)**
+- Learners (people and test accounts), active in the last 7 and 30 days, **retention** (came back on day 1, 7 and 30 after starting), lessons completed and the completion rate, average score, **time per lesson**, learners active per day over 30 days, the **hardest exercises** (5 answers or more, with a link to review them), and each shared course's learners, lessons completed and average score.
+
+**Voices and audio ahead of time**
+- **A voice per language** (Admin › PolyLingue › Voices & audio): a local Kokoro or Piper voice for Spanish, English, French, German, Italian and Portuguese, with a sample to listen to; without a choice, the read-aloud model of Admin › AI model is used as before.
+- **Lesson audio ready before learners need it:** with a local voice, a lesson's audio (words, sentences, words to match) is generated as soon as the lesson is written, one lesson at a time; the audio button of a course generates it for lessons that already exist. Paid cloud voices are never used ahead of time.
+
+**Deployment (prepared; the pod was not started)**
+- `npm run polylingue:backup` / `npm run polylingue:restore -- <file>`: PolyLingue data only, restored without overwriting (rows whose account, course or lesson is missing are skipped and counted).
+- `npm run load:check`: read-only load test with many virtual learners, with p50 / p95 / p99 per endpoint.
+- The pod's `setup.sh` generates the browser-notification keys once; `DEPLOYMENT.md` has a PolyLingue section.
+
+### Fixes
+- **PolyLingue lesson page** no longer renders its offline placeholder on the server (Node 21+ has a `navigator` without `onLine`), which caused a hydration error and a moment of blank page.
+- **Microphone in speaking practice:** it was blocked when PolyLingue was opened from another page of the app (the Dashboard's policy, which refused the microphone, stayed in force without a full reload). The microphone is now allowed for this site on every page (`microphone=(self)`); only speaking practice uses it.
+- **Clearer microphone messages:** when the window itself forbids the microphone (for example the browser panel inside the Claude app), the learner is told to open LearningForge in Chrome, Edge or Firefox, instead of being sent to the site settings; a refused permission, a missing microphone and a microphone used by another app each get their own advice.
+
+### Upgrade notes
+- Run `npm run db:push`: adds learner reports, retired / hidden-exercise / audio / edited fields on lessons, time spent per lesson, and the `lang_recordings` table for kept spoken answers.
+- Local AI: models are listed from Ollama, so `ollama pull deepseek-r1:8b` (or any chat model) makes it selectable in Admin › AI model; `LOCAL_AI_MODEL` stays the default.
+- New npm scripts: `polylingue:backup`, `polylingue:restore`, `load:check`.
+
 ## 2.6 — 2026-10-17
 
 PolyLingue for Schools: teachers run classes, give assignments and follow each student, with the class's common difficulties and suggested activities.
