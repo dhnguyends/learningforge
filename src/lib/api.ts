@@ -5,7 +5,7 @@ import { authOptions } from "@/lib/auth";
 import type { Session } from "next-auth";
 import { prisma } from "@/lib/db";
 import { getEnv, type Env } from "@/lib/env";
-import { effectiveRole } from "@/lib/admin";
+import { canTeach, effectiveRole } from "@/lib/admin";
 
 export class ApiError extends Error {
   status: number;
@@ -78,6 +78,13 @@ async function touchLastActive(userId: string, lastActiveAt: Date | null): Promi
 export async function requireAdmin(): Promise<Session> {
   const session = await requireSession();
   if (session.user.role !== "ADMIN") throw forbidden();
+  return session;
+}
+
+/** Requires a signed-in TEACHER or ADMIN (Human), checked against the database. */
+export async function requireTeacher(): Promise<Session> {
+  const session = await requireSession();
+  if (!canTeach(session.user.role)) throw forbidden();
   return session;
 }
 

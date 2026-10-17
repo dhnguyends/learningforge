@@ -21,7 +21,7 @@ import { AdminCourseTree } from "@/components/shared/admin-course-tree";
 import { AdminDatabase } from "@/components/shared/admin-database";
 import { useConfirm } from "@/components/shared/confirm-dialog";
 
-type Role = "USER" | "ADMIN";
+type Role = "USER" | "TEACHER" | "ADMIN";
 type Nature = "HUMAN" | "BOT";
 
 const ADMIN_NEEDS_HUMAN = "Only Human accounts can be promoted to Admin — change the nature to Human first.";
@@ -205,7 +205,9 @@ function UsersPanel() {
                       {/* Long (test) addresses wrap so the action icons stay in view. */}
                       <td className="max-w-[16rem] break-all px-4 py-3 text-muted-foreground">{u.email}</td>
                       <td className="px-4 py-3">
-                        <Badge variant={u.role === "ADMIN" ? "default" : "secondary"}>{u.role === "ADMIN" ? "Admin" : "User"}</Badge>
+                        <Badge variant={u.role === "ADMIN" ? "default" : u.role === "TEACHER" ? "outline" : "secondary"}>
+                          {u.role === "ADMIN" ? "Admin" : u.role === "TEACHER" ? "Teacher" : "User"}
+                        </Badge>
                       </td>
                       <td className="px-4 py-3">
                         <Badge variant={u.nature === "HUMAN" ? "outline" : "secondary"}>{u.nature === "HUMAN" ? "Human" : "Bot"}</Badge>
@@ -350,6 +352,9 @@ function UserEditor({ state, onClose }: { state: EditorState; onClose: () => voi
                 className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <option value="USER">User — studies with their own study sets</option>
+                <option value="TEACHER" disabled={form.nature !== "HUMAN"}>
+                  Teacher — can also run PolyLingue classes
+                </option>
                 <option value="ADMIN" disabled={form.nature !== "HUMAN"}>
                   Admin — can also manage accounts, AI model and courses
                 </option>
@@ -365,12 +370,14 @@ function UserEditor({ state, onClose }: { state: EditorState; onClose: () => voi
                 className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <option value="HUMAN">Human — a person</option>
-                <option value="BOT" disabled={form.role === "ADMIN"}>
+                <option value="BOT" disabled={form.role !== "USER"}>
                   Bot — automated tests or AI agents
                 </option>
               </select>
-              {form.role === "ADMIN" && (
-                <p className="text-xs text-muted-foreground">An Admin must be Human — set the role to User before making it a Bot.</p>
+              {form.role !== "USER" && (
+                <p className="text-xs text-muted-foreground">
+                  {form.role === "ADMIN" ? "An Admin" : "A Teacher"} must be Human — set the role to User before making it a Bot.
+                </p>
               )}
             </div>
           </div>

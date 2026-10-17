@@ -17,7 +17,7 @@ const createSchema = z.object({
   name: z.string().trim().min(1).max(80),
   email: z.string().trim().email().max(320),
   password: z.string().min(10, "Password must be at least 10 characters").max(256),
-  role: z.enum(["USER", "ADMIN"]).default("USER"),
+  role: z.enum(["USER", "TEACHER", "ADMIN"]).default("USER"),
   // Accounts created by code (tests, AI agents) are bots unless stated otherwise;
   // the "New account" form sends HUMAN explicitly.
   nature: z.enum(["HUMAN", "BOT"]).default("BOT"),

@@ -749,7 +749,7 @@ export interface AdminUserRow {
   id: string;
   name: string | null;
   email: string;
-  role: "USER" | "ADMIN";
+  role: "USER" | "TEACHER" | "ADMIN";
   /** HUMAN = a person; BOT = tests / AI agents. Only Humans can be Admin. */
   nature: "HUMAN" | "BOT";
   /** Last sign-in or activity (ISO), null if never used since tracking began. */
@@ -767,7 +767,7 @@ export function useAdminUsers() {
 
 export function useCreateUser() {
   return useLfMutation(
-    (vars: { name: string; email: string; password: string; role: "USER" | "ADMIN"; nature: "HUMAN" | "BOT" }) =>
+    (vars: { name: string; email: string; password: string; role: "USER" | "TEACHER" | "ADMIN"; nature: "HUMAN" | "BOT" }) =>
       api<{ user: AdminUserRow }>("/api/admin/users", { method: "POST", body: JSON.stringify(vars) }),
     () => [adminUsersKey],
   );
@@ -775,7 +775,7 @@ export function useCreateUser() {
 
 export function useUpdateUser() {
   return useLfMutation(
-    ({ id, ...vars }: { id: string; name?: string; email?: string; password?: string; role?: "USER" | "ADMIN"; nature?: "HUMAN" | "BOT" }) =>
+    ({ id, ...vars }: { id: string; name?: string; email?: string; password?: string; role?: "USER" | "TEACHER" | "ADMIN"; nature?: "HUMAN" | "BOT" }) =>
       api<{ user: AdminUserRow }>(`/api/admin/users/${id}`, { method: "PATCH", body: JSON.stringify(vars) }),
     () => [adminUsersKey],
   );

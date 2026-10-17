@@ -1,6 +1,6 @@
 # PolyLingue — build plan
 
-_Date: 2026-10-16 · Status: Phase 1 (MVP) built, with immersion from B2; Phase 2 complete (skills, adaptive difficulty within the chosen level, placement test, hints, lessons from your own material); Phase 3 built (reminders in the app and as browser notifications, installable app with offline lessons, badges and streak freezes, friends' leagues by invite code, weekly summary); Phases 4–5 planned_
+_Date: 2026-10-16 · Status: Phase 1 (MVP) built, with immersion from B2; Phase 2 complete (skills, adaptive difficulty within the chosen level, placement test, hints, lessons from your own material); Phase 3 built (reminders in the app and as browser notifications, installable app with offline lessons, badges and streak freezes, friends' leagues by invite code, weekly summary); Phase 4 built (Teacher role, classes joined with a code, assignments, class dashboard, common difficulties with suggested activities and CSV export, class leagues, privacy rules); Phase 5 planned_
 
 ## What we are building (my understanding)
 
@@ -121,17 +121,17 @@ Goal: a learner can start a language, take short lessons with instant feedback a
 24. **Leaderboards. ✅ built** as friends' leagues joined with an invite code and a nickname (class leagues come with Phase 4). Weekly XP leagues, opt-in, among friends or a class only. No public ranking by default.
 25. **Weekly summary. ✅ built.** XP, time, words, and the skills to work on.
 
-## Phase 4 — Teacher dashboard ("PolyLingue for Schools")
+## Phase 4 — Teacher dashboard ("PolyLingue for Schools") ✅ built
 
-26. **Teacher role.** A new TEACHER role (Human accounts only, like Admin), set by an admin.
-27. **Classes.** A teacher creates a class with a target language and level. Students join with a code, and the teacher can remove students.
-28. **Assignments.** Assign units or lessons with a due date. Students see them first on their PolyLingue home.
-29. **Class dashboard.**
+26. **Teacher role. ✅ built.** A new TEACHER role (Human accounts only, like Admin), set by an admin.
+27. **Classes. ✅ built.** A teacher creates a class with a target language and level. Students join with a code, and the teacher can remove students.
+28. **Assignments. ✅ built.** Assign units or lessons with a due date. Students see them first on their PolyLingue home.
+29. **Class dashboard. ✅ built.**
     - Activity per student: active days, minutes, streak, XP, assignments done.
     - Accuracy per skill.
     - **Students falling behind:** inactive for 3 or more days, or below the target.
-30. **Common difficulties.** The words and grammar points the class misses most, with suggested in-class activities (role-play, speaking, grammar) generated from them. CSV export.
-31. **Privacy rules.**
+30. **Common difficulties. ✅ built.** The words and grammar points the class misses most, with suggested in-class activities (role-play, speaking, grammar) generated from them. CSV export.
+31. **Privacy rules. ✅ built** (class leagues are opt-in, with a nickname).
     - Teachers see only their classes.
     - Students see what is shared with the class.
     - Deleting an account removes its PolyLingue data.

@@ -13,7 +13,7 @@ const patchSchema = z
     name: z.string().trim().min(1).max(80).optional(),
     email: z.string().trim().email().max(320).optional(),
     password: z.string().min(10, "Password must be at least 10 characters").max(256).optional(),
-    role: z.enum(["USER", "ADMIN"]).optional(),
+    role: z.enum(["USER", "TEACHER", "ADMIN"]).optional(),
     nature: z.enum(["HUMAN", "BOT"]).optional(),
   })
   .refine((b) => Object.values(b).some((v) => v !== undefined), { message: "Nothing to update" });
@@ -38,7 +38,7 @@ export const PATCH = apiHandler<Ctx>(async (req, { params }) => {
   );
   if (violation) throw badRequest(violation);
 
-  if (body.role === "USER" && existing.role === "ADMIN") await assertNotLastAdmin(existing.id);
+  if (body.role && body.role !== "ADMIN" && existing.role === "ADMIN") await assertNotLastAdmin(existing.id);
   const email = body.email?.toLowerCase();
   if (email) {
     const clash = await prisma.user.findFirst({ where: { email, NOT: { id: existing.id } }, select: { id: true } });

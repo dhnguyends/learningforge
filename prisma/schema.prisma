@@ -201,6 +201,8 @@ enum SessionKind {
 
 enum UserRole {
   USER
+  /// Runs PolyLingue classes (Human accounts only, set by an admin).
+  TEACHER
   ADMIN
 }
 
@@ -244,6 +246,8 @@ model User {
   langReminder      LangReminder?
   langLeagues       LangLeagueMember[]
   createdLeagues    LangLeague[]        @relation("LeagueCreator")
+  taughtClasses     LangClass[]         @relation("ClassTeacher")
+  langClasses       LangClassMember[]
 
   @@map("users")
 }
@@ -965,6 +969,7 @@ model LangCurriculum {
   lessons   LangLesson[]
   practices LangPractice[]
   courses   LanguageCourse[]
+  classes   LangClass[]
 
   @@unique([targetLang, baseLang, level])
   @@map("lang_curricula")
@@ -1038,6 +1043,7 @@ model LanguageCourse {
   ownPractices LangPractice[]         @relation("OwnPractices")
   ownLessons   LangLesson[]           @relation("OwnLessons")
   achievements LangAchievement[]
+  offlineSyncs LangOfflineSync[]
 
   @@unique([userId, targetLang])
   @@map("language_courses")
@@ -1294,5 +1300,71 @@ model LangOfflineSync {
   lessonId  String
   createdAt DateTime @default(now())
 
+  course LanguageCourse @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
   @@map("lang_offline_syncs")
+}
+
+/// A teacher's class: one language, level and explanation language (one shared course).
+/// Students join with its code; their course in that language follows the class.
+model LangClass {
+  id            String    @id @default(cuid())
+  teacherId     String
+  name          String
+  targetLang    String
+  baseLang      String
+  level         CefrLevel
+  curriculumId  String
+  /// Invite code, e.g. "K7Q-2MX".
+  code          String    @unique
+  /// Minutes of practice expected per week: below it, a student is "falling behind".
+  weeklyMinutes Int       @default(60)
+  /// Suggested in-class activities generated from the class's difficulties.
+  activities    Json?
+  activitiesAt  DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  teacher     User              @relation("ClassTeacher", fields: [teacherId], references: [id], onDelete: Cascade)
+  curriculum  LangCurriculum    @relation(fields: [curriculumId], references: [id])
+  members     LangClassMember[]
+  assignments LangAssignment[]
+
+  @@index([teacherId])
+  @@map("lang_classes")
+}
+
+model LangClassMember {
+  id       String   @id @default(cuid())
+  classId  String
+  userId   String
+  joinedAt DateTime @default(now())
+  /// Opt-in to the class league (weekly XP among classmates), under a nickname.
+  inLeague Boolean  @default(false)
+  nickname String?
+
+  class LangClass @relation(fields: [classId], references: [id], onDelete: Cascade)
+  user  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([classId, userId])
+  @@index([userId])
+  @@map("lang_class_members")
+}
+
+/// Work given to a class: a whole unit or one lesson of the class's course, with a due date.
+model LangAssignment {
+  id        String   @id @default(cuid())
+  classId   String
+  /// Unit (0-based) or a single lesson of the class curriculum.
+  unitIndex Int?
+  lessonId  String?
+  title     String
+  note      String?
+  dueAt     DateTime
+  createdAt DateTime @default(now())
+
+  class LangClass @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  @@index([classId, dueAt])
+  @@map("lang_assignments")
 }

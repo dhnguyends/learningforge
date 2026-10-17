@@ -511,3 +511,148 @@ export function useWeeklySummary(week: string | null) {
 export function invalidateReminders(qc: ReturnType<typeof useQueryClient>) {
   void qc.invalidateQueries({ queryKey: habitKeys.reminders });
 }
+
+/* ----------------------------------------------- PolyLingue for Schools (4) */
+
+type ClassesService = typeof import("@/lib/polylingue/classes-service");
+export type TeacherClass = Awaited<ReturnType<ClassesService["listTeacherClasses"]>>[number];
+export type ClassDashboard = Awaited<ReturnType<ClassesService["classDashboard"]>>;
+export type ClassOutline = Awaited<ReturnType<ClassesService["classOutline"]>>;
+export type ClassDifficulties = Awaited<ReturnType<ClassesService["classDifficulties"]>>;
+export type MyClass = Awaited<ReturnType<ClassesService["myClasses"]>>[number];
+export type OpenAssignment = Awaited<ReturnType<ClassesService["openAssignments"]>>[number];
+export type JoinPreview = Awaited<ReturnType<ClassesService["previewJoin"]>>;
+
+const classKeys = {
+  teaching: ["polylingue", "teach"] as const,
+  dashboard: (id: string) => ["polylingue", "teach", id] as const,
+  outline: (id: string) => ["polylingue", "teach", id, "outline"] as const,
+  difficulties: (id: string) => ["polylingue", "teach", id, "difficulties"] as const,
+  mine: ["polylingue", "classes"] as const,
+  assignments: ["polylingue", "assignments"] as const,
+};
+
+export function useTeacherClasses(enabled = true) {
+  return useQuery({ queryKey: classKeys.teaching, queryFn: () => api<{ classes: TeacherClass[] }>("/api/polylingue/teach/classes"), enabled });
+}
+
+export function useCreateClass() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { name: string; targetLang: string; baseLang: string; level: Cefr; weeklyMinutes: number }) =>
+      api<{ id: string; code: string }>("/api/polylingue/teach/classes", { method: "POST", body: JSON.stringify(input) }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: classKeys.teaching }),
+  });
+}
+
+export function useClassDashboard(classId: string) {
+  return useQuery({
+    queryKey: classKeys.dashboard(classId),
+    queryFn: () => api<ClassDashboard>(`/api/polylingue/teach/classes/${classId}`),
+    // Follow the course being written for a new class.
+    refetchInterval: (q) => (writing(q.state.data?.class.courseStatus) ? 3000 : 60_000),
+  });
+}
+
+export function useUpdateClass(classId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { name?: string; weeklyMinutes?: number; newCode?: boolean }) =>
+      api<{ code: string }>(`/api/polylingue/teach/classes/${classId}`, { method: "PATCH", body: JSON.stringify(input) }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: classKeys.teaching }),
+  });
+}
+
+export function useDeleteClass() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (classId: string) => api<{ ok: true }>(`/api/polylingue/teach/classes/${classId}`, { method: "DELETE" }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: classKeys.teaching }),
+  });
+}
+
+export function useClassOutline(classId: string, enabled: boolean) {
+  return useQuery({ queryKey: classKeys.outline(classId), queryFn: () => api<ClassOutline>(`/api/polylingue/teach/classes/${classId}/outline`), enabled });
+}
+
+export function useCreateAssignment(classId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { unitIndex?: number; lessonId?: string; dueAt: string; note?: string }) =>
+      api<{ id: string; title: string }>(`/api/polylingue/teach/classes/${classId}/assignments`, { method: "POST", body: JSON.stringify(input) }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: classKeys.dashboard(classId) }),
+  });
+}
+
+export function useDeleteAssignment(classId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (assignmentId: string) => api<{ ok: true }>(`/api/polylingue/teach/classes/${classId}/assignments/${assignmentId}`, { method: "DELETE" }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: classKeys.dashboard(classId) }),
+  });
+}
+
+export function useRemoveStudent(classId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (userId: string) => api<{ ok: true }>(`/api/polylingue/teach/classes/${classId}/students/${userId}`, { method: "DELETE" }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: classKeys.dashboard(classId) }),
+  });
+}
+
+export function useClassDifficulties(classId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: classKeys.difficulties(classId),
+    queryFn: () => api<ClassDifficulties>(`/api/polylingue/teach/classes/${classId}/difficulties`),
+    enabled,
+  });
+}
+
+export function useSuggestActivities(classId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api<{ activities: unknown[] }>(`/api/polylingue/teach/classes/${classId}/difficulties`, { method: "POST" }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: classKeys.difficulties(classId) }),
+  });
+}
+
+export function useMyClasses() {
+  return useQuery({ queryKey: classKeys.mine, queryFn: () => api<{ classes: MyClass[] }>("/api/polylingue/classes") });
+}
+
+export function useOpenAssignments() {
+  return useQuery({ queryKey: classKeys.assignments, queryFn: () => api<{ assignments: OpenAssignment[] }>("/api/polylingue/assignments") });
+}
+
+export function previewJoinClass(code: string) {
+  return api<JoinPreview>(`/api/polylingue/classes/join?code=${encodeURIComponent(code)}`);
+}
+
+export function useJoinClass() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { code: string; timeZone: string }) =>
+      api<{ classId: string; courseId: string }>("/api/polylingue/classes/join", { method: "POST", body: JSON.stringify(input) }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["polylingue"] }),
+  });
+}
+
+export function useLeaveClass() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (classId: string) => api<{ ok: true }>(`/api/polylingue/classes/${classId}`, { method: "DELETE" }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: classKeys.mine });
+      void qc.invalidateQueries({ queryKey: classKeys.assignments });
+    },
+  });
+}
+
+export function useClassLeague(classId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { inLeague: boolean; nickname?: string }) =>
+      api<{ inLeague: boolean; nickname: string | null }>(`/api/polylingue/classes/${classId}`, { method: "PATCH", body: JSON.stringify(input) }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: classKeys.mine }),
+  });
+}

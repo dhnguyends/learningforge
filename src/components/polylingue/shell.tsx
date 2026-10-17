@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
-import { BarChart3, Bell, BookOpen, CalendarRange, GraduationCap, Headphones, Languages, Mic, PenLine, Plus, Repeat, Target, Trophy, Users } from "lucide-react";
+import { useSession } from "next-auth/react";
+import { BarChart3, Bell, BookOpen, CalendarRange, GraduationCap, Headphones, Languages, Mic, PenLine, Plus, Repeat, School, Target, Trophy, Users } from "lucide-react";
+import { canTeach } from "@/lib/admin";
 import { cn } from "@/lib/utils";
 import { targetLanguage } from "@/lib/polylingue/levels";
 import { LangBadge } from "@/components/polylingue/lang-badge";
@@ -18,6 +20,8 @@ import { HabitNotices, InstallButton, usePwaSetup } from "@/components/polylingu
  */
 export function PolyLingueShell({ children }: { children: React.ReactNode }) {
   usePwaSetup();
+  const { data: session } = useSession();
+  const teacher = canTeach(session?.user?.role);
   const params = useParams<{ courseId?: string }>();
   const pathname = usePathname();
   const { data } = usePolyCourses();
@@ -73,8 +77,15 @@ export function PolyLingueShell({ children }: { children: React.ReactNode }) {
             { href: "/polylingue/leagues", label: "Leagues", icon: Users },
             { href: "/polylingue/summary", label: "Weekly summary", icon: CalendarRange },
             { href: "/polylingue/reminders", label: "Reminders", icon: Bell },
+            { href: "/polylingue/classes", label: "My classes", icon: School },
+            ...(teacher ? [{ href: "/polylingue/teach", label: "Teaching", icon: GraduationCap }] : []),
           ].map((i) => (
-            <Link key={i.href} href={i.href} aria-current={pathname === i.href ? "page" : undefined} className={linkClass(pathname === i.href)}>
+            <Link
+              key={i.href}
+              href={i.href}
+              aria-current={pathname === i.href || pathname.startsWith(`${i.href}/`) ? "page" : undefined}
+              className={linkClass(pathname === i.href || pathname.startsWith(`${i.href}/`))}
+            >
               <i.icon className="h-4 w-4" aria-hidden="true" /> {i.label}
             </Link>
           ))}

@@ -15,6 +15,7 @@ import { GoalRing, StreakBadge } from "@/components/polylingue/goal-ring";
 import { LangBadge } from "@/components/polylingue/lang-badge";
 import { SourceLessons } from "@/components/polylingue/source-lessons";
 import { OfflineCard, OfflineCourse } from "@/components/polylingue/offline-lessons";
+import { AssignmentsCard } from "@/components/polylingue/assignments-card";
 import { isNetworkError } from "@/lib/polylingue/pwa-client";
 import { cn } from "@/lib/utils";
 import { BASE_LANGUAGES, CEFR_LEVELS, DAILY_GOALS, LEVELS, isImmersion, targetLanguage, type Cefr } from "@/lib/polylingue/levels";
@@ -72,6 +73,8 @@ export default function PolyCoursePage() {
           <GoalRing minutes={course.today.minutes} goal={course.dailyGoalMinutes} size={72} />
         </CardContent>
       </Card>
+
+      <AssignmentsCard courseId={course.id} />
 
       {course.curriculum.status === "READY" && <OfflineCard courseId={course.id} nextLessonId={course.nextLesson?.id ?? null} />}
 

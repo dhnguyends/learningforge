@@ -12,6 +12,7 @@ import { LangBadge } from "@/components/polylingue/lang-badge";
 import { GoalRing, StreakBadge } from "@/components/polylingue/goal-ring";
 import { targetLanguage } from "@/lib/polylingue/levels";
 import { usePolyCourses } from "@/hooks/use-polylingue";
+import { AssignmentsCard } from "@/components/polylingue/assignments-card";
 
 /** PolyLingue home: the learner's languages, or the onboarding (level first) when there are none. */
 export default function PolyLinguePage() {
@@ -47,6 +48,8 @@ function PolyLingueHome() {
           </Button>
         )}
       </div>
+
+      {!adding && <AssignmentsCard />}
 
       {isLoading ? (
         <div className="h-40 animate-pulse rounded-lg bg-muted" />

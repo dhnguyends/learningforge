@@ -2,6 +2,21 @@
 
 All notable changes to LearningForge.
 
+## Unreleased
+
+### New features
+
+**PolyLingue for Schools (Phase 4)**
+- **Teacher role:** administrators can make a Human account a **Teacher** (Admin › Users); like Admin, it is never effective on a Bot account. Teachers and administrators get a **Teaching** page in PolyLingue's left panel.
+- **Classes:** a teacher creates a class for a language, a level and an explanation language, with a weekly target in minutes, and shares its code (like K7Q-2MX; a new code can be made at any time). The class follows the shared course for that level.
+- **Joining:** students use **My classes › Join a class**. Before confirming they see the class, its teacher and what changes: their course in that language moves to the class level and explanation language, keeping XP, words and streak, and their teacher will see their activity in that language. Students can leave at any time; teachers can remove a student. Neither deletes the student's course or progress.
+- **Assignments:** a whole unit or one lesson of the class course, with a due date and a note. Students see open assignments **first on their PolyLingue home** and on the course page, with a Start button on the next lesson to do; each one shows To do, Overdue, Done or Done late.
+- **Class dashboard:** per student, active days (7 and 28 days), minutes and XP this week, streak, assignments done and overdue, and accuracy per skill. **Falling behind** is flagged with the reason: no practice for 3 days or more, below the weekly target, or overdue work. Each assignment shows how many students finished it.
+- **Common difficulties:** the words the class forgets most, the exercises it misses most and the grammar points (units) with the lowest accuracy. **Suggest activities** has the AI model write 3 to 5 in-class activities (role-play, speaking, grammar, vocabulary, games…) from them; they are kept on the class.
+- **CSV export** of the dashboard (opens in Excel or LibreOffice with accents intact; cells that would run as spreadsheet formulas are neutralised).
+- **Class league:** opt-in per student, under a nickname; classmates who joined see this week's XP ranking in the class language, and nothing else about each other.
+- **Privacy:** teachers see only their own classes. Deleting an account removes all its PolyLingue data (courses, words, answers, classes taught, memberships, leagues, reminders, browser subscriptions, offline results).
+
 ## 2.2 — 2026-10-16
 
 PolyLingue, a language-learning app inside LearningForge (phases 1 to 3), and sources you can translate into any language, correct by hand and scan with OCR.
