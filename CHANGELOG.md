@@ -2,7 +2,9 @@
 
 All notable changes to LearningForge.
 
-## Unreleased
+## 2.6 — 2026-10-17
+
+PolyLingue for Schools: teachers run classes, give assignments and follow each student, with the class's common difficulties and suggested activities.
 
 ### New features
 
@@ -16,6 +18,14 @@ All notable changes to LearningForge.
 - **CSV export** of the dashboard (opens in Excel or LibreOffice with accents intact; cells that would run as spreadsheet formulas are neutralised).
 - **Class league:** opt-in per student, under a nickname; classmates who joined see this week's XP ranking in the class language, and nothing else about each other.
 - **Privacy:** teachers see only their own classes. Deleting an account removes all its PolyLingue data (courses, words, answers, classes taught, memberships, leagues, reminders, browser subscriptions, offline results).
+
+### Fixes
+- **Offline lesson results** of a deleted course or account are now deleted with it (they used to remain).
+- **Common difficulties** list tied exercises in a fixed order (by lesson, then exercise).
+
+### Upgrade notes
+- Run `npx prisma db push && node scripts/ensure-vector-index.mjs`: adds the `TEACHER` role and the class tables (classes, members, assignments), and links offline results to their course.
+- No new settings or keys. Make teachers in Admin › Users (Human accounts only); administrators can teach as well.
 
 ## 2.2 — 2026-10-16
 
