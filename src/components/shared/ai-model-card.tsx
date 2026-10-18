@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { clearSummary, freedSummary, gb, gbMiB, switchSummary } from "@/components/shared/gpu-report";
 import { cn } from "@/lib/utils";
 import {
   useAdminAiSettings,
@@ -39,9 +40,6 @@ const localValue = (model: string) => `local:${norm(model)}`;
 const optionValue = (c: AiChoiceInput, defaultLocal: string) =>
   c.provider === "gemini" ? `gemini:${c.model}` : c.provider === "local" ? localValue(c.model ?? defaultLocal) : c.provider;
 
-const gb = (bytes: number) => `${(bytes / 1024 ** 3).toFixed(1)} GB`;
-const gbMiB = (mib: number) => `${(mib / 1024).toFixed(1)} GB`;
-
 function localNote(m: AdminAiSettings["localModels"][number]): string {
   const size = m.sizeBytes ? ` ${gb(m.sizeBytes)} on disk.` : "";
   if (/deepseek-r1/i.test(m.name)) {
@@ -49,22 +47,6 @@ function localNote(m: AdminAiSettings["localModels"][number]): string {
   }
   if (/gemma-?4/i.test(m.name)) return `Runs on this computer through Ollama. Private, works offline, no cost; slower on long outputs.${size}`;
   return `Runs on this computer through Ollama${m.parameterSize ? ` (${m.parameterSize} parameters)` : ""}. Private, works offline, no cost.${size}`;
-}
-
-/** "Unloaded gemma4:latest (6.1 GB). GPU memory 10.3 GB -> 1.2 GB." */
-function clearSummary(r: GpuClearReport): string {
-  const parts: string[] = [];
-  parts.push(r.unloaded.length ? `Unloaded ${r.unloaded.map((m) => `${m.name} (${gb(m.vramBytes)})`).join(", ")}.` : "No other model was in GPU memory.");
-  if (r.stillLoaded.length) parts.push(`Still loaded: ${r.stillLoaded.join(", ")}.`);
-  if (r.unloaded.length && r.usedBeforeMiB != null && r.usedAfterMiB != null) parts.push(`GPU memory ${gbMiB(r.usedBeforeMiB)} \u2192 ${gbMiB(r.usedAfterMiB)}.`);
-  return parts.join(" ");
-}
-
-function switchSummary(r: LocalSwitchReport): string {
-  const loaded = r.loaded
-    ? `${r.model} loaded${r.vramBytes != null ? `: ${gb(r.vramBytes)} in GPU memory` : ""}${r.usedLoadedMiB != null ? ` (card: ${gbMiB(r.usedLoadedMiB)} used)` : ""}.`
-    : `${r.model} could not be loaded yet${r.error ? ` (${r.error})` : ""}; the first job will load it.`;
-  return `${clearSummary(r)} ${loaded}`;
 }
 
 /**
@@ -153,8 +135,14 @@ export function AiModelCard() {
       const saved = await save.mutateAsync(chosen.choice);
       setSelected(null);
       setResult(null);
-      if (saved.gpu) setGpuReport({ text: switchSummary(saved.gpu), warn: saved.gpu.stillLoaded.length > 0 || !saved.gpu.loaded });
-      toast.success(`AI model set to ${chosen.label}`, saved.gpu ? { description: switchSummary(saved.gpu) } : undefined);
+      const followed = saved.translatorFollowed
+        ? ` The translator now uses ${saved.translatorFollowed.to} too (it used ${saved.translatorFollowed.from}): one model on the GPU.`
+        : "";
+      if (saved.gpu) setGpuReport({ text: switchSummary(saved.gpu) + followed, warn: saved.gpu.stillLoaded.length > 0 || !saved.gpu.loaded });
+      // A cloud model: the local language models nothing uses any more were unloaded.
+      if (saved.gpuFreed) setGpuReport({ text: freedSummary(saved.gpuFreed), warn: saved.gpuFreed.stillLoaded.length > 0 });
+      const report = saved.gpu ? switchSummary(saved.gpu) + followed : saved.gpuFreed ? freedSummary(saved.gpuFreed) : undefined;
+      toast.success(`AI model set to ${chosen.label}`, report ? { description: report } : undefined);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not save");
     }
@@ -311,7 +299,7 @@ function GpuMemoryPanel({
         {!data.ollamaReachable
           ? "Ollama is not reachable."
           : data.loaded.length
-            ? `In Ollama now: ${data.loaded.map((m) => `${m.name} (${gb(m.vramBytes)})`).join(", ")}.`
+            ? `In Ollama now: ${data.loaded.map((m) => m.name).join(", ")}.`
             : "No Ollama model in memory: the next job loads its model."}{" "}
         Choosing a local model unloads the others first, so only one runs on the GPU.
       </p>

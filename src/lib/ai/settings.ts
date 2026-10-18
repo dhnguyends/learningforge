@@ -21,17 +21,16 @@ export const GEMINI_MODELS = [
 export type GeminiModelId = (typeof GEMINI_MODELS)[number]["id"];
 const GEMINI_MODEL_IDS = GEMINI_MODELS.map((m) => m.id) as [GeminiModelId, ...GeminiModelId[]];
 
+/** An Ollama model name ("gemma4:latest", "hf.co/user/repo:Q4_K_M"); checked against the installed models when saved. */
+export const ollamaModelName = z
+  .string()
+  .trim()
+  .regex(/^[\w.\-/]+(:[\w.\-]+)?$/, "Not an Ollama model name")
+  .max(100);
+
 export const aiChoiceSchema = z.discriminatedUnion("provider", [
   // An installed Ollama model (checked when saved); LOCAL_AI_MODEL when absent.
-  z.object({
-    provider: z.literal("local"),
-    model: z
-      .string()
-      .trim()
-      .regex(/^[\w.\-/]+(:[\w.\-]+)?$/, "Not an Ollama model name")
-      .max(100)
-      .optional(),
-  }),
+  z.object({ provider: z.literal("local"), model: ollamaModelName.optional() }),
   z.object({ provider: z.literal("gemini"), model: z.enum(GEMINI_MODEL_IDS) }),
   // GLM served by Z.ai; the model is GLM_AI_MODEL.
   z.object({ provider: z.literal("zai") }),

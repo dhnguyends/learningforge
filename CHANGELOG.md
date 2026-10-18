@@ -4,6 +4,16 @@ All notable changes to LearningForge.
 
 ## Unreleased
 
+### New features
+- **Tutor: "Search my sources" switch** (above the tutor's modes, on by default, remembered per study set in the browser). Off, a question is sent **without semantic search**: no passages are retrieved or added to the prompt, the tutor answers from general knowledge with its usual teaching rules (hints first, solutions on request, academic integrity), and the answer is labelled *General knowledge · sources not searched*, without citations. *Show source* needs the search and is unavailable while it is off. API: `POST /api/tutor/<conversation>/messages` takes `sourceSearch` (default `true`); the choice is recorded on both messages.
+
+- **Local translator models** (Admin › AI model › Translator): every chat model installed in Ollama can translate (Gemma 4, DeepSeek-R1…), besides Azure AI Translator. **One model on the GPU**: while the AI model is local, a local translator must use that same model (other local models are greyed out with the reason; the server refuses them too), and switching the AI model to another local model moves a local translator with it, which the AI card reports. With a cloud AI model, any local model may translate. DeepSeek-R1 translates with its reasoning kept out of the result.
+
+- **Tutor: answer timer.** While the tutor answers, a timer counts from sending the question (⏱ HH:MM:SS); each answer then shows its time to answer, measured until it is on screen. **Hovering the timer shows the AI model** that answered (or is answering). Both are saved with the answer (message metadata: `model`, `modelLabel`, and `displayedMs` sent by the browser through `PATCH /api/tutor/<conversation>/messages/<message>`, first value kept), so the learner finds the same timer and tooltip in a later session; older answers show the time recorded by the server.
+- **Tutor: rename and delete conversations** from the conversation list's right-click menu (also Shift+F10, or the ⋯ button): **Rename…** changes the title (“New conversation” by default), **Delete…** removes the conversation and its messages after a confirmation (audited). API: `PATCH` / `DELETE /api/tutor/<conversation>`, the learner's own conversations only.
+
+- **GPU memory released with cloud models.** Choosing cloud models for both the AI model and the translator now unloads the local language models at once (they used to stay up to 5 minutes, Ollama's keep-alive); a local translator keeps its model, and the embeddings model stays for search. The AI model and Translator cards report what was unloaded and the GPU memory before and after (measured with nvidia-smi: Ollama misreports some models' sizes, so per-model sizes are no longer shown).
+
 ### Documentation
 - **User Guide** (`docs/USER-GUIDE.md`) and **Administrator and Teacher Guide** (`docs/ADMIN-GUIDE.md`), with screenshots of every page. `npm run guides:screenshots` takes them again from the running server (`scripts/guides/`), with temporary accounts that are deleted afterwards and other people's names replaced.
 

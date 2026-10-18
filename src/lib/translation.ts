@@ -1,6 +1,7 @@
 import { getEnv, mockProvidersAllowed } from "@/lib/env";
 import { cpuTimeoutFactor } from "@/lib/gpu";
-import { loadAloneOnGpu } from "@/lib/ai/ollama";
+import { alwaysThinks, loadAloneOnGpu } from "@/lib/ai/ollama";
+import { stripThinking } from "@/lib/ai/local";
 import { languageName } from "@/lib/speech/languages";
 import { getActiveTranslator } from "@/lib/speech/settings";
 
@@ -40,9 +41,10 @@ export class LocalTranslator implements Translator {
   /** Items per call: transcript segments are short, passages are ~330 tokens. */
   batchChars = 2_400;
 
-  constructor() {
+  /** `model`: an installed Ollama model (the admin's choice); LOCAL_AI_MODEL by default. */
+  constructor(model?: string) {
     const env = getEnv();
-    this.model = env.LOCAL_AI_MODEL;
+    this.model = model ?? env.LOCAL_AI_MODEL;
     this.name = `ollama:${this.model}`;
     this.baseUrl = env.LOCAL_AI_BASE_URL.replace(/\/$/, "");
     this.timeoutMs = env.LOCAL_AI_TIMEOUT_MS;
@@ -83,8 +85,10 @@ export class LocalTranslator implements Translator {
       body: JSON.stringify({
         model: this.model,
         stream: false,
-        think: false,
-        options: { temperature: 0.2, num_predict: 6_000 },
+        // DeepSeek-R1 reasons whatever `think` says: ask for it explicitly so the
+        // reasoning stays out of the JSON, and give it room on top of the answer.
+        think: alwaysThinks(this.model),
+        options: { temperature: 0.2, num_predict: 6_000 + (alwaysThinks(this.model) ? 4_096 : 0) },
         format: {
           type: "object",
           properties: { translations: { type: "array", items: { type: "string" }, minItems: items.length, maxItems: items.length } },
@@ -104,7 +108,7 @@ export class LocalTranslator implements Translator {
     });
     if (!res.ok) throw new Error(`Translation (local ${this.model}) failed: ${res.status} ${(await res.text()).slice(0, 200)}`);
     const json = (await res.json()) as { message?: { content?: string } };
-    const parsed = JSON.parse(json.message?.content ?? "{}") as { translations?: unknown };
+    const parsed = JSON.parse(stripThinking(json.message?.content ?? "") || "{}") as { translations?: unknown };
     if (!Array.isArray(parsed.translations)) throw new Error("Translation returned no list");
     return parsed.translations.map((t) => String(t ?? "").trim());
   }
@@ -169,8 +173,8 @@ export class AzureTranslator implements Translator {
 /** The translator chosen at /admin (mock in tests and offline demos). */
 export async function getTranslator(): Promise<Translator> {
   if (getEnv().AI_PROVIDER === "mock" && mockProvidersAllowed()) return new MockTranslator();
-  const { provider } = await getActiveTranslator();
-  return provider === "azure" ? new AzureTranslator() : new LocalTranslator();
+  const { provider, model } = await getActiveTranslator();
+  return provider === "azure" ? new AzureTranslator() : new LocalTranslator(model ?? undefined);
 }
 
 /** Which translator getTranslator() returns, for the list of offered languages. */

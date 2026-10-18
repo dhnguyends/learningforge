@@ -21,6 +21,22 @@ vi.hoisted(() => {
   process.env.GEMINI_API_KEY = "test-gemini-key-not-real";
 });
 
+// Never ask the developer's real Ollama: the installed models are faked.
+vi.mock("@/lib/ai/ollama", async (orig) => ({
+  ...(await orig<typeof import("@/lib/ai/ollama")>()),
+  installedModels: vi.fn(async () => [
+    { name: "gemma4:latest", label: "Gemma 4", parameterSize: "7.5B", sizeBytes: 6e9, capabilities: ["completion"], generation: true },
+  ]),
+  clearOllamaGpu: vi.fn(async () => ({ unloaded: [], stillLoaded: [], usedBeforeMiB: null, usedAfterMiB: null, totalMiB: null })),
+}));
+
+// The AI model is in the cloud here, so any installed local model may translate
+// (whatever AI model the developer chose live).
+vi.mock("@/lib/ai/settings", async (orig) => ({
+  ...(await orig<typeof import("@/lib/ai/settings")>()),
+  getActiveAi: vi.fn(async () => ({ provider: "gemini", model: "gemini-3.8-flash", source: "admin" })),
+}));
+
 const req = (method: "GET" | "PUT" | "POST", body?: unknown) =>
   new NextRequest("http://localhost/api/admin/x", {
     method,
@@ -73,7 +89,7 @@ describe("admin translator and text-to-speech", () => {
     const res = await getTts(req("GET"), {} as never);
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.translator.options.map((o: { id: string }) => o.id)).toEqual(["local", "azure"]);
+    expect(body.translator.options.map((o: { id: string }) => o.id)).toEqual(["local:gemma4:latest", "azure"]);
     expect(body.translator.options.find((o: { id: string }) => o.id === "azure")).toMatchObject({ configured: false, missingKey: "AZURE_TRANSLATOR_KEY" });
     expect(body.tts.options.map((o: { id: string }) => o.id)).toEqual(["kokoro", "piper", "azure", "gemini"]);
     expect(body.tts.options.find((o: { id: string }) => o.id === "gemini")).toMatchObject({ configured: true });

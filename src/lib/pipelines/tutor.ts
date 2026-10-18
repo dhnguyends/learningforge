@@ -3,9 +3,10 @@ import { getGenerator } from "@/lib/ai";
 import { searchChunks, formatRetrievedContext, type RetrievedChunk } from "@/lib/retrieval";
 import { createAnchorsForChunks } from "@/lib/pipelines/anchors";
 import { tutorResponseSchema, type TutorResponse } from "@/lib/pipelines/schemas";
-import { TUTOR_SYSTEM, TUTOR_USER, PROMPT_VERSION } from "@/lib/prompts";
+import { TUTOR_SYSTEM, TUTOR_SYSTEM_GENERAL, TUTOR_USER, PROMPT_VERSION } from "@/lib/prompts";
 import { extractInlineChunkIds, resolveChunkRef } from "@/lib/pipelines/validation";
 import { audit } from "@/lib/audit";
+import { aiLabel } from "@/lib/ai/settings";
 
 export type TutorMode = "answer" | "hint" | "explain_differently" | "show_source" | "challenge" | "reveal_solution";
 
@@ -17,13 +18,23 @@ export interface TutorResult {
   followUpQuestion: string;
   warnings: string[];
   anchors: Array<{ id: string; excerpt: string; sourceTitle: string; sourceId: string }>;
+  /** false: the learner turned source search off; the answer is general knowledge. */
+  sourceSearch: boolean;
 }
 
 export async function answerTutorMessage(opts: {
   conversationId: string;
   question: string;
   mode: TutorMode;
+  /**
+   * Search the study set's sources (RAG, the default). false: no semantic
+   * search and no passages in the prompt; the tutor answers from general
+   * knowledge, labelled as such, without citations.
+   */
+  sourceSearch?: boolean;
 }): Promise<TutorResult> {
+  const sourceSearch = opts.sourceSearch !== false;
+  if (!sourceSearch && opts.mode === "show_source") throw new Error("Show source needs source search");
   const conversation = await prisma.tutorConversation.findUnique({
     where: { id: opts.conversationId },
     include: {
@@ -36,11 +47,12 @@ export async function answerTutorMessage(opts: {
   const allowExternal = settings.includeExternal === true;
 
   // Retrieve evidence (the "R" in RAG) — conversation-aware, see retrieveForTutor.
+  // Skipped entirely when the learner turned source search off.
   const previousQuestion = conversation.messages.find((m) => m.role === "USER")?.content;
-  const chunks: RetrievedChunk[] = await retrieveForTutor(conversation.studySet.id, opts.question, previousQuestion);
+  const chunks: RetrievedChunk[] = sourceSearch ? await retrieveForTutor(conversation.studySet.id, opts.question, previousQuestion) : [];
 
   await prisma.tutorMessage.create({
-    data: { conversationId: opts.conversationId, role: "USER", content: opts.question },
+    data: { conversationId: opts.conversationId, role: "USER", content: opts.question, metadata: { sourceSearch } },
   });
 
   const conversationExcerpt = conversation.messages
@@ -51,18 +63,19 @@ export async function answerTutorMessage(opts: {
   const hintsUsed = opts.mode === "hint" ? conversation.hintsUsed + 1 : conversation.hintsUsed;
 
   const result = await (await getGenerator()).generate({
-    system: TUTOR_SYSTEM,
+    system: sourceSearch ? TUTOR_SYSTEM : TUTOR_SYSTEM_GENERAL,
     user: TUTOR_USER({
       studySetTitle: conversation.studySet.title,
       mode: opts.mode,
       question: opts.question,
       hintsUsed,
       allowExternal,
-      chunkContext: formatRetrievedContext(chunks),
+      chunkContext: sourceSearch ? formatRetrievedContext(chunks) : "",
       conversationExcerpt,
+      sourcesOff: !sourceSearch,
     }),
     schema: tutorResponseSchema,
-    mock: () => mockTutor(opts.mode, opts.question, chunks, hintsUsed, allowExternal),
+    mock: () => (sourceSearch ? mockTutor(opts.mode, opts.question, chunks, hintsUsed, allowExternal) : mockGeneralTutor(opts.mode)),
   });
   const data = result.data;
 
@@ -81,11 +94,18 @@ export async function answerTutorMessage(opts: {
   const citedChunks = citations.map((c) => chunks.find((ch) => ch.id === c.chunkId)!).filter(Boolean);
   const anchorIds = await createAnchorsForChunks(citedChunks.slice(0, 5));
 
-  // Honest labels: an answer that cites nothing cannot claim to come from the sources.
-  const foundInSources = data.foundInSources && citedChunks.length > 0;
-  const claimType = data.claimType === "source_grounded" && citedChunks.length === 0 ? "inference" : data.claimType;
+  // Honest labels: an answer that cites nothing cannot claim to come from the
+  // sources; with source search off it is general knowledge, whatever the model says.
+  const foundInSources = sourceSearch && data.foundInSources && citedChunks.length > 0;
+  const claimType = !sourceSearch
+    ? "external"
+    : data.claimType === "source_grounded" && citedChunks.length === 0
+      ? "inference"
+      : data.claimType;
   const warnings =
-    claimType !== data.claimType ? [...data.warnings, "No source passage was cited for this answer — verify it against your materials."] : data.warnings;
+    sourceSearch && claimType !== data.claimType
+      ? [...data.warnings, "No source passage was cited for this answer — verify it against your materials."]
+      : data.warnings;
   const answer = inline.content;
 
   const message = await prisma.tutorMessage.create({
@@ -98,8 +118,12 @@ export async function answerTutorMessage(opts: {
       metadata: {
         foundInSources,
         warnings,
+        sourceSearch,
         retrievalScores: chunks.slice(0, 5).map((c) => ({ chunkId: c.id, score: Number(c.score.toFixed(3)) })),
         provider: result.provider,
+        // The model that wrote this answer, for the timer's tooltip ("DeepSeek-R1 8B · local").
+        model: result.model,
+        modelLabel: aiLabel({ provider: result.provider as never, model: result.model }),
         promptVersion: PROMPT_VERSION,
       },
       anchors: { connect: anchorIds.map((id) => ({ id })) },
@@ -114,7 +138,7 @@ export async function answerTutorMessage(opts: {
     action: "ai.generation",
     entityType: "tutor_conversation",
     entityId: opts.conversationId,
-    metadata: { type: "tutor", mode: opts.mode, provider: result.provider, citedChunks: citations.length },
+    metadata: { type: "tutor", mode: opts.mode, provider: result.provider, citedChunks: citations.length, sourceSearch },
   });
 
   const chunkTitles = new Map(chunks.map((c) => [c.id, c.sourceTitle]));
@@ -131,6 +155,7 @@ export async function answerTutorMessage(opts: {
       sourceTitle: chunkTitles.get(c.id) ?? "Source",
       sourceId: c.sourceId,
     })),
+    sourceSearch,
   };
 }
 
@@ -181,6 +206,17 @@ export function extractCitationsFromProse(text: string, chunkIds: string[]): { c
   bare.ids.forEach(add);
   content = bare.content.replace(/[ \t]+([.,;:!?])/g, "$1");
   return { content, ids };
+}
+
+function mockGeneralTutor(mode: TutorMode): TutorResponse {
+  return {
+    answer: `${mode === "hint" ? "A hint, from general knowledge:" : "From general knowledge (your sources were not searched):"} think about what the question asks you to relate, and which definition connects the two.\n\n*(Offline mock tutor — configure AI_PROVIDER for real answers.)*`,
+    claimType: "external",
+    citations: [],
+    followUpQuestion: "Want to check this against your sources? Turn source search back on.",
+    foundInSources: false,
+    warnings: [],
+  };
 }
 
 function mockTutor(mode: TutorMode, question: string, chunks: RetrievedChunk[], hintsUsed: number, allowExternal: boolean): TutorResponse {

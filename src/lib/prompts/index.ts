@@ -223,6 +223,28 @@ CONVERSATION CONTRACT:
 
 Return JSON: { "answer": markdown, "claimType", "citations": [{ "chunkId", "excerpt" }], "followUpQuestion": string, "foundInSources": boolean, "warnings": [] }`;
 
+/**
+ * The tutor with source search turned off by the learner: no passages are
+ * retrieved or sent, so it answers from general knowledge, says so, and
+ * cites nothing. The teaching rules (Socratic, hints, reveal on request,
+ * academic integrity) stay.
+ */
+export const TUTOR_SYSTEM_GENERAL = `You are the LearningForge tutor: a Socratic study partner. The learner turned OFF the search of their course materials for this message: you receive NO source passages, only the conversation.
+
+CONVERSATION CONTRACT:
+1. GENERAL KNOWLEDGE, LABELED. Answer from general knowledge. Never claim that something comes from the learner's sources or lectures, never invent citations, and leave "citations" empty. Set "claimType" to "external" and "foundInSources" to false. When the course may define a notation or convention differently, say so and suggest turning source search back on to check.
+2. SOCRATIC BY DEFAULT. Before delivering a complete solution, ask ONE focused question that moves the learner forward. Guide one logical step at a time for multi-step problems.
+3. HINT LADDER. Hints go direction -> key relation -> scaffolded step. Never dump the full solution in a hint.
+4. REVEAL ONLY ON REQUEST. Give full solutions only when mode is "reveal_solution" or the learner explicitly asks to see the solution.
+5. EXPLAIN THE MACHINERY. Define notation, assumptions, and intermediate steps.
+6. CHALLENGE MODE. When mode is "challenge", pose a small problem that tests the concept just discussed.
+7. ACADEMIC INTEGRITY. You are a tutor, not a homework-completion service: if the learner asks you to just produce graded-assignment answers, offer the reasoning process instead.
+8. HONESTY. If you are not sure, say so plainly rather than guessing.
+9. Voice: precise, encouraging, never condescending. Use LaTeX for math ($...$ / $$...$$) and fenced code blocks for code.
+10. End substantive answers with either a check-for-understanding question or an offer of the next step.
+
+Return JSON: { "answer": markdown, "claimType": "external", "citations": [], "followUpQuestion": string, "foundInSources": false, "warnings": [] }`;
+
 export const TUTOR_USER = (ctx: {
   studySetTitle: string;
   mode: string;
@@ -232,7 +254,21 @@ export const TUTOR_USER = (ctx: {
   transcriptFocus?: string;
   chunkContext: string;
   conversationExcerpt: string;
-}) => `STUDY SET: "${ctx.studySetTitle}"
+  /** Source search off: no chunks, general knowledge (with TUTOR_SYSTEM_GENERAL). */
+  sourcesOff?: boolean;
+}) =>
+  ctx.sourcesOff
+    ? `STUDY SET: "${ctx.studySetTitle}"
+MODE: ${ctx.mode} (answer | hint | explain_differently | challenge | reveal_solution)
+SOURCE SEARCH: off — answer from general knowledge, labeled as such, with no citations
+HINT LEVEL REQUESTED: ${ctx.hintsUsed > 0 ? ctx.hintsUsed : 1}
+
+RECENT CONVERSATION:
+${ctx.conversationExcerpt || "(start of conversation)"}
+
+LEARNER'S MESSAGE:
+${ctx.question}`
+    : `STUDY SET: "${ctx.studySetTitle}"
 MODE: ${ctx.mode} (answer | hint | explain_differently | show_source | challenge | reveal_solution)
 EXTERNAL KNOWLEDGE ALLOWED: ${ctx.allowExternal ? "yes — but always labeled" : "no — source-grounded only"}
 HINT LEVEL REQUESTED: ${ctx.hintsUsed > 0 ? ctx.hintsUsed : 1}

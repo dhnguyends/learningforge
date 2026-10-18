@@ -385,6 +385,8 @@ test("user and admin guides: PolyLingue, teaching and administration", async ({ 
   await step("admin ai", async () => {
     await tab("AI model");
     await settle(a.page, 180_000);
+    // The GPU memory panel loads after the cards.
+    await a.page.getByRole("region", { name: "GPU memory" }).waitFor({ timeout: 60_000 }).catch(() => undefined);
     await shot(a.page, "admin/02-ai-model.png", { full: true });
   });
   await step("admin courses", async () => {

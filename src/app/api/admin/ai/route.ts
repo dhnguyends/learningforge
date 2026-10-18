@@ -3,6 +3,8 @@ import { audit } from "@/lib/audit";
 import { getEnv } from "@/lib/env";
 import { aiChoiceSchema, aiSettingsView, geminiConfigured, getStoredAiChoice, localModelProblem, saveAiChoice, zaiConfigured } from "@/lib/ai/settings";
 import { switchLocalModel } from "@/lib/ai/ollama";
+import { translatorFollowsAiModel } from "@/lib/speech/settings";
+import { releaseUnusedLocalModels } from "@/lib/ai/gpu-policy";
 
 /**
  * The generation model used by every pipeline, chosen by an administrator.
@@ -34,6 +36,17 @@ export const PUT = apiHandler(async (req) => {
   const previous = await getStoredAiChoice();
   await saveAiChoice(choice, admin.user.id);
   const gpu = localModel ? await switchLocalModel(localModel, env) : null;
+  // One model on the GPU: a local translator on another model moves to this one.
+  const translatorFollowed = localModel ? await translatorFollowsAiModel(localModel, admin.user.id) : null;
+  if (translatorFollowed) {
+    await audit({
+      userId: admin.user.id,
+      action: "admin.translator_model",
+      entityType: "app_setting",
+      entityId: "translator",
+      metadata: { from: { provider: "local", model: translatorFollowed.from }, to: { provider: "local", model: translatorFollowed.to }, reason: "follows the AI model" },
+    });
+  }
   await audit({
     userId: admin.user.id,
     action: "admin.ai_model",
@@ -41,5 +54,7 @@ export const PUT = apiHandler(async (req) => {
     entityId: "ai",
     metadata: { from: previous, to: choice, ...(gpu ? { unloaded: gpu.unloaded.map((m) => m.name), loaded: gpu.loaded } : {}) },
   });
-  return ok({ ...(await aiSettingsView()), gpu });
+  // A cloud model: unload the local language models nothing uses any more.
+  const gpuFreed = localModel ? null : await releaseUnusedLocalModels();
+  return ok({ ...(await aiSettingsView()), gpu, translatorFollowed, gpuFreed });
 });

@@ -2,6 +2,8 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { getEnv, type Env } from "@/lib/env";
 import type { SourceLanguage } from "@/lib/language";
+import { getActiveAi, localModelOptions, localModelProblem, ollamaModelName } from "@/lib/ai/settings";
+import { localModelLabel, sameModel } from "@/lib/ai/ollama";
 
 /**
  * Translator and text-to-speech choices made at /admin → AI model, stored in
@@ -12,13 +14,45 @@ import type { SourceLanguage } from "@/lib/language";
 // ---------------------------------------------------------------- translator
 
 export const TRANSLATOR_PROVIDERS = {
-  local: { label: "Gemma 4 — local (Ollama)", note: "Private and free; slower on long lectures.", cloud: null },
+  local: { label: "Local model (Ollama)", note: "Private and free; slower on long lectures.", cloud: null },
   azure: { label: "Azure AI Translator — cloud", note: "Fast and consistent; about $10 per 1M characters, free tier available.", cloud: "Microsoft Azure" },
 } as const;
 export type TranslatorProvider = keyof typeof TRANSLATOR_PROVIDERS;
 
-export const translatorChoiceSchema = z.object({ provider: z.enum(["local", "azure"]) });
+/**
+ * "local" translates with an installed Ollama model (`model`; the AI model's
+ * when it is local, else LOCAL_AI_MODEL, when absent). One language model on
+ * the GPU: while the AI model is local, a local translator uses that same
+ * model — any other would unload it at every translation.
+ */
+export const translatorChoiceSchema = z.object({ provider: z.enum(["local", "azure"]), model: ollamaModelName.optional() });
 export type TranslatorChoice = z.infer<typeof translatorChoiceSchema>;
+
+/** The AI model's local model, when the AI model is local (null for a cloud model). */
+export async function aiLocalModel(): Promise<string | null> {
+  const ai = await getActiveAi();
+  return ai.provider === "local" ? ai.model : null;
+}
+
+/**
+ * Why a translator choice cannot be used (a local model other than the local
+ * AI model, not installed, Ollama down), or null. `model` is the local model
+ * it resolves to.
+ */
+export async function translatorChoiceProblem(choice: TranslatorChoice, env: Env = getEnv()): Promise<{ problem: string | null; model: string | null }> {
+  if (choice.provider === "azure") {
+    return { problem: translatorConfigured("azure", env) ? null : "Set AZURE_TRANSLATOR_KEY in the server environment before selecting Azure AI Translator", model: null };
+  }
+  const ai = await aiLocalModel();
+  const model = choice.model ?? ai ?? env.LOCAL_AI_MODEL;
+  if (ai && !sameModel(model, ai)) {
+    return {
+      problem: `The AI model is ${localModelLabel(ai)} (${ai}): a local translator must use the same model, or the GPU would unload one for the other. Choose ${localModelLabel(ai)} or Azure AI Translator.`,
+      model,
+    };
+  }
+  return { problem: await localModelProblem(model, env), model };
+}
 
 export function translatorConfigured(provider: TranslatorProvider, env: Env = getEnv()): boolean {
   return provider === "local" || Boolean(env.AZURE_TRANSLATOR_KEY?.trim());
@@ -116,14 +150,40 @@ async function writeSetting(key: string, value: object, userId: string): Promise
 }
 
 export const saveTranslatorChoice = (c: TranslatorChoice, userId: string) => writeSetting("translator", c, userId);
+
+/** Drops the in-process memo (tests, and after a restore). */
+export function invalidateSpeechSettings(): void {
+  memo.clear();
+}
 export const saveTtsChoice = (c: TtsChoice, userId: string) => writeSetting("tts", c, userId);
 
-/** Active translator: the admin's choice when usable, otherwise local Gemma. */
-export async function getActiveTranslator(): Promise<{ provider: TranslatorProvider; source: "admin" | "default" | "fallback" }> {
-  const stored = await readSetting("translator", translatorChoiceSchema);
-  if (!stored) return { provider: "local", source: "default" };
-  if (!translatorConfigured(stored.provider)) return { provider: "local", source: "fallback" };
-  return { provider: stored.provider, source: "admin" };
+export const getStoredTranslatorChoice = () => readSetting("translator", translatorChoiceSchema);
+
+/**
+ * Active translator: the admin's choice when usable, otherwise local. A local
+ * translator runs the AI model's local model when the AI model is local (one
+ * model on the GPU), else its stored model, else LOCAL_AI_MODEL.
+ */
+export async function getActiveTranslator(): Promise<{ provider: TranslatorProvider; model: string | null; source: "admin" | "default" | "fallback" }> {
+  const stored = await getStoredTranslatorChoice();
+  const local = async () => (await aiLocalModel()) ?? stored?.model ?? getEnv().LOCAL_AI_MODEL;
+  if (!stored) return { provider: "local", model: await local(), source: "default" };
+  if (!translatorConfigured(stored.provider)) return { provider: "local", model: await local(), source: "fallback" };
+  return { provider: stored.provider, model: stored.provider === "local" ? await local() : null, source: "admin" };
+}
+
+/**
+ * After the AI model moved to local model `model`: a stored local translator
+ * on another model follows it (one model on the GPU). Returns the change, or
+ * null when nothing had to change.
+ */
+export async function translatorFollowsAiModel(model: string, userId: string): Promise<{ from: string; to: string } | null> {
+  const stored = await getStoredTranslatorChoice();
+  if (!stored || stored.provider !== "local") return null;
+  const from = stored.model ?? getEnv().LOCAL_AI_MODEL;
+  if (sameModel(from, model)) return null;
+  await saveTranslatorChoice({ provider: "local", model }, userId);
+  return { from, to: model };
 }
 
 /** Active read-aloud model and voices: the admin's choice when usable, otherwise Kokoro. */
@@ -138,16 +198,44 @@ export async function getActiveTts(): Promise<TtsChoice & { source: "admin" | "d
 /** What /admin shows. Never any key. */
 export async function speechSettingsView() {
   const env = getEnv();
-  const [translator, tts] = await Promise.all([getActiveTranslator(), getActiveTts()]);
+  const [translator, tts, ai, locals] = await Promise.all([getActiveTranslator(), getActiveTts(), aiLocalModel(), localModelOptions(env)]);
+  const localNote = (name: string) =>
+    /deepseek-r1/i.test(name)
+      ? "Private and free; reasons before translating, so much slower."
+      : TRANSLATOR_PROVIDERS.local.note;
   return {
     translator: {
       active: translator,
-      options: (Object.keys(TRANSLATOR_PROVIDERS) as TranslatorProvider[]).map((id) => ({
-        id,
-        ...TRANSLATOR_PROVIDERS[id],
-        configured: translatorConfigured(id, env),
-        missingKey: id === "azure" ? "AZURE_TRANSLATOR_KEY" : null,
-      })),
+      /** The AI model's local model: the only local model a translator may use (null: the AI model is in the cloud). */
+      aiLocalModel: ai,
+      options: [
+        // One option per local chat model installed in Ollama (Gemma 4, DeepSeek-R1…).
+        ...locals.map((m) => ({
+          id: `local:${m.name}`,
+          provider: "local" as TranslatorProvider,
+          model: m.name as string | null,
+          label: `${m.label} — local (Ollama)`,
+          note: localNote(m.name),
+          cloud: null as string | null,
+          configured: m.installed,
+          missingKey: m.installed ? null : "a running Ollama",
+          blockedBy:
+            ai && !sameModel(m.name, ai)
+              ? `The AI model is ${localModelLabel(ai)}: a local translator must use the same model (one model on the GPU).`
+              : null,
+        })),
+        {
+          id: "azure",
+          provider: "azure" as TranslatorProvider,
+          model: null as string | null,
+          label: TRANSLATOR_PROVIDERS.azure.label,
+          note: TRANSLATOR_PROVIDERS.azure.note,
+          cloud: TRANSLATOR_PROVIDERS.azure.cloud as string | null,
+          configured: translatorConfigured("azure", env),
+          missingKey: "AZURE_TRANSLATOR_KEY" as string | null,
+          blockedBy: null as string | null,
+        },
+      ],
     },
     tts: {
       active: tts,

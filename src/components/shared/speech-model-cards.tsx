@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { freedSummary } from "@/components/shared/gpu-report";
 import {
   useSaveTranslatorChoice,
   useSaveTtsChoice,
@@ -102,6 +103,10 @@ function OptionRow({
   );
 }
 
+/** "gemma4" and "gemma4:latest" are the same Ollama model. */
+const normModel = (m: string) => (m.includes(":") ? m : `${m}:latest`).toLowerCase();
+const translatorOptionId = (provider: string, model: string | null) => (provider === "azure" ? "azure" : `local:${normModel(model ?? "")}`);
+
 /**
  * Translator used to make French sources bilingual (English passages for
  * search, English transcript for the reader). Local Gemma 4 by default.
@@ -110,22 +115,26 @@ export function TranslatorCard() {
   const { data, isLoading, error } = useSpeechSettings();
   const save = useSaveTranslatorChoice();
   const test = useTestTranslator();
-  const [selected, setSelected] = useState<TranslatorChoiceInput["provider"] | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
   const [result, setResult] = useState<TranslatorTestResult | null>(null);
 
   if (isLoading) return <Loading />;
   if (error || !data) return <LoadError message={error?.message} />;
 
   const { translator } = data;
-  const active = translator.active.provider;
+  const options = translator.options.map((o) => ({ ...o, key: translatorOptionId(o.provider, o.model) }));
+  const active = translatorOptionId(translator.active.provider, translator.active.model);
   const current = selected ?? active;
-  const chosen = translator.options.find((o) => o.id === current) ?? translator.options[0];
-  const cloud = chosen.cloud ?? translator.options.find((o) => o.id === active)?.cloud ?? null;
+  const chosen = options.find((o) => o.key === current) ?? options.find((o) => o.key === active) ?? options[0];
+  const usable = (o: (typeof options)[number]) => o.configured && !o.blockedBy;
+  const cloud = chosen.cloud ?? options.find((o) => o.key === active)?.cloud ?? null;
+  const choiceOf = (o: (typeof options)[number]): TranslatorChoiceInput =>
+    o.provider === "azure" ? { provider: "azure" } : { provider: "local", model: o.model ?? undefined };
 
   async function onTest() {
     setResult(null);
     try {
-      setResult(await test.mutateAsync({ provider: chosen.id }));
+      setResult(await test.mutateAsync(choiceOf(chosen)));
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Test failed");
     }
@@ -133,10 +142,10 @@ export function TranslatorCard() {
 
   async function onSave() {
     try {
-      await save.mutateAsync({ provider: chosen.id });
+      const saved = await save.mutateAsync(choiceOf(chosen));
       setSelected(null);
       setResult(null);
-      toast.success(`Translator set to ${chosen.label}`);
+      toast.success(`Translator set to ${chosen.label}`, saved.gpuFreed?.unloaded.length ? { description: freedSummary(saved.gpuFreed) } : undefined);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not save");
     }
@@ -161,21 +170,28 @@ export function TranslatorCard() {
           </p>
         )}
 
+        {translator.aiLocalModel && (
+          <p className="text-xs text-muted-foreground">
+            One model on the GPU: while the AI model is local ({translator.aiLocalModel}), a local translator uses the same
+            model; choose it or Azure. Switching the AI model to another local model moves a local translator with it.
+          </p>
+        )}
+
         <fieldset className="space-y-2">
           <legend className="sr-only">Translation model</legend>
-          {translator.options.map((o) => (
+          {options.map((o) => (
             <OptionRow
-              key={o.id}
+              key={o.key}
               name="translator"
-              value={o.id}
-              checked={o.id === current}
-              disabled={!o.configured}
+              value={o.key}
+              checked={o.key === current}
+              disabled={!usable(o)}
               cloud={o.cloud}
               label={o.label}
-              note={o.configured ? o.note : `Set ${o.missingKey} in the server .env to enable.`}
-              inUse={o.id === active}
+              note={o.blockedBy ?? (o.configured ? o.note : o.provider === "azure" ? `Set ${o.missingKey} in the server .env to enable.` : "Ollama is not reachable: start it to use local models.")}
+              inUse={o.key === active}
               onSelect={() => {
-                setSelected(o.id);
+                setSelected(o.key);
                 setResult(null);
               }}
             />
@@ -208,11 +224,11 @@ export function TranslatorCard() {
         )}
 
         <div className="flex flex-wrap justify-end gap-2">
-          <Button variant="outline" onClick={onTest} disabled={!chosen.configured || test.isPending}>
+          <Button variant="outline" onClick={onTest} disabled={!usable(chosen) || test.isPending}>
             {test.isPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden="true" /> : <PlugZap className="mr-1.5 h-4 w-4" aria-hidden="true" />}
             Test translation
           </Button>
-          <Button onClick={onSave} disabled={!chosen.configured || chosen.id === active || save.isPending}>
+          <Button onClick={onSave} disabled={!usable(chosen) || chosen.key === active || save.isPending}>
             {save.isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden="true" />}
             Use this translator
           </Button>

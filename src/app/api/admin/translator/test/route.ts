@@ -1,6 +1,6 @@
 import { apiHandler, ok, parseJsonBody, requireAdmin, badRequest } from "@/lib/api";
 import { AzureTranslator, LocalTranslator } from "@/lib/translation";
-import { translatorChoiceSchema, translatorConfigured } from "@/lib/speech/settings";
+import { translatorChoiceProblem, translatorChoiceSchema } from "@/lib/speech/settings";
 
 /**
  * "Test": translates one fixed French sentence with the candidate model so an
@@ -11,8 +11,9 @@ const SAMPLE = "La dérivée d'une fonction mesure la vitesse à laquelle sa val
 export const POST = apiHandler(async (req) => {
   await requireAdmin();
   const choice = await parseJsonBody(req, translatorChoiceSchema);
-  if (!translatorConfigured(choice.provider)) throw badRequest("AZURE_TRANSLATOR_KEY is not set");
-  const translator = choice.provider === "azure" ? new AzureTranslator() : new LocalTranslator();
+  const { problem, model } = await translatorChoiceProblem(choice);
+  if (problem) throw badRequest(problem);
+  const translator = choice.provider === "azure" ? new AzureTranslator() : new LocalTranslator(model ?? undefined);
   const started = Date.now();
   try {
     const [text] = await translator.translate([SAMPLE], "fr", "en");

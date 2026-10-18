@@ -85,13 +85,23 @@ The model that writes study guides, flashcards, quizzes, exercises, feedback, th
 
 The graphics card holds one local language model at a time. **Choosing a local model** first unloads every other model from the GPU (Gemma 4, the embeddings model…), checks that they are gone, then loads the chosen one; the card reports what was freed, for example *Unloaded gemma4:latest (6.1 GB). GPU memory 7.7 → 1.9 GB. deepseek-r1:8b loaded: 8.7 GB.*
 
+The rule is **one local language model in GPU memory at a time**:
+
+- **A second local model is never loaded next to the first**: choosing a local AI model unloads the others first; a job or a translation that needs another local model unloads the current one first, and waits until it is gone.
+- **Only cloud models chosen** (AI model and translator both in the cloud): saving that choice unloads the local language models at once, instead of after Ollama's 5-minute keep-alive, and the card reports the memory freed (for example *Unloaded gemma4:latest. GPU memory 7.3 GB → 2.2 GB.*). A local translator keeps its own model.
+- The small **embeddings model** (about 0.6 GB) always stays: search needs it.
+
 The **GPU memory** panel shows the memory in use (all programs, including speech recognition) and the models Ollama holds, refreshed every 10 seconds. **Free GPU memory** unloads them all; the next job loads what it needs.
 
 ### Translator and read-aloud
 
 Further down the same tab:
 
-- **Translator**: local Gemma 4 (private, free, about 35 languages) or **Azure AI Translator** (about 140 languages, paid per character). **Test translation** before switching.
+- **Translator**: a **local model** through Ollama (every installed chat model is listed: Gemma 4, DeepSeek-R1…; private, free, about 35 languages) or **Azure AI Translator** (about 140 languages, paid per character). **Test translation** before switching.
+  - **One model on the GPU.** While the AI model is local, a local translator must use **the same model**: the other local models are greyed out with the reason, and Azure stays available. (Two different models would unload each other from the GPU at every translation.)
+  - **Switching the AI model** to another local model moves a local translator with it (*The translator now uses deepseek-r1:8b too*). An Azure translator stays on Azure.
+  - With a **cloud AI model** (Gemini, GLM), any installed local model may translate.
+  - DeepSeek-R1 reasons before translating: correct, but much slower than Gemma 4.
 - **Text to speech** (read-aloud of sources and transcripts): **Kokoro** or **Piper** (local, free), **Azure Neural TTS** or **Gemini TTS** (cloud, paid). Choose the English and French voices and listen to a sample (🔊) before **Use these voices**.
 
 ---

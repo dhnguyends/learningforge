@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { prisma, jsonSafe } from "@/lib/db";
-import { apiHandler, ok, parseJsonBody, requireSession, notFound } from "@/lib/api";
+import { apiHandler, ok, parseJsonBody, requireSession, notFound, badRequest } from "@/lib/api";
 import { assertStudySetAccess } from "@/lib/access";
 import { answerTutorMessage, type TutorMode } from "@/lib/pipelines/tutor";
 import { rateLimit } from "@/lib/rate-limit";
@@ -27,6 +27,9 @@ export const GET = apiHandler<Ctx>(async (_req, { params }) => {
 const messageSchema = z.object({
   content: z.string().min(1).max(6000),
   mode: z.enum(["answer", "hint", "explain_differently", "show_source", "challenge", "reveal_solution"]).default("answer"),
+  // Semantic search of the study set's sources (RAG). false: the message is
+  // sent without passages and answered from general knowledge.
+  sourceSearch: z.boolean().default(true),
 });
 
 export const POST = apiHandler<Ctx>(async (req, { params }) => {
@@ -39,10 +42,12 @@ export const POST = apiHandler<Ctx>(async (req, { params }) => {
   if (!limit.allowed) throw rateLimited(limit.retryAfterSec);
 
   const body = await parseJsonBody(req, messageSchema);
+  if (!body.sourceSearch && body.mode === "show_source") throw badRequest("Show source needs source search: turn it on, or pick another mode");
   const result = await answerTutorMessage({
     conversationId: conversation.id,
     question: body.content,
     mode: body.mode as TutorMode,
+    sourceSearch: body.sourceSearch,
   });
   return ok(jsonSafe({ reply: result }), { status: 201 });
 });

@@ -7,6 +7,7 @@ import { POST as testConnection } from "@/app/api/admin/ai/test/route";
 import { GET as gpuStatus, POST as freeGpu } from "@/app/api/admin/ai/gpu/route";
 import { clearOllamaGpu, switchLocalModel } from "@/lib/ai/ollama";
 import { getActiveAi, invalidateAiChoice } from "@/lib/ai/settings";
+import { saveTranslatorChoice, getStoredTranslatorChoice, invalidateSpeechSettings } from "@/lib/speech/settings";
 
 /**
  * Admin AI-model selector: ADMIN only (database role), allow-listed models,
@@ -46,9 +47,12 @@ let admin: TestUser;
 let user: TestUser;
 // The test shares the development database: keep whatever the developer chose.
 let saved: { value: unknown; updatedById: string | null } | null = null;
+// A local AI model change can move a local translator: keep that setting too.
+let savedTranslator: { value: unknown; updatedById: string | null } | null = null;
 
 beforeAll(async () => {
   saved = await prisma.appSetting.findUnique({ where: { key: "ai" }, select: { value: true, updatedById: true } });
+  savedTranslator = await prisma.appSetting.findUnique({ where: { key: "translator" }, select: { value: true, updatedById: true } });
   admin = await createTestUser("AI admin");
   await prisma.user.update({ where: { id: admin.id }, data: { role: "ADMIN", nature: "HUMAN" } }); // only Human accounts can be Admin
   user = await createTestUser("AI plain user");
@@ -65,6 +69,15 @@ afterAll(async () => {
       await prisma.appSetting.deleteMany({ where: { key: "ai" } });
     }
   }
+  const translator = await prisma.appSetting.findUnique({ where: { key: "translator" }, select: { updatedById: true } });
+  if (translator && translator.updatedById === admin.id) {
+    if (savedTranslator) {
+      await prisma.appSetting.update({ where: { key: "translator" }, data: { value: savedTranslator.value as object, updatedById: savedTranslator.updatedById } });
+    } else {
+      await prisma.appSetting.deleteMany({ where: { key: "translator" } });
+    }
+  }
+  invalidateSpeechSettings();
   await prisma.auditLog.deleteMany({ where: { userId: admin.id } });
   await disposeTestUser(admin.email);
   await disposeTestUser(user.email);
@@ -111,6 +124,21 @@ describe("admin AI model", () => {
     expect(switchLocalModel).not.toHaveBeenCalled();
   });
 
+  it("moves a local translator to the new local AI model (one model on the GPU)", async () => {
+    signInAs(admin.id);
+    await saveTranslatorChoice({ provider: "local", model: "gemma4:latest" }, admin.id);
+    const body = await (await PUT(req("PUT", { provider: "local", model: "deepseek-r1:8b" }), {} as never)).json();
+    expect(body.translatorFollowed).toEqual({ from: "gemma4:latest", to: "deepseek-r1:8b" });
+    expect(await getStoredTranslatorChoice()).toEqual({ provider: "local", model: "deepseek-r1:8b" });
+    const log = await prisma.auditLog.findFirst({ where: { userId: admin.id, action: "admin.translator_model" }, orderBy: { createdAt: "desc" } });
+    expect(log?.metadata).toMatchObject({ to: { provider: "local", model: "deepseek-r1:8b" }, reason: "follows the AI model" });
+
+    // Azure stays Azure.
+    await saveTranslatorChoice({ provider: "azure" }, admin.id);
+    expect((await (await PUT(req("PUT", { provider: "local", model: "gemma4:latest" }), {} as never)).json()).translatorFollowed).toBeNull();
+    expect(await getStoredTranslatorChoice()).toEqual({ provider: "azure" });
+  });
+
   it("shows what is in GPU memory and frees it on request, audited", async () => {
     signInAs(admin.id);
     expect(await (await gpuStatus(req("GET"), {} as never)).json()).toMatchObject({ ollamaReachable: true, loaded: [{ name: "deepseek-r1:8b" }] });
@@ -143,8 +171,11 @@ describe("admin AI model", () => {
 
   it("switches to GLM on Z.ai without exposing the key", async () => {
     signInAs(admin.id);
+    vi.mocked(clearOllamaGpu).mockClear();
     const res = await PUT(req("PUT", { provider: "zai" }), {} as never);
     expect(res.status).toBe(200);
+    // A cloud model: the local language models nothing uses are unloaded at once (embeddings stay).
+    expect(clearOllamaGpu).toHaveBeenCalledWith(expect.objectContaining({ keepEmbeddings: true }));
     const text = await res.text();
     expect(text).not.toContain("zai-test-key-not-real");
     expect(JSON.parse(text)).toMatchObject({

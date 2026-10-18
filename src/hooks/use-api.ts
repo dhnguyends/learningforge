@@ -233,6 +233,15 @@ export interface TutorMessageRow {
   claimType?: string | null;
   hintsUsed: number;
   anchors: AnchorRef[];
+  /** sourceSearch false: sent without searching the sources (general knowledge). */
+  metadata?: {
+    sourceSearch?: boolean;
+    provider?: string;
+    model?: string;
+    modelLabel?: string;
+    /** Time from sending the question to the answer on screen, saved by the browser. */
+    displayedMs?: number;
+  } | null;
   createdAt: string;
 }
 
@@ -701,6 +710,33 @@ export function useCreateConversation(studySetId: string) {
   );
 }
 
+/** Saves how long the learner waited for an answer (the timer under it), for later sessions. */
+export function useSaveAnswerTime(conversationId: string) {
+  return useLfMutation(
+    ({ messageId, displayedMs }: { messageId: string; displayedMs: number }) =>
+      api<{ displayedMs: number; saved: boolean }>(`/api/tutor/${conversationId}/messages/${messageId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ displayedMs }),
+      }),
+    () => [],
+  );
+}
+
+export function useRenameConversation(studySetId: string) {
+  return useLfMutation(
+    ({ id, title }: { id: string; title: string }) =>
+      api<{ conversation: TutorConversationRow }>(`/api/tutor/${id}`, { method: "PATCH", body: JSON.stringify({ title }) }),
+    () => [qk.tutor(studySetId)],
+  );
+}
+
+export function useDeleteConversation(studySetId: string) {
+  return useLfMutation(
+    (id: string) => api<{ deleted: boolean; messages: number }>(`/api/tutor/${id}`, { method: "DELETE" }),
+    () => [qk.tutor(studySetId), qk.studySet(studySetId)],
+  );
+}
+
 export interface TutorReply {
   userMessage: TutorMessageRow;
   reply: TutorMessageRow;
@@ -708,8 +744,14 @@ export interface TutorReply {
 
 export function useSendTutorMessage(studySetId: string, conversationId: string) {
   return useLfMutation(
-    (body: { content: string; mode?: "answer" | "hint" | "explain_differently" | "show_source" | "challenge" | "reveal_solution" }) =>
-      api<{ reply: TutorReply["reply"] }>(`/api/tutor/${conversationId}/messages`, { method: "POST", body: JSON.stringify(body) }),
+    (body: {
+      content: string;
+      mode?: "answer" | "hint" | "explain_differently" | "show_source" | "challenge" | "reveal_solution";
+      /** false: no semantic search of the sources (RAG off). */
+      sourceSearch?: boolean;
+    }) =>
+      // The reply carries the id of the stored answer (messageId).
+      api<{ reply: { messageId: string; answer: string } }>(`/api/tutor/${conversationId}/messages`, { method: "POST", body: JSON.stringify(body) }),
     () => [qk.tutorMessages(conversationId), qk.tutor(studySetId)],
   );
 }
@@ -955,8 +997,12 @@ export interface AdminGpuStatus {
 export function useSaveAiChoice() {
   return useLfMutation(
     (choice: AiChoiceInput) =>
-      api<AdminAiSettings & { gpu: LocalSwitchReport | null }>("/api/admin/ai", { method: "PUT", body: JSON.stringify(choice) }),
-    () => [adminAiKey, activeAiKey, adminGpuKey],
+      api<AdminAiSettings & { gpu: LocalSwitchReport | null; translatorFollowed: { from: string; to: string } | null; gpuFreed: GpuClearReport | null }>("/api/admin/ai", {
+        method: "PUT",
+        body: JSON.stringify(choice),
+      }),
+    // The translator may follow a local AI model, and its options depend on it.
+    () => [adminAiKey, activeAiKey, adminGpuKey, ["admin", "speech"]],
   );
 }
 
@@ -1041,8 +1087,13 @@ export function useSpeechSettings() {
 
 export function useSaveTranslatorChoice() {
   return useLfMutation(
-    (choice: TranslatorChoiceInput) => api<SpeechSettings>("/api/admin/translator", { method: "PUT", body: JSON.stringify(choice) }),
-    () => [adminSpeechKey],
+    (choice: TranslatorChoiceInput) =>
+      api<SpeechSettings & { gpuFreed: import("@/lib/ai/ollama").GpuClearReport | null }>("/api/admin/translator", {
+        method: "PUT",
+        body: JSON.stringify(choice),
+      }),
+    // The GPU panel changes when local models are unloaded.
+    () => [adminSpeechKey, ["admin", "ai", "gpu"]],
   );
 }
 

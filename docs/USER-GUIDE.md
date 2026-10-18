@@ -196,10 +196,12 @@ Each problem shows its type, whether it is **grounded in source**, an estimated 
 
 A study partner that answers **from your sources only**, with a citation for every claim. It leads with hints rather than solutions, and says plainly when something is not in your material.
 
-- **New conversation** starts a topic; past conversations are listed on the left.
+- **New conversation** starts a topic; past conversations are listed on the left. **Right-click a conversation** (or Shift+F10, or its **⋯** button) to **Rename…** it (the title in the list) or **Delete…** it with its messages, after a confirmation.
+- **Answer timer**: while the tutor answers, a timer (⏱ HH:MM:SS) counts the time since you sent your question; each answer then shows how long it took, until it was on your screen. **Hover the timer** to see which AI model wrote the answer (for example *Answered by Gemma 4 · local*); while you wait, it shows the model that is answering. The time and the model are saved with the answer, so you find them again in a later session.
 - Choose a mode under the conversation: **Ask**, **Hint**, **Explain differently**, **Show source**, **Challenge me** (a small problem on what you just discussed), or **Reveal solution** (it asks you to confirm: solutions stick better after your own attempt).
 - Each answer is labelled **Supported** or **Inference**, with its citations (click one to open the lecture at that moment).
 - Follow-up questions ("Why?") keep the context of the conversation.
+- **Search my sources** (the switch above the modes, on by default): when on, each question is searched in your sources (semantic search) and the tutor answers from the passages it finds, with citations. Turn it **off** to send your question without searching your sources: the tutor answers from general knowledge, the answer is labelled **General knowledge · sources not searched** and has no citations, and **Show source** is unavailable. The switch is remembered for each study set in this browser. General knowledge may use different notation or conventions than your course: turn the search back on to check against your material.
 - For a graded assignment, the tutor guides you through the reasoning instead of giving the answer.
 
 ---
