@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { freedSummary } from "@/components/shared/gpu-report";
+import { RunsOn, RunsOnHeader, type LocalHost } from "@/components/shared/runs-on";
 import {
   useSaveTranslatorChoice,
   useSaveTtsChoice,
@@ -63,6 +64,7 @@ function OptionRow({
   note,
   inUse,
   onSelect,
+  local,
 }: {
   name: string;
   value: string;
@@ -73,6 +75,8 @@ function OptionRow({
   note: string;
   inUse: boolean;
   onSelect: () => void;
+  /** Where a local option runs: Ollama (translators) or Speaches (voices). */
+  local: LocalHost;
 }) {
   return (
     <label
@@ -99,6 +103,7 @@ function OptionRow({
         </span>
         <span className="mt-0.5 block text-xs text-muted-foreground">{note}</span>
       </span>
+      <RunsOn cloud={cloud} local={local} className="mt-0.5" />
     </label>
   );
 }
@@ -179,6 +184,7 @@ export function TranslatorCard() {
 
         <fieldset className="space-y-2">
           <legend className="sr-only">Translation model</legend>
+          <RunsOnHeader />
           {options.map((o) => (
             <OptionRow
               key={o.key}
@@ -190,6 +196,7 @@ export function TranslatorCard() {
               label={o.label}
               note={o.blockedBy ?? (o.configured ? o.note : o.provider === "azure" ? `Set ${o.missingKey} in the server .env to enable.` : "Ollama is not reachable: start it to use local models.")}
               inUse={o.key === active}
+              local="Ollama"
               onSelect={() => {
                 setSelected(o.key);
                 setResult(null);
@@ -321,6 +328,7 @@ export function TtsCard() {
 
         <fieldset className="space-y-2">
           <legend className="sr-only">Text-to-speech model</legend>
+          <RunsOnHeader />
           {tts.options.map((o) => (
             <OptionRow
               key={o.id}
@@ -329,6 +337,7 @@ export function TtsCard() {
               checked={o.id === current.provider}
               disabled={!o.configured}
               cloud={o.cloud}
+              local="Speaches"
               label={o.label}
               note={o.configured ? o.note : `Set ${o.missingKey} in the server .env to enable.`}
               inUse={o.id === active.provider}

@@ -14,6 +14,8 @@ All notable changes to LearningForge.
 
 - **GPU memory released with cloud models.** Choosing cloud models for both the AI model and the translator now unloads the local language models at once (they used to stay up to 5 minutes, Ollama's keep-alive); a local translator keeps its model, and the embeddings model stays for search. The AI model and Translator cards report what was unloaded and the GPU memory before and after (measured with nvidia-smi: Ollama misreports some models' sizes, so per-model sizes are no longer shown).
 
+- **"Runs on" column** in every admin model list (AI model, Translator, Text to speech, PolyLingue voices): *Local · Ollama*, *Local · Speaches* or *Cloud · Google / Z.ai / Microsoft Azure*, with an icon; the PolyLingue voices show where the voice in use runs.
+
 ### Documentation
 - **User Guide** (`docs/USER-GUIDE.md`) and **Administrator and Teacher Guide** (`docs/ADMIN-GUIDE.md`), with screenshots of every page. `npm run guides:screenshots` takes them again from the running server (`scripts/guides/`), with temporary accounts that are deleted afterwards and other people's names replaced.
 

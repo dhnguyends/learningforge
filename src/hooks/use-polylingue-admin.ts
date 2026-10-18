@@ -13,7 +13,15 @@ export type LessonReview = Awaited<ReturnType<Review["lessonForReview"]>>;
 export type ReportGroup = Awaited<ReturnType<Review["reportQueue"]>>[number];
 export type PolyAnalytics = Awaited<ReturnType<typeof import("@/lib/polylingue/analytics").polylingueAnalytics>>;
 export interface VoicesView {
-  languages: { code: string; name: string; options: { key: string; label: string }[]; chosen: string | null; current: string | null }[];
+  languages: {
+    code: string;
+    name: string;
+    options: { key: string; label: string }[];
+    chosen: string | null;
+    current: string | null;
+    /** Cloud provider of the voice in use; null for a local (Speaches) voice. */
+    currentCloud: string | null;
+  }[];
 }
 
 const k = {

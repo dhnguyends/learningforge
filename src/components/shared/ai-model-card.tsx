@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { clearSummary, freedSummary, gb, gbMiB, switchSummary } from "@/components/shared/gpu-report";
+import { RunsOn, RunsOnHeader } from "@/components/shared/runs-on";
 import { cn } from "@/lib/utils";
 import {
   useAdminAiSettings,
@@ -175,6 +176,7 @@ export function AiModelCard() {
 
         <fieldset className="space-y-2" disabled={data.mockMode}>
           <legend className="sr-only">Generation model</legend>
+          <RunsOnHeader />
           {options.map((o) => (
             <label
               key={o.value}
@@ -206,6 +208,7 @@ export function AiModelCard() {
                   {o.missingKey ?? o.note}
                 </span>
               </span>
+              <RunsOn cloud={o.cloud} local="Ollama" className="mt-0.5" />
             </label>
           ))}
         </fieldset>

@@ -65,6 +65,8 @@ The table lists every account: name, email, role, nature, number of study sets, 
 
 ![AI model tab](images/admin/02-ai-model.png)
 
+Every model list (AI model, Translator, Text to speech, and PolyLingue › Voices & audio) has a **Runs on** column: **Local · Ollama** (language models on this computer), **Local · Speaches** (Kokoro and Piper voices on this computer), or **Cloud · Google / Z.ai / Microsoft Azure**. With a cloud model, text is sent to that provider; with a local one, nothing leaves the server.
+
 ### Generation model
 
 The model that writes study guides, flashcards, quizzes, exercises, feedback, the tutor's answers and PolyLingue lessons. Search embeddings are not affected. The change applies to the next generation, without a restart.

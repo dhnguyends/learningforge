@@ -2,21 +2,29 @@ import { z } from "zod";
 import { apiHandler, ok, parseJsonBody, requireAdmin, badRequest } from "@/lib/api";
 import { audit } from "@/lib/audit";
 import { readPolylingueVoices, savePolylingueVoices } from "@/lib/speech/settings";
-import { LOCAL_VOICES, isLocalVoiceKey, polylingueSpeaker } from "@/lib/polylingue/voices";
+import { LOCAL_VOICES, isLocalSpeaker, isLocalVoiceKey, polylingueSpeaker } from "@/lib/polylingue/voices";
+
+/** The cloud provider of a voice in use, or null for a local (Speaches) voice. */
+const cloudOf = (speakerId: string): string | null =>
+  speakerId.startsWith("azure") ? "Microsoft Azure" : speakerId.startsWith("gemini") ? "Google" : "cloud";
 import { TARGET_LANGUAGES } from "@/lib/polylingue/levels";
 
 async function view() {
   const chosen = await readPolylingueVoices();
   return {
     languages: await Promise.all(
-      TARGET_LANGUAGES.map(async (l) => ({
-        code: l.code,
-        name: l.name,
-        options: LOCAL_VOICES[l.code] ?? [],
-        chosen: chosen[l.code] ?? null,
+      TARGET_LANGUAGES.map(async (l) => {
         // The voice used now (the choice, or the read-aloud model).
-        current: (await polylingueSpeaker(l.code))?.label ?? null,
-      })),
+        const speaker = await polylingueSpeaker(l.code);
+        return {
+          code: l.code,
+          name: l.name,
+          options: LOCAL_VOICES[l.code] ?? [],
+          chosen: chosen[l.code] ?? null,
+          current: speaker?.label ?? null,
+          currentCloud: speaker && !isLocalSpeaker(speaker) ? cloudOf(speaker.id) : null,
+        };
+      }),
     ),
   };
 }

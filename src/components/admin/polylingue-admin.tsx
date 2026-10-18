@@ -1,5 +1,6 @@
 "use client";
 
+import { RunsOn, RunsOnHeader } from "@/components/shared/runs-on";
 import { useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, ArrowLeft, AudioLines, BarChart3, ChevronRight, EyeOff, Flag, Loader2, Pencil, Volume2 } from "lucide-react";
@@ -372,6 +373,7 @@ function VoicesPanel({ active }: { active: boolean }) {
           The voice of each language in PolyLingue. A local voice (Kokoro or Piper, free) is also used to generate each lesson&apos;s audio as soon as the lesson is
           written, so learners never wait. Without a choice, the read-aloud model of AI model is used and audio is made on first play.
         </p>
+        <RunsOnHeader />
         <ul className="divide-y divide-border/60">
           {data.languages.map((l) => (
             <li key={l.code} className="flex flex-wrap items-center gap-3 py-2 text-sm">
@@ -408,6 +410,7 @@ function VoicesPanel({ active }: { active: boolean }) {
                   aria-label={`Sample of the ${l.name} voice`}
                 />
               )}
+              {l.current && <RunsOn cloud={l.currentCloud} local="Speaches" className="ml-auto" />}
             </li>
           ))}
         </ul>
