@@ -2,7 +2,9 @@
 
 All notable changes to LearningForge.
 
-## Unreleased
+## 3.1 — 2026-10-18
+
+A smarter tutor (source-search switch, answer timer with the model that answered, rename, delete and Markdown export of conversations), local AI models that share the GPU one at a time (local translators, DeepSeek-R1 / Qwen 3 / Gemma 4 12B, memory released for cloud models), the real AI cost of each course, and the Azure Translator free tier watched. User and administrator guides with screenshots.
 
 ### New features
 - **Tutor: "Search my sources" switch** (above the tutor's modes, on by default, remembered per study set in the browser). Off, a question is sent **without semantic search**: no passages are retrieved or added to the prompt, the tutor answers from general knowledge with its usual teaching rules (hints first, solutions on request, academic integrity), and the answer is labelled *General knowledge · sources not searched*, without citations. *Show source* needs the search and is unavailable while it is off. API: `POST /api/tutor/<conversation>/messages` takes `sourceSearch` (default `true`); the choice is recorded on both messages.
@@ -16,12 +18,24 @@ All notable changes to LearningForge.
 
 - **"Runs on" column** in every admin model list (AI model, Translator, Text to speech, PolyLingue voices): *Local · Ollama*, *Local · Speaches* or *Cloud · Google / Z.ai / Microsoft Azure*, with an icon; the PolyLingue voices show where the voice in use runs.
 
+- **Tutor: export a conversation as Markdown (.md)**, from the conversation's right-click menu, the chat's own right-click menu (new; also Rename and Delete) or **Export .md** at the top of the chat: each question and answer, with the model, time to answer, provenance label and cited passages. `GET /api/tutor/<conversation>/export`, the learner's own conversations only.
+
+- **The real AI cost of each course.** Every AI call is now recorded (table `ai_usage`): its course, what it was for (study guide, flashcards, quiz, exercises, audio recap, import, tutor, exercise feedback, translation, PolyLingue), the provider, the model and its tokens — repair rounds included — and, for Azure AI Translator, the characters it bills. Each course's Overview has an **AI cost of this course** card (tokens in and out, calls, estimated Z.ai credits for GLM calls, Azure characters, by feature and model), and Admin › Courses has an **AI cost** column. Z.ai credits are estimated with `ZAI_TOKENS_PER_CREDIT` (default 5,400, measured on GLM-5.3-Flash). API: `GET /api/study-sets/<id>/ai-usage`.
+- **Azure AI Translator free tier watched.** The characters sent to Azure this month are counted against `AZURE_TRANSLATOR_FREE_CHARS` (default 2,000,000, the F0 tier), and a quota refusal from Azure is noted. The Translator card shows the month's use; from 80 % it warns, and at the limit a banner at the top of /admin asks the administrator to **switch the translator to Gemma 4 E2B** (`AZURE_TRANSLATOR_FALLBACK_MODEL`) in one click — never automatically. While the AI model is another local model, the switch offers that model instead (one local model on the GPU).
+
 ### Documentation
 - **User Guide** (`docs/USER-GUIDE.md`) and **Administrator and Teacher Guide** (`docs/ADMIN-GUIDE.md`), with screenshots of every page. `npm run guides:screenshots` takes them again from the running server (`scripts/guides/`), with temporary accounts that are deleted afterwards and other people's names replaced.
 
 ### Fixes
 - **Answers cut mid-sentence with local models** (seen with Gemma 4 12B: *…the value of this*): a bare double quote inside a text ends it under the JSON format local models write in, and the model carried on with the next fields. Local models are now told to quote with single quotes, and a reply whose text stops in the middle is asked for once more (the longer reply is kept).
+- **Plain names for quantized local models** in the lists and tooltips: `gemma4:12b-it-q4_K_M` shows as *Gemma 4 12B Q4_K_M*.
 - **Study set Analytics** stayed on its loading placeholder for any learner with quiz results: the server computed the topic trends before reading the quiz history (an error since the first version).
+
+### Upgrade notes
+- Run `npm run db:push`: adds the `ai_usage` table (AI cost of each course, Azure characters).
+- New optional settings in `.env`: `ZAI_TOKENS_PER_CREDIT` (default 5400, to estimate Z.ai credits), `AZURE_TRANSLATOR_FREE_CHARS` (default 2000000, the free tier per month) and `AZURE_TRANSLATOR_FALLBACK_MODEL` (default `gemma4:e2b`, the local model the Admin prompt suggests).
+- Local models: pull any chat model with `ollama pull <model>` (for example `qwen3:8b`, `gemma4:12b`); it appears in Admin › AI model and Translator. On an 11 GB GPU, `OLLAMA_CONTEXT_LENGTH=16384` leaves room for speech recognition next to an 8–12B model.
+- AI costs are recorded from this version on; earlier generations are not counted.
 
 ## 3.0 — 2026-10-17
 
