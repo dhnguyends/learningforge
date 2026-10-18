@@ -71,7 +71,9 @@ export function localModelLabel(model: string): string {
   const hf = /^hf\.co\/[^/]+\/([^:]+?)(?:-GGUF)?(?::(.+))?$/i.exec(model);
   if (hf) return hf[2] && hf[2] !== "latest" ? `${hf[1]} ${hf[2]}` : hf[1];
   const [family, tag = "latest"] = model.toLowerCase().split(":");
-  const size = tag === "latest" ? "" : ` ${tag.toUpperCase()}`;
+  // "12b-it-q4_k_m" -> "12B Q4_K_M": the size, then the quantization (the "it" of instruction-tuned is implied).
+  const parts = tag === "latest" ? [] : tag.split("-").filter((p) => p !== "it");
+  const size = parts.length ? ` ${parts.map((p) => p.toUpperCase()).join(" ")}` : "";
   const known: [RegExp, string][] = [
     [/^deepseek-r1$/, "DeepSeek-R1"],
     [/^gemma4$/, "Gemma 4"],

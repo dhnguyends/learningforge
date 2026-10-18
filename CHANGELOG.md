@@ -20,6 +20,7 @@ All notable changes to LearningForge.
 - **User Guide** (`docs/USER-GUIDE.md`) and **Administrator and Teacher Guide** (`docs/ADMIN-GUIDE.md`), with screenshots of every page. `npm run guides:screenshots` takes them again from the running server (`scripts/guides/`), with temporary accounts that are deleted afterwards and other people's names replaced.
 
 ### Fixes
+- **Answers cut mid-sentence with local models** (seen with Gemma 4 12B: *…the value of this*): a bare double quote inside a text ends it under the JSON format local models write in, and the model carried on with the next fields. Local models are now told to quote with single quotes, and a reply whose text stops in the middle is asked for once more (the longer reply is kept).
 - **Study set Analytics** stayed on its loading placeholder for any learner with quiz results: the server computed the topic trends before reading the quiz history (an error since the first version).
 
 ## 3.0 — 2026-10-17

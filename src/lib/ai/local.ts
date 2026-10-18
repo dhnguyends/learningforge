@@ -2,10 +2,41 @@ import type { ZodTypeAny } from "zod";
 import type { Env } from "@/lib/env";
 import type { GenerateOptions, GenerationResult, StructuredGenerator } from "@/lib/ai/types";
 import { AIProviderError, JSON_CONTRACT_INSTRUCTION } from "@/lib/ai/types";
-import { parseWithRepair, type RawCompletion } from "@/lib/ai/shared";
+import { extractJson, parseWithRepair, type RawCompletion } from "@/lib/ai/shared";
 import { zodToJsonSchema } from "@/lib/ai/zod-to-json-schema";
 import { cpuTimeoutFactor } from "@/lib/gpu";
 import { alwaysThinks, loadAloneOnGpu } from "@/lib/ai/ollama";
+
+/**
+ * Local models write JSON under a grammar: a bare double quote inside a text
+ * ends that text, and the model carries on with the next fields — an answer
+ * then stops mid-sentence ("…the value of this "). Seen with Gemma 4 12B.
+ */
+export const LOCAL_QUOTE_RULE =
+  "Inside JSON text values, quote words with single quotes ('like this'), never with a bare double quote: a double quote ends the text. In code, escape it as \\\".";
+
+/**
+ * The first text value of a JSON result that stops in the middle: it ends with
+ * a space after a word, which a finished text never does (the mark of a bare
+ * double quote that closed it early). null when every text is whole.
+ */
+export function findCutText(value: unknown): string | null {
+  if (typeof value === "string") return /\S[ \t]+$/.test(value) ? value : null;
+  if (Array.isArray(value)) {
+    for (const v of value) {
+      const cut = findCutText(v);
+      if (cut !== null) return cut;
+    }
+    return null;
+  }
+  if (value && typeof value === "object") {
+    for (const v of Object.values(value)) {
+      const cut = findCutText(v);
+      if (cut !== null) return cut;
+    }
+  }
+  return null;
+}
 
 /** Drops a `<think>…</think>` block a reasoning model may leave in its answer. */
 export function stripThinking(text: string): string {
@@ -59,7 +90,7 @@ export class LocalGenerator implements StructuredGenerator {
 
   async generate<S extends ZodTypeAny>(opts: GenerateOptions<S>): Promise<GenerationResult<S>> {
     const messages: ChatMessage[] = [
-      { role: "system", content: `${opts.system}\n\n${JSON_CONTRACT_INSTRUCTION}` },
+      { role: "system", content: `${opts.system}\n\n${JSON_CONTRACT_INSTRUCTION}\n${LOCAL_QUOTE_RULE}` },
       { role: "user", content: opts.user },
     ];
     const format = zodToJsonSchema(opts.schema);
@@ -115,6 +146,31 @@ export class LocalGenerator implements StructuredGenerator {
       }
       return call();
     });
+
+    // A text cut short by a bare double quote: ask once more for the whole JSON.
+    const cut = findCutText(data);
+    if (cut !== null) {
+      messages.push(
+        { role: "assistant", content: lastText.slice(0, 20_000) },
+        {
+          role: "user",
+          content:
+            `A text in your JSON stops in the middle ("...${cut.trim().slice(-80)}"): a bare double quote ended it. ` +
+            "Return the complete JSON object again; inside texts use single quotes, never a bare double quote.",
+        },
+      );
+      try {
+        const again = await call();
+        const parsed = opts.schema.safeParse(extractJson(again.text));
+        // Keep the retry when it is whole, or at least longer than the cut one.
+        if (parsed.success && (findCutText(parsed.data) === null || JSON.stringify(parsed.data).length > JSON.stringify(data).length)) {
+          const total = { inputTokens: usage.inputTokens + again.usage.inputTokens, outputTokens: usage.outputTokens + again.usage.outputTokens };
+          return { data: parsed.data, provider: this.provider, model: this.model, usage: total };
+        }
+      } catch {
+        // The first answer, cut or not, is better than none.
+      }
+    }
 
     return { data, provider: this.provider, model: this.model, usage };
   }
