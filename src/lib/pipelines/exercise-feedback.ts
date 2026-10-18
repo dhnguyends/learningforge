@@ -1,3 +1,4 @@
+import { withAiUsage } from "@/lib/ai/usage";
 import { getGenerator } from "@/lib/ai";
 import { z } from "zod";
 import { searchChunks, formatRetrievedContext } from "@/lib/retrieval";
@@ -28,9 +29,14 @@ export async function gradeExerciseAttempt(opts: {
   };
   submission: string;
 }): Promise<ExerciseFeedback> {
+  return withAiUsage({ studySetId: opts.studySetId, feature: "exercise-feedback" }, () => gradeWithContext(opts));
+}
+
+async function gradeWithContext(opts: Parameters<typeof gradeExerciseAttempt>[0]): Promise<ExerciseFeedback> {
   const chunks = await searchChunks(opts.studySetId, opts.exercise.title, { k: 5 });
   return (
     await (await getGenerator()).generate({
+      feature: "exercise-feedback",
       system: `You are LearningForge's exercise grader. Grade the learner's submission against the exercise requirements. Be specific about what is right, what is wrong, and the single most valuable next step. Do not reveal the full solution unless the submission is essentially complete; point at what to fix instead. Verify any arithmetic the learner shows.`,
       user: `EXERCISE: ${opts.exercise.title}\nREQUIREMENTS: ${opts.exercise.prompt}\n${
         opts.exercise.expectedOutput ? `EXPECTED OUTPUT: ${opts.exercise.expectedOutput}\n` : ""

@@ -1,6 +1,8 @@
 import type { ZodTypeAny, output } from "zod";
 
 export interface GenerateOptions<S extends ZodTypeAny> {
+  /** What the call is for, in the AI usage records when no withAiUsage context says it ("polylingue"…). */
+  feature?: string;
   system: string;
   user: string;
   schema: S;

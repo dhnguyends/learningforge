@@ -1,5 +1,6 @@
 "use client";
 
+import { AiCostCard } from "@/components/study/ai-cost-card";
 import { useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -228,6 +229,8 @@ export default function OverviewTab() {
           </CardContent>
         </Card>
       )}
+
+      <AiCostCard studySetId={studySetId} />
 
       {/* Recent activity */}
       <Card>

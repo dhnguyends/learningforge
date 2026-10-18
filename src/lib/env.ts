@@ -73,6 +73,13 @@ const envSchema = z.object({
   // keys use /api/paas/v4; GLM Coding Plan keys only work on /api/coding/paas/v4.
   ZAI_API_KEY: z.string().optional(),
   GLM_AI_MODEL: z.string().default("glm-5.3-flash"),
+  // Z.ai Coding Plan credits: tokens per credit, to estimate a course's cost
+  // in credits (measured on GLM-5.3-Flash in October 2026: about 5,400).
+  ZAI_TOKENS_PER_CREDIT: z.coerce.number().positive().default(5_400),
+  // Azure AI Translator free tier (F0): characters per calendar month. At 80 %
+  // and at the limit, Admin suggests switching the translator to a local model.
+  AZURE_TRANSLATOR_FREE_CHARS: z.coerce.number().int().positive().default(2_000_000),
+  AZURE_TRANSLATOR_FALLBACK_MODEL: z.string().default("gemma4:e2b"),
   ZAI_BASE_URL: z.string().default("https://api.z.ai/api/paas/v4"),
   // GLM-5.3 always thinks and defaults to "max" — very slow for structured output.
   ZAI_REASONING_EFFORT: z.enum(["low", "high", "max"]).default("low"),

@@ -35,6 +35,7 @@ async function writeBank(bankId: string): Promise<void> {
   const levels = CEFR_LEVELS.map((l) => `${l} (${LEVELS[l].name}): ${LEVELS[l].canDo} Grammar: ${LEVELS[l].grammar}.`).join("\n");
   try {
     const result = await (await getGenerator()).generate({
+      feature: "polylingue",
       system: `You are an expert ${T} examiner writing a CEFR placement test. Each question must clearly belong to its level. Return ONLY one JSON object.`,
       user:
         `Write exactly ${PER_LEVEL} multiple-choice questions for each level A1, A2, B1, B2, C1 and C2 (${PER_LEVEL * CEFR_LEVELS.length} items):\n${levels}\n` +
@@ -85,6 +86,7 @@ async function reviewItems(targetLang: string, items: PlacementItem[]): Promise<
   const T = languageEnglishName(targetLang);
   try {
     const result = await (await getGenerator()).generate({
+      feature: "polylingue",
       system: `You are a strict native ${T} reviewer of CEFR placement tests. Return ONLY JSON.`,
       user:
         `For each numbered item, answer "ok": true only if the given answer is correct, standard ${T}, the ONLY correct option, ` +

@@ -95,6 +95,7 @@ The **Overview** shows:
 - the classification path (Discipline › Subject › Course › Topic), the level and the exam countdown;
 - a card per tool, with **Open** and **Generate** / **Regenerate** / **Add cards**;
 - **Ask the grounded tutor**;
+- **AI cost of this course**: the tokens used by every AI call for this course (study material, tutor, translations), with the estimated Z.ai credits when GLM wrote them and the characters sent to Azure Translator, by feature and model;
 - **Recent activity**: every import and generation, with its status;
 - the list of sources.
 
@@ -196,7 +197,8 @@ Each problem shows its type, whether it is **grounded in source**, an estimated 
 
 A study partner that answers **from your sources only**, with a citation for every claim. It leads with hints rather than solutions, and says plainly when something is not in your material.
 
-- **New conversation** starts a topic; past conversations are listed on the left. **Right-click a conversation** (or Shift+F10, or its **⋯** button) to **Rename…** it (the title in the list) or **Delete…** it with its messages, after a confirmation.
+- **New conversation** starts a topic; past conversations are listed on the left. **Right-click a conversation** (or Shift+F10, or its **⋯** button) to **Rename…** it (the title in the list) or **Delete…** it with its messages, after a confirmation. The same menu opens when you right-click in the chat itself (with text selected, the browser's own menu stays, to copy it).
+- **Export as Markdown (.md)** (in both menus, or **Export .md** at the top of the chat) downloads the conversation as a text file you can keep or share: each question and answer in order, with the model, the time to answer, the provenance label and the cited passages (source, page or timestamp).
 - **Answer timer**: while the tutor answers, a timer (⏱ HH:MM:SS) counts the time since you sent your question; each answer then shows how long it took, until it was on your screen. **Hover the timer** to see which AI model wrote the answer (for example *Answered by Gemma 4 · local*); while you wait, it shows the model that is answering. The time and the model are saved with the answer, so you find them again in a later session.
 - Choose a mode under the conversation: **Ask**, **Hint**, **Explain differently**, **Show source**, **Challenge me** (a small problem on what you just discussed), or **Reveal solution** (it asks you to confirm: solutions stick better after your own attempt).
 - Each answer is labelled **Supported** or **Inference**, with its citations (click one to open the lecture at that moment).

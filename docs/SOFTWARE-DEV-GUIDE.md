@@ -258,6 +258,10 @@ The tutor is a Socratic study partner restricted to the learner's own material (
 - **Retrieval quality**: the similarity floor (`RETRIEVAL_MIN_SCORE`) is calibrated per embeddings model (`scripts/calibrate-retrieval.ts`), so weak matches are not presented as sources.
 - **Learner signal (outside the tutor)**: graded quiz answers update `ProgressMetric` (mastery per topic, `src/lib/pipelines/grading.ts`), which adapts the difficulty of the next quizzes. The tutor itself does not change mastery; connecting tutor challenges to mastery is a natural next step.
 
+### 6.3b Recording AI usage
+
+Every AI call is recorded in `ai_usage` (`src/lib/ai/usage.ts`): `generatorFor()` wraps each generator (`recordingUsage`), the local and Azure translators record themselves, and callers say what they work on with `withAiUsage({ studySetId, feature }, fn)` — the job runner does it for every job (`src/lib/queue/processors.ts`), the tutor and exercise feedback for themselves; PolyLingue calls pass `feature: "polylingue"`. Recording never fails a call, and the mock provider is not recorded. `courseAiCost()` sums a course; Azure's free tier is computed from the month's `characters` (`src/lib/speech/translator-quota.ts`).
+
 ### 6.4 Changing models
 
 - **Generation**: Admin › AI model. New Gemini ids go into `GEMINI_MODELS` (`src/lib/ai/settings.ts`). A different local model: `ollama pull <model>`, and it appears in Admin › AI model (`LOCAL_AI_MODEL` is the default when none is chosen).

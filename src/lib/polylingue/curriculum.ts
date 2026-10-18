@@ -58,6 +58,7 @@ export async function generateOutline(curriculumId: string): Promise<void> {
   const p = LEVELS[level];
   try {
     const result = await (await getGenerator()).generate({
+      feature: "polylingue",
       system: teacherSystem(c.targetLang, c.baseLang, level),
       user:
         `Write the outline of the ${level} course: exactly ${p.units} units of exactly ${p.lessonsPerUnit} lessons, from easiest to hardest.\n` +
@@ -120,6 +121,7 @@ export async function prepareLesson(lessonId: string): Promise<void> {
   const meaning = p.immersion ? `a short ${T} definition or synonym` : `its ${B} translation`;
   try {
     const result = await (await getGenerator()).generate({
+      feature: "polylingue",
       system: teacherSystem(target, base, level),
       user:
         (lesson.sourceExcerpt

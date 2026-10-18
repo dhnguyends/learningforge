@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { freedSummary } from "@/components/shared/gpu-report";
+import { AzureQuotaMeter } from "@/components/admin/azure-quota";
 import { RunsOn, RunsOnHeader, type LocalHost } from "@/components/shared/runs-on";
 import {
   useSaveTranslatorChoice,
@@ -168,6 +169,8 @@ export function TranslatorCard() {
             English questions find French material. Citations always point at the original.
           </p>
         </div>
+
+        <AzureQuotaMeter quota={translator.azureQuota} active={translator.active.provider === "azure"} />
 
         {translator.active.source === "fallback" && (
           <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">

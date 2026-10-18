@@ -48,7 +48,8 @@ test("DeepSeek-R1 runs alone on the GPU, and the GPU can be freed", async ({ bro
   await page.getByRole("button", { name: "Test connection" }).click();
   await expect(page.getByText(/deepseek-r1:8b answered in/)).toBeVisible({ timeout: 5 * 60_000 });
   // Gemma 4 was unloaded before DeepSeek ran.
-  await expect(gpu).toContainText(/In Ollama now: deepseek-r1:8b \([\d.]+ GB\)\./, { timeout: 20_000 });
+  // Model names only: Ollama misreports some models' sizes, so the panel does not show them.
+  await expect(gpu).toContainText(/In Ollama now: deepseek-r1:8b\./, { timeout: 20_000 });
   await expect(gpu).not.toContainText("gemma4:latest");
   await page.screenshot({ path: "test-results/admin-ai-deepseek.png", fullPage: true });
 

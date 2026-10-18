@@ -38,6 +38,8 @@ function groupByOwner(rows: AdminStudySetRow[]): { nature: "HUMAN" | "BOT"; rows
  * Courses tab: every study set with the one account it belongs to, and
  * "Change owner" to give a study set to another account.
  */
+const compact = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(2)} M` : n >= 1_000 ? `${(n / 1_000).toFixed(1)} k` : String(n));
+
 export function AdminCourses() {
   const { data, isLoading, error } = useAdminStudySets();
   const [query, setQuery] = useState("");
@@ -166,6 +168,9 @@ export function AdminCourses() {
                   <th scope="col" className="px-4 py-3 font-medium">Course</th>
                   <th scope="col" className="px-4 py-3 font-medium">Owner</th>
                   <th scope="col" className="px-4 py-3 font-medium">Content</th>
+                  <th scope="col" className="whitespace-nowrap px-4 py-3 text-right font-medium" title="Tokens of the course's AI calls; Z.ai credits estimated for GLM calls; characters sent to Azure Translator">
+                    AI cost
+                  </th>
                   <th scope="col" className="px-4 py-3 font-medium">Created</th>
                   <th scope="col" className="px-4 py-3 text-right font-medium">
                     <span className="sr-only">Actions</span>
@@ -175,7 +180,7 @@ export function AdminCourses() {
               <tbody>
                 {rows.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-4 py-10 text-center text-muted-foreground">
+                    <td colSpan={6} className="px-4 py-10 text-center text-muted-foreground">
                       {query ? "No course matches this search." : "No study sets yet."}
                     </td>
                   </tr>
@@ -183,7 +188,7 @@ export function AdminCourses() {
                   groups.flatMap((group) => [
                     // Group heading: splits Human accounts' courses from Bot accounts' courses.
                     <tr key={`group-${group.nature}`} className="border-b border-border bg-muted/50">
-                      <th scope="colgroup" colSpan={5} className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      <th scope="colgroup" colSpan={6} className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                         <span className="inline-flex items-center gap-1.5">
                           {group.nature === "HUMAN" ? (
                             <UserRound className="h-3.5 w-3.5" aria-hidden="true" />
@@ -197,7 +202,7 @@ export function AdminCourses() {
                     ...(group.rows.length === 0
                       ? [
                           <tr key={`empty-${group.nature}`} className="border-b border-border/60">
-                            <td colSpan={5} className="px-4 py-3 text-xs text-muted-foreground">
+                            <td colSpan={6} className="px-4 py-3 text-xs text-muted-foreground">
                               No courses.
                             </td>
                           </tr>,
@@ -231,6 +236,17 @@ export function AdminCourses() {
                           <Badge variant="outline" className="ml-2 border-amber-500/50 text-[10px] text-amber-700 dark:text-amber-400">
                             Empty
                           </Badge>
+                        )}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-right text-xs tabular-nums text-muted-foreground">
+                        {s.aiCost.calls === 0 ? (
+                          "–"
+                        ) : (
+                          <>
+                            <p className="font-medium text-foreground">{compact(s.aiCost.tokens)} tokens</p>
+                            {s.aiCost.zaiCredits != null && <p>≈ {s.aiCost.zaiCredits.toLocaleString()} Z.ai credits</p>}
+                            {s.aiCost.characters > 0 && <p>{compact(s.aiCost.characters)} Azure chars</p>}
+                          </>
                         )}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">{new Date(s.createdAt).toLocaleDateString()}</td>

@@ -97,6 +97,7 @@ export async function preparePractice(practiceId: string): Promise<void> {
   };
   try {
     const result = await (await getGenerator()).generate({
+      feature: "polylingue",
       system:
         `You are an expert ${T} teacher writing CEFR ${level} (${p.name}) practice material: ${p.canDo} ` +
         (p.immersion ? `This is an immersion course: everything is written in ${T} only. ` : `Instructions and questions are in ${E}. `) +
@@ -132,6 +133,7 @@ export async function correctText(opts: {
 }): Promise<Correction> {
   const { T, E } = languages(opts.target, opts.base, opts.level);
   const result = await (await getGenerator()).generate({
+      feature: "polylingue",
     system:
       `You are a kind, precise ${T} teacher correcting a CEFR ${opts.level} learner. Write "corrected", "corrections" (original fragment, corrected fragment, ` +
       `a short explanation in ${E}) and "feedback" (2–3 encouraging sentences in ${E}: what is good, the main thing to improve). ` +
@@ -159,6 +161,7 @@ export async function correctText(opts: {
 export async function judgeRewrite(opts: { target: string; level: Cefr; prompt: string; expected: string; given: string }) {
   const T = languageEnglishName(opts.target);
   const result = await (await getGenerator()).generate({
+      feature: "polylingue",
     system: `You check ${T} answers to rewriting exercises for CEFR ${opts.level}. Accept any correct, natural answer that does what the instruction asks, not only the model answer. Write "note" in ${T}. Return ONLY JSON.`,
     user: `Instruction: ${opts.prompt}\nModel answer: ${opts.expected}\nLearner's answer: ${opts.given}`,
     schema: judgeSchema,
@@ -218,6 +221,7 @@ export async function writeHint(opts: { target: string; base: string; level: Cef
   const { T, E } = languages(opts.target, opts.base, opts.level);
   const e = opts.exercise;
   const result = await (await getGenerator()).generate({
+      feature: "polylingue",
     system: `You are a supportive ${T} teacher for CEFR ${opts.level}. Write ONE short hint in ${E} (max 25 words). NEVER give the answer or any word of it; point to the rule, the meaning or a clue. Return ONLY JSON.`,
     user: `Exercise (${e.type}): ${e.prompt}${e.text ? `\nSentence: ${e.text}` : ""}${e.options.length ? `\nOptions: ${e.options.join(" | ")}` : ""}\nAnswer (do not reveal): ${e.answer}`,
     schema: hintSchema,

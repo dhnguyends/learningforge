@@ -7,6 +7,7 @@ import { TUTOR_SYSTEM, TUTOR_SYSTEM_GENERAL, TUTOR_USER, PROMPT_VERSION } from "
 import { extractInlineChunkIds, resolveChunkRef } from "@/lib/pipelines/validation";
 import { audit } from "@/lib/audit";
 import { aiLabel } from "@/lib/ai/settings";
+import { withAiUsage } from "@/lib/ai/usage";
 
 export type TutorMode = "answer" | "hint" | "explain_differently" | "show_source" | "challenge" | "reveal_solution";
 
@@ -62,7 +63,8 @@ export async function answerTutorMessage(opts: {
 
   const hintsUsed = opts.mode === "hint" ? conversation.hintsUsed + 1 : conversation.hintsUsed;
 
-  const result = await (await getGenerator()).generate({
+  const generator = await getGenerator();
+  const result = await withAiUsage({ studySetId: conversation.studySet.id, userId: conversation.userId, feature: "tutor" }, () => generator.generate({
     system: sourceSearch ? TUTOR_SYSTEM : TUTOR_SYSTEM_GENERAL,
     user: TUTOR_USER({
       studySetTitle: conversation.studySet.title,
@@ -76,7 +78,7 @@ export async function answerTutorMessage(opts: {
     }),
     schema: tutorResponseSchema,
     mock: () => (sourceSearch ? mockTutor(opts.mode, opts.question, chunks, hintsUsed, allowExternal) : mockGeneralTutor(opts.mode)),
-  });
+  }));
   const data = result.data;
 
   // Trust boundary: only citations that resolve to RETRIEVED chunks survive.

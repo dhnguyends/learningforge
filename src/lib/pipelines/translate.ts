@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { getTranslator } from "@/lib/translation";
+import { withSourceAiUsage } from "@/lib/ai/usage";
 import { indexTranslations } from "@/lib/retrieval";
 import { normalizeLanguage, type SourceLanguage } from "@/lib/language";
 
@@ -140,6 +141,10 @@ async function recordStatus(sourceId: string, translation: TranslationStatus): P
  * progress in source.metadata.readingTranslations[to].
  */
 export async function translateForReading(sourceId: string, from: string, to: string): Promise<TranslationStatus> {
+  return withSourceAiUsage(sourceId, "translation", () => translateForReadingNow(sourceId, from, to));
+}
+
+async function translateForReadingNow(sourceId: string, from: string, to: string): Promise<TranslationStatus> {
   const startedAt = new Date().toISOString();
   await recordReadingStatus(sourceId, to, { status: "running", from, to, at: startedAt, startedAt, done: 0 });
   try {

@@ -104,6 +104,7 @@ Further down the same tab:
   - **Switching the AI model** to another local model moves a local translator with it (*The translator now uses deepseek-r1:8b too*). An Azure translator stays on Azure.
   - With a **cloud AI model** (Gemini, GLM), any installed local model may translate.
   - DeepSeek-R1 reasons before translating: correct, but much slower than Gemma 4.
+  - **Azure free tier**: the card shows the characters sent to Azure this month against the free allowance (2 million on the F0 tier; `AZURE_TRANSLATOR_FREE_CHARS`). From 80 % it warns; at the limit (or when Azure refuses for quota) a banner at the top of the administration asks you to **switch to Gemma 4 E2B**, a free local model, in one click. Nothing switches by itself. While the AI model is another local model, the switch offers that model instead (one local model on the GPU).
 - **Text to speech** (read-aloud of sources and transcripts): **Kokoro** or **Piper** (local, free), **Azure Neural TTS** or **Gemini TTS** (cloud, paid). Choose the English and French voices and listen to a sample (🔊) before **Use these voices**.
 
 ---
@@ -114,6 +115,7 @@ Further down the same tab:
 
 Every study set and the account it belongs to (a study set belongs to exactly one account), grouped into **Human accounts** and **Bot accounts**, with its classification, its content (sources, guides, decks, quizzes; *working* while something is being generated) and its creation date. **Search courses or owners** filters the list.
 
+- **AI cost**: the tokens of every AI call made for the course (generations, tutor, translations), the estimated Z.ai credits for calls made with GLM, and the characters sent to Azure AI Translator. Open a course for the details by feature and model.
 - **Topic**: files the course under one **main topic** of the Courses Tree; its Discipline, Subject and Course / Module follow from the tree. The owner sees the path read-only.
 - **Change owner** moves the course to another account.
 - **🗑** deletes the course with its sources and files, after a confirmation.

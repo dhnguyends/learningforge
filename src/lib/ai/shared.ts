@@ -66,19 +66,26 @@ export async function parseWithRepair<S extends ZodTypeAny>(
   schema: S,
   repair: (problem: string) => Promise<RawCompletion>,
 ): Promise<{ data: output<S>; usage: RawCompletion["usage"] }> {
+  // Every round's tokens count (the cost of a generation includes its repairs).
+  const spent = { inputTokens: completion.usage.inputTokens, outputTokens: completion.usage.outputTokens };
+  const add = (u: RawCompletion["usage"]) => {
+    spent.inputTokens += u.inputTokens;
+    spent.outputTokens += u.outputTokens;
+  };
   let parsed: unknown;
   try {
     parsed = extractJson(completion.text);
   } catch (err) {
     if (err instanceof AIProviderError) {
       const fixed = await repair(`The previous output was not valid JSON: ${err.message}`);
+      add(fixed.usage);
       parsed = extractJson(fixed.text);
       completion = fixed;
     } else throw err;
   }
 
   const result = schema.safeParse(parsed);
-  if (result.success) return { data: result.data, usage: completion.usage };
+  if (result.success) return { data: result.data, usage: spent };
 
   const issues = new ZodError(result.error.issues)
     .issues.slice(0, 8)
@@ -86,9 +93,10 @@ export async function parseWithRepair<S extends ZodTypeAny>(
     .join("; ");
 
   const fixed = await repair(`The JSON did not match the required schema — ${issues}. Return corrected JSON only.`);
+  add(fixed.usage);
   const reparsed = schema.safeParse(extractJson(fixed.text));
   if (!reparsed.success) {
     throw new AIProviderError(`Structured output failed schema validation twice: ${issues}`);
   }
-  return { data: reparsed.data, usage: fixed.usage };
+  return { data: reparsed.data, usage: spent };
 }

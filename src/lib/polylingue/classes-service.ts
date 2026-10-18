@@ -325,6 +325,7 @@ export async function suggestActivities(teacherId: string, classId: string) {
   const words = d.words.map((w) => w.term);
   const grammar = d.grammar.map((g) => g.grammar).filter(Boolean);
   const result = await (await getGenerator()).generate({
+      feature: "polylingue",
     system:
       `You are an experienced ${T} teacher preparing a CEFR ${c.level} class. Suggest 3 to 5 short in-class activities (role-play, speaking, grammar, vocabulary, ` +
       `games, listening or writing) that work on the difficulties given. Write titles and instructions in ${languageEnglishName(c.baseLang)}, with any example ` +

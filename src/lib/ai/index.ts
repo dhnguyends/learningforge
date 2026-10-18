@@ -7,6 +7,7 @@ import { LocalGenerator } from "@/lib/ai/local";
 import { GeminiGenerator } from "@/lib/ai/gemini";
 import { ZaiGenerator } from "@/lib/ai/zai";
 import { getActiveAi, type ResolvedAi } from "@/lib/ai/settings";
+import { recordAiUsage } from "@/lib/ai/usage";
 
 const cache = new Map<string, StructuredGenerator>();
 
@@ -36,8 +37,24 @@ export function generatorFor(ai: Pick<ResolvedAi, "provider" | "model">): Struct
     default:
       generator = new MockGenerator();
   }
+  generator = recordingUsage(generator);
   cache.set(key, generator);
   return generator;
+}
+
+/**
+ * The same generator, recording each call's tokens (course and feature from
+ * the withAiUsage context). Failed calls are not recorded: their providers
+ * report no usage.
+ */
+export function recordingUsage(inner: StructuredGenerator): StructuredGenerator {
+  const wrapped = Object.create(inner) as StructuredGenerator;
+  wrapped.generate = async (opts) => {
+    const result = await inner.generate(opts);
+    await recordAiUsage({ provider: result.provider, model: result.model, ...result.usage, feature: opts.feature });
+    return result;
+  };
+  return wrapped;
 }
 
 /**

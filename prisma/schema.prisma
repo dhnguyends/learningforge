@@ -236,6 +236,7 @@ model User {
   attempts          Attempt[]
   studySessions     StudySession[]
   progressMetrics   ProgressMetric[]
+  aiUsage           AiUsage[]
   flashcardLogs     FlashcardReview[]
   edits             ArtifactEdit[]
   auditLogs         AuditLog[]
@@ -359,10 +360,38 @@ model StudySet {
   sessions      StudySession[]
   metrics       ProgressMetric[]
   attempts      Attempt[]
+  aiUsage       AiUsage[]
 
   @@index([workspaceId])
   @@index([topicId])
   @@map("study_sets")
+}
+
+/// Tokens of one AI model call (generation, tutor answer, local translation),
+/// for the real cost of each course. A course deleted later keeps its rows
+/// (studySetId set to null) in the totals.
+model AiUsage {
+  id           String   @id @default(cuid())
+  createdAt    DateTime @default(now())
+  studySetId   String?
+  userId       String?
+  /// guide | flashcards | quiz | exercises | audio-recap | ingest | tutor |
+  /// exercise-feedback | translation | polylingue | other
+  feature      String
+  provider     String
+  model        String
+  inputTokens  Int
+  outputTokens Int
+  /// Characters sent to a translation service billed per character (Azure AI Translator); 0 otherwise.
+  characters   Int      @default(0)
+
+  studySet StudySet? @relation(fields: [studySetId], references: [id], onDelete: SetNull)
+  user     User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([studySetId])
+  @@index([createdAt])
+  @@index([provider, createdAt])
+  @@map("ai_usage")
 }
 
 /// Course taxonomy (docs/COURSE-TAXONOMY.txt, loaded by `npm run taxonomy:import`):

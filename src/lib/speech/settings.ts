@@ -198,7 +198,13 @@ export async function getActiveTts(): Promise<TtsChoice & { source: "admin" | "d
 /** What /admin shows. Never any key. */
 export async function speechSettingsView() {
   const env = getEnv();
-  const [translator, tts, ai, locals] = await Promise.all([getActiveTranslator(), getActiveTts(), aiLocalModel(), localModelOptions(env)]);
+  const [translator, tts, ai, locals, azureQuota] = await Promise.all([
+    getActiveTranslator(),
+    getActiveTts(),
+    aiLocalModel(),
+    localModelOptions(env),
+    import("@/lib/speech/translator-quota").then((m) => m.azureTranslatorQuota()),
+  ]);
   const localNote = (name: string) =>
     /deepseek-r1/i.test(name)
       ? "Private and free; reasons before translating, so much slower."
@@ -208,6 +214,8 @@ export async function speechSettingsView() {
       active: translator,
       /** The AI model's local model: the only local model a translator may use (null: the AI model is in the cloud). */
       aiLocalModel: ai,
+      /** Azure AI Translator's free tier this month, and the local model to switch to. */
+      azureQuota,
       options: [
         // One option per local chat model installed in Ollama (Gemma 4, DeepSeek-R1…).
         ...locals.map((m) => ({

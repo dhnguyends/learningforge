@@ -1,6 +1,8 @@
 import { getEnv, mockProvidersAllowed } from "@/lib/env";
 import { cpuTimeoutFactor } from "@/lib/gpu";
 import { alwaysThinks, loadAloneOnGpu } from "@/lib/ai/ollama";
+import { recordAiUsage } from "@/lib/ai/usage";
+import { isQuotaRefusal, noteAzureQuotaRefusal } from "@/lib/speech/translator-quota";
 import { stripThinking } from "@/lib/ai/local";
 import { languageName } from "@/lib/speech/languages";
 import { getActiveTranslator } from "@/lib/speech/settings";
@@ -107,7 +109,8 @@ export class LocalTranslator implements Translator {
       }),
     });
     if (!res.ok) throw new Error(`Translation (local ${this.model}) failed: ${res.status} ${(await res.text()).slice(0, 200)}`);
-    const json = (await res.json()) as { message?: { content?: string } };
+    const json = (await res.json()) as { message?: { content?: string }; prompt_eval_count?: number; eval_count?: number };
+    await recordAiUsage({ provider: "local", model: this.model, inputTokens: json.prompt_eval_count ?? 0, outputTokens: json.eval_count ?? 0, feature: "translation" });
     const parsed = JSON.parse(stripThinking(json.message?.content ?? "") || "{}") as { translations?: unknown };
     if (!Array.isArray(parsed.translations)) throw new Error("Translation returned no list");
     return parsed.translations.map((t) => String(t ?? "").trim());
@@ -152,9 +155,13 @@ export class AzureTranslator implements Translator {
             return body;
           }
         })();
+        // Free tier used up (403001) or its rate limit: Admin will suggest a local translator.
+        if (isQuotaRefusal(res.status, message)) await noteAzureQuotaRefusal(message);
         throw new Error(`Azure Translator error ${res.status}: ${message.slice(0, 200)}`);
       }
       const json = (await res.json()) as { translations?: { text: string }[] }[];
+      // Billed per character of the source text: kept for the monthly free limit and costs.
+      await recordAiUsage({ provider: "azure-translator", model: "text-translation", inputTokens: 0, outputTokens: 0, characters: chars, feature: "translation" });
       out.push(...json.map((r) => r.translations?.[0]?.text ?? ""));
       await onProgress?.(out.length, texts.length);
       batch = [];

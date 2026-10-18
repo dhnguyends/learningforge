@@ -843,9 +843,18 @@ export interface AdminStudySetRow {
   owner: { id: string; name: string | null; email: string; nature: "HUMAN" | "BOT" };
   busy: boolean;
   _count: { sources: number; guides: number; decks: number; quizzes: number; exerciseSets: number };
+  /** Tokens of the course's AI calls, Azure characters and estimated Z.ai credits. */
+  aiCost: { calls: number; tokens: number; characters: number; zaiCredits: number | null };
 }
 
 const adminStudySetsKey = ["admin", "study-sets"] as const;
+
+export type CourseAiCost = import("@/lib/ai/usage").CourseAiCost;
+
+/** The real AI cost of a course (tokens, Azure characters, estimated Z.ai credits). */
+export function useCourseAiCost(studySetId: string) {
+  return useQuery({ queryKey: ["ai-usage", studySetId], queryFn: () => api<CourseAiCost>(`/api/study-sets/${studySetId}/ai-usage`), staleTime: 30_000 });
+}
 
 export function useAdminStudySets() {
   return useQuery({ queryKey: adminStudySetsKey, queryFn: () => api<{ studySets: AdminStudySetRow[] }>("/api/admin/study-sets") });

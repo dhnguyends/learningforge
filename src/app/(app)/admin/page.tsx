@@ -21,6 +21,7 @@ import { AdminCourseTree } from "@/components/shared/admin-course-tree";
 import { AdminDatabase } from "@/components/shared/admin-database";
 import { PolylingueAdmin } from "@/components/admin/polylingue-admin";
 import { useConfirm } from "@/components/shared/confirm-dialog";
+import { AzureQuotaBanner } from "@/components/admin/azure-quota";
 
 type Role = "USER" | "TEACHER" | "ADMIN";
 type Nature = "HUMAN" | "BOT";
@@ -79,6 +80,7 @@ function AdminTabs() {
           </Link>
         </Button>
       </div>
+      <AzureQuotaBanner />
       <Tabs value={tab} onValueChange={(next) => router.replace(`${pathname}?tab=${next}`, { scroll: false })}>
         <TabsList>
           <TabsTrigger value="users" className="gap-1.5">

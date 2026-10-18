@@ -90,7 +90,9 @@ async function hideRealPeople(page: Page) {
 async function hideBoxes(page: Page, texts: string[]) {
   await page.evaluate((needles) => {
     for (const needle of needles) {
-      const hits = [...document.querySelectorAll<HTMLElement>("body *")].filter((el) => el.children.length === 0 && el.textContent?.includes(needle));
+      // The deepest elements holding the text (it may be split across children, e.g. a quoted title).
+      const holders = [...document.querySelectorAll<HTMLElement>("body *")].filter((el) => el.textContent?.includes(needle));
+      const hits = holders.filter((el) => ![...el.children].some((c) => c.textContent?.includes(needle)));
       for (const hit of hits) {
         const box = hit.closest<HTMLElement>("[class*='rounded-lg'], [class*='rounded-md'][class*='border']");
         if (box) box.style.display = "none";

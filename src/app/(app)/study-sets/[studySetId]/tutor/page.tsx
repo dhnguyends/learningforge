@@ -14,6 +14,7 @@ import {
   ShieldAlert,
   Sparkles,
   Eye,
+  FileDown,
   Globe,
   MoreHorizontal,
   Pencil,
@@ -58,6 +59,9 @@ const MODES: { value: "answer" | "hint" | "explain_differently" | "show_source" 
 ];
 
 const NOT_FOUND_PREFIX = "I cannot find that in your uploaded sources";
+
+/** The conversation as a Markdown file (downloaded: the server sends it as an attachment). */
+const exportUrl = (conversationId: string) => `/api/tutor/${conversationId}/export`;
 
 /** The "Search my sources" switch, remembered per study set in this browser. */
 function useSourceSearch(studySetId: string): [boolean, (on: boolean) => void] {
@@ -194,6 +198,9 @@ export default function TutorPage() {
             <DropdownMenuItem onSelect={() => setRenaming({ id: menu.id, title: menu.title })}>
               <Pencil className="mr-2 h-3.5 w-3.5" aria-hidden="true" /> Rename…
             </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => window.location.assign(exportUrl(menu.id))}>
+              <FileDown className="mr-2 h-3.5 w-3.5" aria-hidden="true" /> Export as Markdown (.md)
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => void deleteConversation(menu.id, menu.title)}>
               <Trash2 className="mr-2 h-3.5 w-3.5" aria-hidden="true" /> Delete…
@@ -237,7 +244,18 @@ export default function TutorPage() {
 
       {/* Thread */}
       {conversationId ? (
-        <TutorThread studySetId={studySetId} conversationId={conversationId} />
+        <TutorThread
+          studySetId={studySetId}
+          conversationId={conversationId}
+          onRename={() => {
+            const c = conversations.find((x) => x.id === conversationId);
+            if (c) setRenaming({ id: c.id, title: c.title });
+          }}
+          onDelete={() => {
+            const c = conversations.find((x) => x.id === conversationId);
+            if (c) void deleteConversation(c.id, c.title);
+          }}
+        />
       ) : (
         <Card>
           <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
@@ -295,7 +313,20 @@ function anchorsFrom(refs: AnchorRef[] | undefined): AnchorData[] {
   }));
 }
 
-function TutorThread({ studySetId, conversationId }: { studySetId: string; conversationId: string }) {
+function TutorThread({
+  studySetId,
+  conversationId,
+  onRename,
+  onDelete,
+}: {
+  studySetId: string;
+  conversationId: string;
+  onRename: () => void;
+  onDelete: () => void;
+}) {
+  // Right-click in the chat (or Shift+F10): export, rename, delete. With text
+  // selected, the browser's own menu stays (to copy it).
+  const [threadMenu, setThreadMenu] = useState<MenuPoint | null>(null);
   const { data, isLoading } = useTutorMessages(conversationId);
   const send = useSendTutorMessage(studySetId, conversationId);
   const saveTime = useSaveAnswerTime(conversationId);
@@ -364,7 +395,32 @@ function TutorThread({ studySetId, conversationId }: { studySetId: string; conve
 
   return (
     <Card className="flex h-[calc(100vh-14rem)] min-h-[480px] flex-col">
-      <div className="scroll-thin flex-1 space-y-4 overflow-y-auto p-4">
+      {messages.length > 0 && (
+        <div className="flex justify-end border-b border-border px-3 py-1.5">
+          <a
+            href={exportUrl(conversationId)}
+            download
+            className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+            title="Download this conversation as a Markdown file"
+          >
+            <FileDown className="h-3.5 w-3.5" aria-hidden="true" /> Export .md
+          </a>
+        </div>
+      )}
+      <div
+        className="scroll-thin flex-1 space-y-4 overflow-y-auto p-4"
+        tabIndex={-1}
+        onContextMenu={(e) => {
+          if (window.getSelection()?.toString().trim()) return;
+          e.preventDefault();
+          setThreadMenu(menuPoint(e));
+        }}
+        onKeyDown={(e) => {
+          if (!isMenuKey(e)) return;
+          e.preventDefault();
+          setThreadMenu(menuPoint(e));
+        }}
+      >
         {isLoading ? (
           <div className="h-40 animate-pulse rounded-lg bg-muted" />
         ) : messages.length === 0 && !waiting ? (
@@ -489,6 +545,20 @@ function TutorThread({ studySetId, conversationId }: { studySetId: string; conve
             : "Hints first, solutions on request. General knowledge may differ from your course: turn source search on to check."}
         </p>
       </div>
+
+      <PointerMenu at={threadMenu} onClose={() => setThreadMenu(null)}>
+        <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">This conversation</DropdownMenuLabel>
+        <DropdownMenuItem disabled={messages.length === 0} onSelect={() => window.location.assign(exportUrl(conversationId))}>
+          <FileDown className="mr-2 h-3.5 w-3.5" aria-hidden="true" /> Export as Markdown (.md)
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={onRename}>
+          <Pencil className="mr-2 h-3.5 w-3.5" aria-hidden="true" /> Rename…
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={onDelete}>
+          <Trash2 className="mr-2 h-3.5 w-3.5" aria-hidden="true" /> Delete…
+        </DropdownMenuItem>
+      </PointerMenu>
 
       <Dialog open={confirmReveal} onOpenChange={setConfirmReveal}>
         <DialogContent>

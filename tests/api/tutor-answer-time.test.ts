@@ -65,3 +65,24 @@ describe("tutor answer time", () => {
     expect((await patch(answerId, { displayedMs: 1_000 })).status).toBe(404);
   });
 });
+
+describe("tutor conversation export", () => {
+  it("downloads the learner's conversation as Markdown, to nobody else", async () => {
+    const { GET: exportMd } = await import("@/app/api/tutor/[conversationId]/export/route");
+    const get = () => exportMd(jsonRequest(`http://localhost/api/tutor/${conversationId}/export`, "GET"), { params: { conversationId } });
+    signInAs(me.id);
+    const res = await get();
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("text/markdown; charset=utf-8");
+    expect(res.headers.get("content-disposition")).toMatch(/^attachment; filename="tutor-new-conversation-\d{4}-\d{2}-\d{2}\.md"$/);
+    const md = await res.text();
+    expect(md).toContain("# New conversation");
+    expect(md).toContain("study set **Timer set**");
+    expect(md).toContain("What is a gradient?");
+    expect(md).toContain("### Tutor · DeepSeek-R1 8B · local · answered in 00:01:14");
+    signInAs(other.id);
+    expect((await get()).status).toBe(404);
+    signInAs(null);
+    expect((await get()).status).toBe(401);
+  });
+});
